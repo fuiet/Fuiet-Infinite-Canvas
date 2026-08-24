@@ -153,6 +153,151 @@ async function diagnoseProvider(input){
   }
   return report;
 }
+const tasks = new Map();
+function deepGet(obj, pathText){
+  if (!pathText) return obj;
+  return String(pathText).split('.').reduce((acc, key) => {
+    if (acc == null) return undefined;
+    const arrayKey = key.match(/^(\d+)$/);
+    return arrayKey ? acc[Number(arrayKey[1])] : acc[key];
+  }, obj);
+}
+function renderTemplate(value, ctx = {}){
+  if (value == null) return value;
+  if (typeof value === 'string') {
+    return value.replace(/\{\{([^}]+)\}\}/g, (_, key) => {
+      const hit = deepGet(ctx, String(key).trim());
+      return hit == null ? '' : String(hit);
+    });
+  }
+  if (Array.isArray(value)) return value.map(v => renderTemplate(v, ctx));
+  if (typeof value === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(value)) out[k] = renderTemplate(v, ctx);
+    return out;
+  }
+  return value;
+}
+function normalizeOutput(value, modality){
+  if (value == null) return { type:'json', value:null };
+  if (typeof value === 'string') {
+    if (/^(https?:\/\/|data:)/i.test(value)) return { type:'url', value };
+    return { type: (modality === 'text' || modality === 'script') ? 'text' : 'text', value };
+  }
+  if (Array.isArray(value)) {
+    const first = value.find(Boolean);
+    return normalizeOutput(first, modality);
+  }
+  if (typeof value === 'object') {
+    const url = value.url || value.uri || value.href || value.file_url || value.fileUrl || value.output_url;
+    if (url) return normalizeOutput(url, modality);
+    const text = value.text || value.content || value.output_text;
+    if (typeof text === 'string') return { type:'text', value:text };
+  }
+  return { type:'json', value };
+}
+function taskPublic(task){
+  return {
+    id: task.id,
+    status: task.status,
+    progress: task.progress,
+    nodeType: task.nodeType,
+    providerId: task.providerId,
+    modelId: task.modelId,
+    output: task.output || null,
+    error: task.error || null,
+    createdAt: task.createdAt,
+    updatedAt: task.updatedAt,
+    attempt: task.attempt || 0,
+    maxRetries: task.maxRetries || 0,
+    cancelRequested: Boolean(task.cancelRequested),
+    priority: Number(task.priority ?? 50),
+    logs: task.logs || [],
+  };
+}
+function updateTask(task, patch = {}){
+  Object.assign(task, patch, { updatedAt: new Date().toISOString() });
+  tasks.set(task.id, task);
+  return task;
+}
+function taskLog(task, message, level = 'info'){
+  const next = { at: new Date().toISOString(), message: String(message || ''), level };
+  task.logs = Array.isArray(task.logs) ? task.logs.concat(next).slice(-200) : [next];
+  updateTask(task, {});
+}
+function resolveTaskModel(provider, task){
+  const wanted = normalizeModality(task.nodeType);
+  return (provider.models || []).find(m => m.id === task.modelId && m.enabled !== false && normalizeModality(m.modality) === wanted) || null;
+}
+async function executeTask(task){
+  const provider = providers.get(task.providerId);
+  if (!provider) throw new Error('供应商不存在');
+  const model = resolveTaskModel(provider, task);
+  if (!model) throw new Error('模型不存在或已停用');
+  const payload = task.payload || {};
+  const params = payload.parameters || {};
+  const operation = String(params.operation || 'generate');
+  const opConfig = (model.operationRoutes && (model.operationRoutes[operation] || model.operationRoutes.generate)) || {};
+  const ctx = {
+    model: model.id,
+    prompt: String(payload.prompt || ''),
+    nodeType: task.nodeType,
+    aspectRatio: params.aspectRatio || '16:9',
+    count: params.count || 1,
+    duration: params.duration || 5,
+    resolution: params.resolution || '720p',
+    references: payload.references || [],
+    parameters: params,
+  };
+  let route = String(opConfig.createPath || model.createPath || '').trim();
+  if (!route) {
+    if (task.nodeType === 'text' || task.nodeType === 'script') route = '/v1/chat/completions';
+    else if (task.nodeType === 'image') route = '/v1/images/generations';
+    else if (task.nodeType === 'audio') route = '/v1/audio/speech';
+    else if (task.nodeType === 'video' && provider.videoProtocol === 'standard-video-async-v1') route = '/v1/video/generations';
+    else throw new Error(`模型「${model.name || model.id}」尚未完成自动适配。请在「全部模型」里补充生成接口。`);
+  }
+  let body = renderTemplate(opConfig.requestTemplate || model.requestTemplate || null, ctx);
+  if (!body || typeof body !== 'object' || Array.isArray(body)) body = {};
+  const promptText = String(payload.prompt || '');
+  const routeLower = route.toLowerCase();
+  const isChat = /\/chat\/completions(?:$|\?)/.test(routeLower);
+  const isResponses = /\/responses(?:$|\?)/.test(routeLower);
+  const isImages = /\/images\/generations(?:$|\?)/.test(routeLower);
+  const isAudio = /\/audio\/speech(?:$|\?)/.test(routeLower);
+  if (!Object.keys(body).length) {
+    if (isChat) body = { model: model.id, messages: [{ role:'user', content: promptText }] };
+    else if (isResponses) body = { model: model.id, input: promptText };
+    else if (isImages) body = { model: model.id, prompt: promptText, n: Number(params.count || 1) };
+    else if (isAudio) body = { model: model.id, input: promptText, voice: params.voice || 'alloy', format: params.format || 'mp3' };
+    else body = { model: model.id, prompt: promptText };
+  } else {
+    if (!body.model) body.model = model.id;
+    if (isChat && (!Array.isArray(body.messages) || !body.messages.length)) body.messages = [{ role:'user', content: promptText }];
+    if (isResponses && body.input == null) body.input = promptText;
+    if (isImages && body.prompt == null && body.input == null) body.prompt = promptText;
+    if (isAudio && body.input == null && body.text == null) body.input = promptText;
+  }
+  updateTask(task, { status:'running', progress: 12, error: null, attempt: Number(task.attempt || 0) + 1 });
+  const requestOptions = { method: opConfig.method || model.method || 'POST', timeoutMs: 120000, provider };
+  if (!['GET', 'HEAD'].includes(String(requestOptions.method || '').toUpperCase())) requestOptions.body = JSON.stringify(body);
+  if (isAudio) {
+    const res = await fetch(joinUrl(provider.baseUrl, route), { ...requestOptions, headers: providerHeaders(provider, { 'Content-Type': 'application/json' }) });
+    if (!res.ok) throw new Error(`上游 API ${res.status}`);
+    const out = { type:'url', value: `data:audio/mpeg;base64,${Buffer.from(await res.arrayBuffer()).toString('base64')}` };
+    updateTask(task, { status:'succeeded', progress: 100, output: out, error: null });
+    return task;
+  }
+  const data = await fetchJson(joinUrl(provider.baseUrl, route), requestOptions, provider);
+  let raw;
+  if (isChat) raw = deepGet(data, 'choices.0.message.content');
+  else if (isResponses) raw = deepGet(data, 'output.0.content.0.text') ?? deepGet(data, 'output_text') ?? deepGet(data, 'response.output_text');
+  else if (isImages) raw = deepGet(data, 'data.0.url') ?? (deepGet(data, 'data.0.b64_json') ? `data:image/png;base64,${deepGet(data, 'data.0.b64_json')}` : undefined);
+  else raw = opConfig.outputPath ? deepGet(data, opConfig.outputPath) : data;
+  const out = normalizeOutput(raw ?? data, task.nodeType);
+  updateTask(task, { status:'succeeded', progress: 100, output: out, error: null });
+  return task;
+}
 export default {
   async fetch(request){
     const url = new URL(request.url);
@@ -176,8 +321,60 @@ export default {
       if(request.method === 'DELETE'){ const existed = providers.delete(id); return existed ? json({ ok:true }) : json({ error:'供应商不存在' }, 404); }
       if(request.method === 'GET'){ const provider = providers.get(id); return provider ? json({ provider: publicProvider(provider) }) : json({ error:'供应商不存在' }, 404); }
     }
-    if(path === '/api/tasks' && request.method === 'GET') return json({ tasks: [] });
-    if(path === '/api/queue' && request.method === 'GET') return json({ paused: false, concurrency: 0, running: 0, queued: 0 });
+    if(path === '/api/tasks' && request.method === 'GET') return json({ tasks: Array.from(tasks.values()).map(taskPublic) });
+    if(path === '/api/tasks' && request.method === 'POST'){
+      const body = await request.json().catch(() => ({}));
+      const nodeType = String(body.nodeType || '').trim();
+      if (!body.providerId || !body.modelId || !['text','image','video','audio','script'].includes(nodeType)) return json({ error:'任务参数不完整' }, 400);
+      const now = new Date().toISOString();
+      const task = {
+        id: 'task_' + crypto.randomUUID().replace(/-/g, '').slice(0, 12),
+        status: 'queued',
+        progress: 0,
+        providerId: String(body.providerId || ''),
+        modelId: String(body.modelId || ''),
+        nodeType,
+        payload: body,
+        output: null,
+        error: null,
+        createdAt: now,
+        updatedAt: now,
+        attempt: 0,
+        maxRetries: Math.max(0, Math.min(5, Number(body.maxRetries ?? 1))),
+        priority: Math.max(0, Math.min(100, Number(body.priority ?? 50))),
+        cancelRequested: false,
+        logs: [],
+      };
+      tasks.set(task.id, task);
+      try {
+        await executeTask(task);
+      } catch (err) {
+        updateTask(task, { status:'failed', error: String(err.message || err), progress: 100 });
+      }
+      return json({ task: taskPublic(task) }, 202);
+    }
+    if(path === '/api/queue' && request.method === 'GET'){
+      const all = Array.from(tasks.values());
+      return json({ paused:false, concurrency:1, running:all.filter(t => t.status === 'running').length, queued:all.filter(t => t.status === 'queued').length });
+    }
+    const taskMatch = path.match(/^\/api\/tasks\/([^/]+)$/);
+    if(taskMatch){
+      const id = decodeURIComponent(taskMatch[1]);
+      const task = tasks.get(id);
+      if (!task) return json({ error:'任务不存在' }, 404);
+      if (request.method === 'GET') return json({ task: taskPublic(task) });
+      if (request.method === 'DELETE'){ updateTask(task, { status: task.status === 'queued' ? 'canceled' : 'cancelling', cancelRequested: true, error: null }); return json({ task: taskPublic(task) }); }
+      if (request.method === 'PATCH'){
+        const body = await request.json().catch(() => ({}));
+        updateTask(task, { priority: Math.max(0, Math.min(100, Number(body.priority ?? task.priority ?? 50))) });
+        return json({ task: taskPublic(task) });
+      }
+      if (request.method === 'POST' && path.endsWith('/retry')) {
+        updateTask(task, { status:'queued', progress:0, error:null, cancelRequested:false });
+        try { await executeTask(task); } catch (err) { updateTask(task, { status:'failed', error: String(err.message || err), progress:100 }); }
+        return json({ task: taskPublic(task) });
+      }
+    }
     if(path === '/api/projects' && request.method === 'GET') return json({ projects: Array.from(projects.values()).map(p => ({ id: p.id, name: p.name, version: p.version, createdAt: p.createdAt, updatedAt: p.updatedAt })) });
     if(path === '/api/projects' && request.method === 'POST'){ const body = await request.json().catch(() => ({})); const id = body.id || ('proj_' + crypto.randomUUID().replace(/-/g, '').slice(0, 12)); const project = projectPayload(id, body); projects.set(id, project); return json({ project }, 201); }
     const projectMatch = path.match(/^\/api\/projects\/([^/]+)$/);
