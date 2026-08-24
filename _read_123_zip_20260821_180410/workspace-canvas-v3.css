@@ -655,3 +655,121 @@ html,body,.app-shell{background:var(--lib-bg)!important;color:var(--lib-text)}
   padding:0 10px!important;
   font-size:9px!important;
 }
+
+/* Readability pass: unify dialog/menu typography so settings and panels are legible */
+.project-menu,
+.context-menu,
+.provider-modal .provider-dialog,
+.feature-modal .feature-dialog,
+.timeline-panel,
+.login-modal,
+.model-picker,
+.agent-panel,
+.drawer,
+.command-palette,
+.task-manager,
+.creative-context-shell,
+.v36-studio{
+  font-size:14px!important;
+  line-height:1.55!important;
+}
+.project-menu .menu-item,
+.context-menu .menu-item,
+.context-menu > button:not(.quick-add-item),
+.provider-modal .provider-side-title,
+.provider-modal .provider-list-name,
+.provider-modal .provider-editor-title,
+.provider-modal .provider-section-title,
+.provider-modal .provider-note,
+.provider-modal .provider-list-meta,
+.provider-modal .provider-empty,
+.provider-modal .backend-status,
+.provider-modal .provider-test-result,
+.provider-modal .field-hint,
+.provider-modal .provider-advanced summary,
+.provider-modal .provider-field label,
+.provider-modal .provider-field input,
+.provider-modal .provider-field textarea,
+.provider-modal .provider-field select,
+.provider-modal .provider-action,
+.provider-modal .provider-add,
+.provider-modal .provider-button,
+.models-page .models-title,
+.models-page .models-subtitle,
+.models-page .provider-filter,
+.models-page .provider-settings,
+.models-page .provider-list-name,
+.models-page .provider-list-meta,
+.models-page .model-name,
+.models-page .model-meta,
+.models-page .model-provider,
+.models-page .row-action,
+.models-page .model-enabled,
+.models-page .field label,
+.models-page .field small,
+.models-page .summary-chip,
+.models-page .save-state,
+.creative-context-shell b,
+.creative-context-shell span,
+.creative-context-shell small,
+.creative-context-shell button,
+.task-manager h3,
+.task-manager section,
+.task-manager .task-settings label,
+.task-manager .task-row,
+.task-manager .task-status,
+.v36-studio b,
+.v36-studio span,
+.v36-studio small,
+.v36-studio button,
+.v36-studio input,
+.v36-studio select,
+.v36-studio textarea{
+  font-size:13px!important;
+  line-height:1.6!important;
+}
+.provider-modal .provider-side-title,
+.provider-modal .provider-editor-title,
+.provider-modal .provider-section-title,
+.models-page .models-title,
+.models-page .overview-heading,
+.creative-context-shell .context-overview-hero b,
+.task-manager h3,
+.v36-studio .v36-top>b,
+.v36-studio .v36-inspector>header b{
+  font-size:16px!important;
+  font-weight:750!important;
+}
+.provider-modal .provider-list-meta,
+.provider-modal .provider-empty,
+.provider-modal .backend-status,
+.provider-modal .provider-note,
+.provider-modal .provider-test-result,
+.provider-modal .field-hint,
+.provider-modal .provider-advanced summary,
+.models-page .provider-list-meta,
+.models-page .provider-empty,
+.models-page .field small,
+.models-page .save-state,
+.creative-context-shell span,
+.creative-context-shell small,
+.task-manager .task-row small,
+.task-manager .task-status,
+.v36-studio span,
+.v36-studio small{
+  font-size:12px!important;
+}
+.context-menu .menu-item,
+.project-menu .menu-item,
+.command-palette-row,
+.agent-chip,
+.drawer-row,
+.provider-action,
+.provider-add,
+.provider-close,
+.row-action,
+.model-enabled,
+.task-manager button,
+.v36-studio button{
+  min-height:32px!important;
+}

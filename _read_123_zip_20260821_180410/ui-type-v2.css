@@ -148,3 +148,80 @@ small,.muted,.meta,.hint{font-size:var(--ui-type-xs)!important}
 .models-subtitle,.overview-copy p,.field-help,.model-meta,.summary-chip,.storyboard-view-head p,.storyboard-view-summary span,.storyboard-shot-index span,.storyboard-shot-copy p,.storyboard-shot-copy small,.storyboard-audio-card small,.agent-title span,.agent-meta,.agent-skill-copy span,.timeline-head span,.timeline-controls>span,.nle-clip>span,.v36-top>span,.v36-top>mark,.v36-left>header span,.v36-tree-row small,.v36-ref small,.v36-empty,.v36-main>header,.v36-transport button,.v36-transport select,.v36-transport span,.v36-main>footer>header,.v36-ver span,.v36-ver small,.v36-right>nav button,.v36-inspector>.tabs,.v36-inspector>header small,.v36-inspector label,.v36-inspector>p,.v36-inspector button.block,.v36-cap span,.v36-compare-modes button,.v36-compare-actions button,.v362-last,.v362-marker-row small{
   line-height:1.55!important;
 }
+
+/* Settings / provider modal readability */
+.provider-modal .provider-dialog,
+.provider-modal .provider-dialog *,
+.provider-modal .provider-dialog input,
+.provider-modal .provider-dialog select,
+.provider-modal .provider-dialog textarea{
+  font-size:var(--ui-type-sm)!important;
+  line-height:1.55!important;
+}
+.provider-modal .provider-side-title,
+.provider-modal .provider-list-name,
+.provider-modal .provider-editor-title,
+.provider-modal .provider-section-title,
+.provider-modal .configured-models-head strong{
+  font-size:var(--ui-type-md)!important;
+  font-weight:700!important;
+}
+.provider-modal .provider-list-meta,
+.provider-modal .provider-empty,
+.provider-modal .backend-status,
+.provider-modal .provider-note,
+.provider-modal .provider-field label,
+.provider-modal .field-hint,
+.provider-modal .provider-test-result,
+.provider-modal .provider-advanced summary,
+.provider-modal .discovered-head .field-hint,
+.provider-modal .configured-models-head .field-hint,
+.provider-modal .model-summary-strip span,
+.provider-modal .model-summary-strip b,
+.provider-modal .provider-add,
+.provider-modal .provider-action,
+.provider-modal .provider-button,
+.provider-modal .provider-grid label,
+.provider-modal .provider-grid input,
+.provider-modal .provider-grid select,
+.provider-modal .provider-grid textarea{
+  font-size:var(--ui-type-sm)!important;
+}
+.provider-modal .provider-note,
+.provider-modal .provider-empty,
+.provider-modal .provider-field label,
+.provider-modal .field-hint,
+.provider-modal .provider-advanced summary,
+.provider-modal .backend-status,
+.provider-modal .provider-test-result{
+  line-height:1.6!important;
+}
+
+/* Models page settings readability */
+.models-page .models-title,
+.models-page .overview-heading,
+.models-page .provider-side-title,
+.models-page .provider-editor-title,
+.models-page .provider-section-title,
+.models-page .model-name,
+.models-page .model-meta,
+.models-page .provider-list-name{
+  font-size:var(--ui-type-md)!important;
+}
+.models-page .provider-list-meta,
+.models-page .provider-empty,
+.models-page .provider-settings,
+.models-page .provider-filter,
+.models-page .row-action,
+.models-page .model-enabled,
+.models-page .field label,
+.models-page .field small,
+.models-page .summary-chip,
+.models-page .adapter-summary,
+.models-page .adapter-summary small,
+.models-page .developer-config>summary,
+.models-page .field-hint,
+.models-page .save-state{
+  font-size:var(--ui-type-sm)!important;
+  line-height:1.55!important;
+}
