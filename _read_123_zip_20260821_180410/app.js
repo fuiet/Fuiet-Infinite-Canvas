@@ -53,6 +53,8 @@
     link:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.2 14.8 6.8 17a3.5 3.5 0 1 1-4.9-4.9l2.2-2.2"/><path d="M14.8 9.2 17 7a3.5 3.5 0 1 1 4.9 4.9l-2.2 2.2"/><path d="M8.5 15.5 15.5 8.5"/></svg>`,
     close:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12"/><path d="M18 6 6 18"/></svg>`,
     select:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 4 7.5 16 2.1-6 6.4-2.2L5 4Z"/></svg>`,
+    move:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 4 7.5 16 2.1-6 6.4-2.2L5 4Z"/></svg>`,
+    hand:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 11V7.6a1.2 1.2 0 0 1 2.4 0V11"/><path d="M10.4 10.8V6.9a1.2 1.2 0 0 1 2.4 0v3.9"/><path d="M12.8 10.8V7.4a1.2 1.2 0 0 1 2.4 0v3.4"/><path d="M15.2 11V8.8a1.2 1.2 0 0 1 2.4 0v5c0 2.7-2.2 4.9-4.9 4.9h-2.5c-2.2 0-4.2-1.4-4.9-3.5L5 12.5"/></svg>`,
     layout:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4v16"/><path d="M16 4v16"/><path d="M4 8h16"/><path d="M4 16h16"/></svg>`,
     workflow:`<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="12" cy="18" r="2"/><path d="M8.1 7.1 10.9 15M15.9 7.1 13.1 15M8.3 6h7.4"/></svg>`,
     asset:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6 4.5 8.2 12 12.8l7.5-4.6L12 3.6Z"/><path d="M4.5 15.2 12 19.8l7.5-4.6"/><path d="M4.5 11.1 12 15.7l7.5-4.6"/></svg>`,
@@ -231,7 +233,7 @@
     const next=input||defaultState();
     next.nodes=(next.nodes||[]).map(n=>({providerId:'',modelId:'',modelName:'',...n,providerId:n.providerId||'',modelId:n.modelId||'',modelName:n.modelName||''}));
     next.history=next.history||[]; next.assets=next.assets||[]; next.workflows=next.workflows||[]; next.edges=(next.edges||[]).map(normalizeSemanticEdge); next.groups=(next.groups||[]).map(g=>{const meta={...(g.meta||{})};if(g.kind==='storyboard'){meta.storyboard={version:1,mode:'cinematic',concept:'',frameOrder:[...(g.nodeIds||[])],updatedAt:'',...(meta.storyboard||{})};meta.storyboard.frameOrder=(meta.storyboard.frameOrder||[]).filter(id=>(g.nodeIds||[]).includes(id));for(const id of (g.nodeIds||[]))if(!meta.storyboard.frameOrder.includes(id))meta.storyboard.frameOrder.push(id)}return({...g,meta,collapsed:Boolean(g.collapsed),collapsedPos:g.collapsedPos||null,locked:Boolean(g.locked),frozen:Boolean(g.frozen)})}); next.subjects=next.subjects||[]; next.selectedIds=next.selectedIds||[];
-    next.projectId=next.projectId||'';next.projectUpdatedAt=next.projectUpdatedAt||'';next.assetFolders=next.assetFolders||[];next.historyScroll=next.historyScroll||0;next.projectConsistency={registry:{},lastScanAt:'',lastScanSummary:null,...(next.projectConsistency||{}),registry:{...((next.projectConsistency||{}).registry||{})}};const pn=next.projectNarrative||{};next.projectNarrative={characterTracks:{...(pn.characterTracks||{})},sceneTracks:{...(pn.sceneTracks||{})},events:Array.isArray(pn.events)?pn.events:[],lastAuditAt:pn.lastAuditAt||'',lastAuditSummary:pn.lastAuditSummary||null};next.creativeContext={autoSuggest:true,includeProjectAssets:true,includeNarrativeState:true,nearbyRadius:1200,lastNodeId:'',lastScanAt:'',...(next.creativeContext||{})};next.shortcutOverrides={...(next.shortcutOverrides||{})};next.workflowSettings={concurrency:2,maxRetries:1,failPolicy:'stop',cache:true,defaultPriority:50,costConfirmThreshold:0,autoFallback:true,...(next.workflowSettings||{})};next.workflowRuns=(next.workflowRuns||[]).map(r=>{const run={checkpointAt:r?.checkpointAt||r?.startedAt||'',...r,statuses:{...(r?.statuses||{})}};if(run.status==='running'){run.status='interrupted';run.interruptedAt=new Date().toISOString();Object.keys(run.statuses).forEach(id=>{if(['running','pending'].includes(run.statuses[id]))run.statuses[id]='pending'})}return run});next.canvasSettings={snap:true,grid:12,autoLayoutDirection:'LR',autoLayoutMode:'branches',viewMode:'workflow',storyboardGroupId:'',...((next.canvasSettings)||{})};
+    next.projectId=next.projectId||'';next.projectUpdatedAt=next.projectUpdatedAt||'';next.assetFolders=next.assetFolders||[];next.historyScroll=next.historyScroll||0;next.projectConsistency={registry:{},lastScanAt:'',lastScanSummary:null,...(next.projectConsistency||{}),registry:{...((next.projectConsistency||{}).registry||{})}};const pn=next.projectNarrative||{};next.projectNarrative={characterTracks:{...(pn.characterTracks||{})},sceneTracks:{...(pn.sceneTracks||{})},events:Array.isArray(pn.events)?pn.events:[],lastAuditAt:pn.lastAuditAt||'',lastAuditSummary:pn.lastAuditSummary||null};next.creativeContext={autoSuggest:true,includeProjectAssets:true,includeNarrativeState:true,nearbyRadius:1200,lastNodeId:'',lastScanAt:'',...(next.creativeContext||{})};next.shortcutOverrides={...(next.shortcutOverrides||{})};next.workflowSettings={concurrency:2,maxRetries:1,failPolicy:'stop',cache:true,defaultPriority:50,costConfirmThreshold:0,autoFallback:true,...(next.workflowSettings||{})};next.workflowRuns=(next.workflowRuns||[]).map(r=>{const run={checkpointAt:r?.checkpointAt||r?.startedAt||'',...r,statuses:{...(r?.statuses||{})}};if(run.status==='running'){run.status='interrupted';run.interruptedAt=new Date().toISOString();Object.keys(run.statuses).forEach(id=>{if(['running','pending'].includes(run.statuses[id]))run.statuses[id]='pending'})}return run});next.canvasSettings={snap:true,grid:12,autoLayoutDirection:'LR',autoLayoutMode:'branches',viewMode:'workflow',storyboardGroupId:'',interactionMode:'move',...((next.canvasSettings)||{})};
     next.nodes=next.nodes.map(n=>{const x={rotation:0,mirrorX:false,mirrorY:false,cropRatio:'',toolParams:{},scriptData:null,directorData:null,resultVersions:[],activeResultVersionId:'',h:null,locked:false,frozen:false,queuePriority:null,fallbackModels:[],lastUsedProviderId:'',lastUsedModelId:'',lastUsedModelName:'',...n,toolParams:n.toolParams||{},resultVersions:Array.isArray(n.resultVersions)?n.resultVersions:[],fallbackModels:Array.isArray(n.fallbackModels)?n.fallbackModels:[]};if(x.type==='script'&&(!x.w||x.w===470||x.w===500))x.w=310;if(!x.resultVersions.length&&x.taskStatus==='succeeded'&&(x.outputUrl||x.generatedText||x.generatedResult)){x.resultVersions=[{id:`legacy_${x.id}`,outputUrl:x.outputUrl||'',text:x.type==='text'?(x.text||x.generatedText||''):(x.generatedText||''),generatedResult:x.generatedResult??null,prompt:x.prompt||'',modelName:x.modelName||'',createdAt:x.updatedAt||new Date(0).toISOString()}];x.activeResultVersionId=x.resultVersions[0].id}return x;});
     return next;
   }
@@ -471,6 +473,7 @@
     $('#projectName').textContent=state.projectName;if(workspaceNameEl)workspaceNameEl.textContent=workspaceName;applyViewportTransform({minimap:false,overlays:false});
     const visible=renderedNodeIds();nodeLayer.innerHTML='';renderGroups(visible);state.nodes.forEach(n=>{if(visible.has(n.id))nodeLayer.appendChild(renderNode(n))});
     renderEdges();renderToolbar();renderGenerator();lastVirtualizedViewport={...state.viewport};renderMinimap();renderWorkflowRunHud();renderEmptyQuickBar();renderAgentPanel();$('#emptyCanvasHint')?.classList.toggle('hidden',state.nodes.length>0);renderCanvasViewMode();
+    syncDockModeButton();
     document.querySelector('#app')?.classList.toggle('agent-open',Boolean(agentState?.open));
     agentBtn?.classList.toggle('active',Boolean(agentState?.open));
   }
@@ -1867,6 +1870,11 @@
 
   function onNodePointerDown(e,n,el){
     if(e.button!==0) return;
+    if(currentInteractionMode()==='grab'){
+      if(e.target.closest('button,input,select,textarea,.node-port,.node-menu-btn')) return;
+      startViewportPan(e);
+      return;
+    }
     if(n.locked&&!e.target.closest('button,input,select,textarea,.node-port,.node-menu-btn')){e.preventDefault();e.stopPropagation();selectNode(n.id,e.shiftKey);expandedNodeId=n.id;render();return;}
     if(e.target.closest('button,input,select,textarea,.node-port,.node-menu-btn')) return;
     e.preventDefault();
@@ -1986,7 +1994,7 @@
   });
   viewport.addEventListener('pointerdown',e=>{
     hideMenus();selectedEdgeId=null;renderEdges();
-    if(e.button===1 || e.code==='Space' || window.__spaceDown){ e.preventDefault(); panning={px:e.clientX,py:e.clientY,startX:state.viewport.x,startY:state.viewport.y}; viewport.classList.add('panning'); return; }
+    if(e.button===1 || e.code==='Space' || window.__spaceDown || (e.button===0 && currentInteractionMode()==='grab')){ if(startViewportPan(e)) return; }
     if(e.button===0 && isCanvasBlankTarget(e.target)){const additive=!!(e.shiftKey||e.ctrlKey||e.metaKey),baseIds=additive?currentSelectionIds():[];expandedNodeId=null;selectedGroupId=null;marquee={x:e.clientX,y:e.clientY,cx:e.clientX,cy:e.clientY,baseIds,additive,active:false,previewIds:[...baseIds]};selectionRect.classList.add('hidden');}
   });
   viewport.addEventListener('dblclick',e=>{ if(!isCanvasBlankTarget(e.target)) return; const p=screenToWorld(e.clientX,e.clientY); showQuickAdd(e.clientX,e.clientY,p); });
@@ -2079,6 +2087,7 @@
   function runPaletteNode(type,p,fromNodeId){const created=addNode(type,p,true);if(created&&['image','video','audio','text','script'].includes(created.type))expandedNodeId=created.id;if(fromNodeId&&created){const edge=createEdge(fromNodeId,created.id,{type:'asset',silent:true});if(!edge)showToast('这个节点组合无法连接')}saveState();render();return created}
   function showCommandPalette(x,y,p,{fromNodeId=null,initialQuery=''}={}){
     const source=fromNodeId&&state.nodes.find(n=>n.id===fromNodeId),allowed=new Set(compatibleDownstreamTypes(source));let active=0,rows=[];
+    setDockModeMenuOpen(false);
     contextMenu.style.left=Math.max(8,Math.min(x,window.innerWidth-360))+'px';contextMenu.style.top=Math.max(8,Math.min(y,window.innerHeight-430))+'px';contextMenu.classList.add('quick-add-menu','command-palette');contextMenu.classList.remove('hidden');contextMenu.innerHTML=`<div class="command-palette-head"><b>${source?`从「${escapeHtml(source.title||labelForType(source.type))}」继续`:'Command Palette'}</b><span>${source?'仅显示兼容节点':'Tab / ⌘K'}</span></div><input id="commandPaletteInput" class="command-palette-input" placeholder="搜索节点或命令…" value="${escapeAttr(initialQuery)}"><div class="command-palette-results" id="commandPaletteResults"></div>${!source?'<div class="command-palette-foot">提示：拖动节点输出端口到空白处，也会打开这个面板并自动过滤兼容节点。</div>':''}`;
     const input=$('#commandPaletteInput',contextMenu),results=$('#commandPaletteResults',contextMenu);
     const buildRows=()=>{const norm=String(input?.value||'').trim().toLowerCase(),nodes=NODE_PALETTE_ITEMS.filter(it=>(!source||allowed.has(it.type))&&(!norm||`${it.label} ${it.keywords}`.toLowerCase().includes(norm))),actions=source?[]:paletteCanvasActions().filter(a=>(!norm||`${a.label} ${a.keywords}`.toLowerCase().includes(norm))&&(!a.enabled||a.enabled()));return[...nodes.map(it=>({kind:'node',...it})),...actions.map(a=>({kind:'action',...a}))]};
@@ -2088,6 +2097,7 @@
   }
   function showQuickAdd(x,y,p,fromNodeId=null,{preferAboveToolbar=false}={}){
     const source=fromNodeId&&state.nodes.find(n=>n.id===fromNodeId),allowed=new Set(compatibleDownstreamTypes(source));
+    setDockModeMenuOpen(false);
     const nodeItems=NODE_PALETTE_ITEMS.filter(it=>!source||allowed.has(it.baseType||it.type));
     const resourceItems=source?[]:[
       {id:'asset',icon:'◇',label:'素材库',run:()=>renderDrawer('asset')},
@@ -2135,6 +2145,7 @@
   function nodeContextPrimaryHtml(n,many){if(many||!n)return'';if(n.type==='image')return `<div class="menu-section-label">图片创作</div><button class="menu-item strong" data-act="image-studio">打开 Image Studio</button><button class="menu-item" data-act="image-storyboard">创建 Storyboard</button><button class="menu-item" data-act="image-video">创建图转视频节点</button><div class="menu-sep"></div>`;if(n.type==='video')return `<div class="menu-section-label">视频创作</div><button class="menu-item strong" data-act="video-studio">打开 Video Studio</button><button class="menu-item" data-act="video-analysis">逐帧拉片</button><button class="menu-item" data-act="video-compose">视频合成</button><div class="menu-sep"></div>`;if(n.type==='script')return `<div class="menu-section-label">脚本</div><button class="menu-item strong" data-act="script-studio">打开 Script Studio</button><button class="menu-item" data-act="script-storyboard">从脚本创建 Storyboard</button><div class="menu-sep"></div>`;if(n.type==='audio')return `<div class="menu-section-label">音频</div><button class="menu-item strong" data-act="audio-trim">截取 / 编辑音频</button><div class="menu-sep"></div>`;return''}
   function showContextMenu(x,y,id){
     const many=(state.selectedIds||[]).length>1,n=state.nodes.find(x=>x.id===id),failed=nodeTaskVisualState(n)==='failed',versions=nodeResultVersions(n).length,ids=currentSelectionIds(id),candidateCount=ids.filter(nid=>nodeResultVersions(state.nodes.find(x=>x.id===nid)).length).length;
+    setDockModeMenuOpen(false);
     contextMenu.style.left=x+'px';contextMenu.style.top=y+'px';contextMenu.classList.remove('quick-add-menu','command-palette');contextMenu.innerHTML=`${nodeContextPrimaryHtml(n,many)}<div class="menu-section-label">复制与分支</div><button class="menu-item" data-act="dup">复制（不带外部连线）</button><button class="menu-item" data-act="clone-inputs">副本（保留上游输入）</button><button class="menu-item" data-act="clone-branch">复制完整下游分支</button><button class="menu-item" data-act="copy">复制到跨画布剪贴板</button><button class="menu-item" data-act="asset">${many?'批量创建资产':'创建资产'}</button>${!many?`<button class="menu-item" data-act="reset-size">恢复默认尺寸</button>${versions>1?`<button class="menu-item" data-act="compare-versions">对比 ${versions} 个生成结果</button>`:''}`:''}${candidateCount?`<button class="menu-item" data-act="batch-candidates">▦ 批量候选结果 (${candidateCount})</button>`:''}<div class="menu-sep"></div><button class="menu-item" data-act="lock">${ids.every(nid=>state.nodes.find(x=>x.id===nid)?.locked)?'🔓 解锁位置':'🔒 锁定位置'}</button><button class="menu-item" data-act="freeze">${ids.every(nid=>state.nodes.find(x=>x.id===nid)?.frozen)?'☀ 解除冻结':'❄ 冻结生成结果'}</button><button class="menu-item" data-act="priority">队列优先级 · ${priorityLabel(n?.queuePriority??state.workflowSettings?.defaultPriority)}</button>${!many&&['image','video','audio','text'].includes(n.type)?`<button class="menu-item" data-act="fallback-models">备用模型 · ${(n.fallbackModels||[]).length}</button>`:''}<div class="menu-sep"></div>${failed?`<button class="menu-item retry-emphasis" data-act="retry-downstream">↻ 失败节点重试并重跑下游</button>`:`<button class="menu-item" data-act="run-downstream">从此节点执行下游</button>`}<button class="menu-item" data-act="cost">生成前成本预估</button>${many?`<div class="menu-sep"></div><button class="menu-item" data-act="group">打组</button><button class="menu-item" data-act="storyboard">合并分镜组</button><button class="menu-item strong" data-act="workflow">保存到 My Toolbox</button><button class="menu-item" data-act="run-group">整组执行</button><button class="menu-item" data-act="layout">整理工作流分支</button>`:''}<div class="menu-sep"></div><button class="menu-item danger" data-act="delete" ${ids.some(nid=>state.nodes.find(x=>x.id===nid)?.locked)?'disabled':''}>删除</button>`;contextMenu.classList.remove('hidden');
     requestAnimationFrame(()=>{const r=contextMenu.getBoundingClientRect(),pad=8;if(r.right>window.innerWidth-pad)contextMenu.style.left=Math.max(pad,window.innerWidth-r.width-pad)+'px';if(r.bottom>window.innerHeight-pad)contextMenu.style.top=Math.max(pad,window.innerHeight-r.height-pad)+'px'});
     $$('[data-act]',contextMenu).forEach(b=>b.onclick=()=>{const act=b.dataset.act;if(act==='image-studio'){contextMenu.classList.add('hidden');openImageStudio(n);return}if(act==='image-storyboard'){contextMenu.classList.add('hidden');openStoryboardFromImage(n);return}if(act==='image-video'){snapshot('创建图转视频');const v=createDerivedNode(n,'video','图转视频',n.prompt||'保持主体与构图连续，自然运动',{operation:'image_to_video'},430);saveState();render();showToast('已创建图转视频节点');}if(act==='video-studio'){contextMenu.classList.add('hidden');openVideoStudio(n);return}if(act==='video-analysis'){contextMenu.classList.add('hidden');createVideoAnalysis(n,true);return}if(act==='video-compose'){contextMenu.classList.add('hidden');openVideoComposer(n);return}if(act==='script-studio'){contextMenu.classList.add('hidden');openScriptEditor(n);return}if(act==='script-storyboard'){contextMenu.classList.add('hidden');createStoryboardFromSource(n,{count:9,mode:'cinematic',concept:n.sourceText||'',ratio:'16:9'});return}if(act==='audio-trim'){contextMenu.classList.add('hidden');openAudioTool('截取',n);return}if(act==='dup')duplicateSelection(id,false);if(act==='clone-inputs')duplicateSelection(id,true);if(act==='clone-branch')duplicateBranch(id);if(act==='copy')copySelection(id);if(act==='asset'){if(many)createAssetsFromSelection(id);else createAsset(n)}if(act==='reset-size')resetNodeSize(id);if(act==='compare-versions')openNodeVersionCompare(n);if(act==='batch-candidates')openBatchCandidateView(ids);if(act==='cost')openCostDetails(ids);if(act==='lock'){snapshot('切换节点锁定');const lock=!ids.every(nid=>state.nodes.find(x=>x.id===nid)?.locked);ids.forEach(nid=>{const node=state.nodes.find(x=>x.id===nid);if(node)node.locked=lock});saveState();render();showToast(lock?'已锁定节点位置':'已解锁节点')}if(act==='freeze'){snapshot('切换节点冻结');const freeze=!ids.every(nid=>state.nodes.find(x=>x.id===nid)?.frozen);ids.forEach(nid=>{const node=state.nodes.find(x=>x.id===nid);if(node)node.frozen=freeze});saveState();render();showToast(freeze?'已冻结生成结果，工作流将直接复用':'已解除冻结')}if(act==='priority'){const current=nodePriority(n),v=prompt('队列优先级 0-100（80+ 高，50 普通，20- 低）',String(current));if(v!=null){const pr=Math.max(0,Math.min(100,Number(v)||0));ids.forEach(nid=>{const node=state.nodes.find(x=>x.id===nid);if(node)node.queuePriority=pr});saveState();showToast(`队列优先级：${priorityLabel(pr)} ${pr}`)}}if(act==='fallback-models'){contextMenu.classList.add('hidden');openFallbackModelPicker(n);return}if(act==='run-downstream')executeDownstream(id);if(act==='retry-downstream')rerunFailedDownstream(id);if(act==='group')createGroup(state.selectedIds,'工作流组','workflow');if(act==='storyboard')createGroup(state.selectedIds.filter(x=>state.nodes.find(n=>n.id===x)?.type==='image'),'分镜组','storyboard',{grid:'3x3',ratio:'16:9'});if(act==='workflow')saveWorkflowFromSelection();if(act==='run-group')executeSelectedGroup();if(act==='layout')openAutoLayoutMenu();if(act==='delete')deleteSelection(id);contextMenu.classList.add('hidden');});
@@ -2564,7 +2575,7 @@
     storyboardView.innerHTML=`<div class="storyboard-view-shell"><div class="storyboard-view-head"><div><h2>故事版</h2><p>画布逻辑在“工作流”视图；镜头细节、顺序、分镜图、视频和音频在这里集中处理。</p></div><div class="storyboard-view-actions"><select id="sbViewGroupSelect">${groups.map(x=>`<option value="${escapeAttr(x.id)}" ${x.id===g.id?'selected':''}>${escapeHtml(x.title||'故事版')} · ${storyboardOrderedNodes(x).length} 镜</option>`).join('')}</select><button id="sbViewEdit">镜头设计</button><button id="sbViewCreateMissing">补齐视频节点</button><button id="sbViewRunVideos" class="primary">生成故事版视频</button><button id="sbViewBackWorkflow">工作流视图</button></div></div><div class="storyboard-view-summary"><article><span>镜头</span><b>${frames.length}</b></article><article><span>分镜图已生成</span><b>${readyImages}/${frames.length}</b></article><article><span>视频已生成</span><b>${readyVideos}/${frames.length}</b></article><article><span>镜头音频</span><b>${audios.length}</b></article></div><div class="storyboard-board"><div class="storyboard-board-head"><div>镜头</div><div>脚本 / 提示词 / 参考</div><div>分镜图</div><div>视频</div><div>音频</div></div>${frames.map((f,i)=>storyboardViewRowHtml(g,f,i)).join('')}</div></div>`;bindStoryboardView(g);
   }
   function renderCanvasViewMode(){
-    const mode=state.canvasSettings?.viewMode==='storyboard'?'storyboard':'workflow',story=mode==='storyboard';workflowViewBtn?.classList.toggle('active',!story);storyboardViewBtn?.classList.toggle('active',story);viewport.classList.toggle('storyboard-mode',story);if(story){drawer.classList.add('hidden');toolbar.classList.add('hidden');generator.classList.add('hidden');bottomDock?.classList.add('hidden');$('.bottom-left')?.classList.add('hidden');$('.bottom-center-hint')?.classList.add('hidden');renderStoryboardBoardView()}else{storyboardView?.classList.add('hidden');bottomDock?.classList.remove('hidden');$('.bottom-left')?.classList.remove('hidden');$('.bottom-center-hint')?.classList.remove('hidden')}
+    const mode=state.canvasSettings?.viewMode==='storyboard'?'storyboard':'workflow',story=mode==='storyboard';workflowViewBtn?.classList.toggle('active',!story);storyboardViewBtn?.classList.toggle('active',story);viewport.classList.toggle('storyboard-mode',story);viewport.classList.toggle('grab-mode',currentInteractionMode()==='grab'&&!story);if(story){drawer.classList.add('hidden');toolbar.classList.add('hidden');generator.classList.add('hidden');bottomDock?.classList.add('hidden');$('.bottom-left')?.classList.add('hidden');$('.bottom-center-hint')?.classList.add('hidden');renderStoryboardBoardView()}else{storyboardView?.classList.add('hidden');bottomDock?.classList.remove('hidden');$('.bottom-left')?.classList.remove('hidden');$('.bottom-center-hint')?.classList.remove('hidden')}
   }
 
   async function createNewServerProject(name=''){await flushProjectSave(true).catch(()=>{});undoStack.length=0;redoStack.length=0;selectedGroupId=null;const fresh=defaultState();fresh.nodes=[];fresh.edges=[];fresh.groups=[];fresh.history=[];fresh.assets=[];fresh.subjects=[];fresh.projectName=String(name||'').trim()||`画布 ${Math.max(1,(await listCanvasProjects()).length+1)}`;fresh.projectId='';state=migrateState(fresh);selectedId=null;expandedNodeId=null;await ensureServerProject();saveState();render();showToast(`已创建「${state.projectName}」`);}
@@ -2582,7 +2593,7 @@
     bottomDock?.classList.toggle('add-open',!!open);
     bottomDock?.querySelector('[data-dock-action="add"]')?.classList.toggle('open',!!open);
   }
-  function hideMenus(){ contextMenu.classList.add('hidden');contextMenu.classList.remove('quick-add-menu'); projectMenu.classList.add('hidden'); modelPicker?.classList.add('hidden'); setDockAddOpen(false); }
+  function hideMenus(){ contextMenu.classList.add('hidden');contextMenu.classList.remove('quick-add-menu','libtv-add-menu','command-palette','dock-mode-menu'); projectMenu.classList.add('hidden'); modelPicker?.classList.add('hidden'); setDockAddOpen(false); setDockModeMenuOpen(false); }
   function showToast(msg){ toast.textContent=msg;toast.classList.remove('hidden');clearTimeout(window.__toastTimer);window.__toastTimer=setTimeout(()=>toast.classList.add('hidden'),1700); }
   function labelForType(t){ return ({text:'文本',image:'图片',video:'视频',audio:'音频',script:'脚本',director:'导演台'})[t] || t; }
   function escapeHtml(s=''){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
@@ -2850,6 +2861,7 @@
 
   function showSettingsMenu(){
     const r=$('#settingsBtn').getBoundingClientRect();
+    setDockModeMenuOpen(false);
     contextMenu.style.left=Math.max(8,r.right-190)+'px';contextMenu.style.top=(r.bottom+6)+'px';
     contextMenu.innerHTML=`<button class="menu-item" data-setting="providers">API 供应商</button><button class="menu-item" data-setting="models">全部模型</button><button class="menu-item" data-setting="production">项目生产总控</button><button class="menu-item" data-setting="context">Creative Context</button><button class="menu-item" data-setting="narrative">连续性状态时间线</button><button class="menu-item" data-setting="tasks">任务队列</button><button class="menu-item" data-setting="shortcuts">快捷键</button>`;
     contextMenu.classList.remove('hidden');
@@ -2857,6 +2869,39 @@
   }
 
   function setDockActive(action){if(!bottomDock)return;$$('[data-dock-action]',bottomDock).forEach(b=>b.classList.toggle('active',b.dataset.dockAction===action||b.dataset.dockAction==='select'&&action==='select'))}
+  let dockModeMenuOpen=false;
+  function currentInteractionMode(){return state.canvasSettings?.interactionMode==='grab'?'grab':'move'}
+  function syncDockModeButton(){
+    const btn=bottomDock?.querySelector('[data-dock-action="mode"]');
+    if(!btn)return;
+    const grab=currentInteractionMode()==='grab';
+    btn.classList.toggle('mode-grab',grab);
+    btn.setAttribute('aria-pressed',grab?'true':'false');
+    btn.setAttribute('title',grab?'抓手工具 · H':'移动 · V');
+    btn.setAttribute('aria-label',grab?'抓手工具':'移动');
+  }
+  function setDockModeMenuOpen(open){
+    dockModeMenuOpen=!!open;
+    bottomDock?.classList.toggle('mode-open',!!open);
+    bottomDock?.querySelector('[data-dock-action="mode"]')?.classList.toggle('open',!!open);
+  }
+  function setInteractionMode(mode,{persist=true,toast=true}={}){
+    const next=mode==='grab'?'grab':'move';
+    state.canvasSettings=state.canvasSettings||{};
+    state.canvasSettings.interactionMode=next;
+    viewport.classList.toggle('grab-mode',next==='grab');
+    syncDockModeButton();
+    if(persist)saveState();
+    if(toast)showToast(next==='grab'?'抓手工具 · 拖动画布':'移动工具 · 拖动节点');
+  }
+  function startViewportPan(e){
+    if(e.button!==0)return false;
+    e.preventDefault();
+    e.stopPropagation();
+    panning={px:e.clientX,py:e.clientY,startX:state.viewport.x,startY:state.viewport.y};
+    viewport.classList.add('panning');
+    return true;
+  }
   function openDockAdd(){
     const r=viewport.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,btn=bottomDock?.querySelector('[data-dock-action="add"]'),br=btn?.getBoundingClientRect();
     if(quickAddMenuOpen && !contextMenu.classList.contains('hidden') && contextMenu.classList.contains('libtv-add-menu')){hideMenus();return}
@@ -2864,7 +2909,27 @@
     showQuickAdd(br?br.left:cx,br?br.top-460:cy,screenToWorld(cx,cy-190),null,{preferAboveToolbar:true});
     setDockAddOpen(true);
   }
-  if(bottomDock){$$('[data-dock-action]',bottomDock).forEach(b=>b.onclick=()=>{const a=b.dataset.dockAction;if(a==='add'){openDockAdd();return}if(a==='select'){setDockActive('select');viewport.focus();showToast('选择工具 · 单击节点，框选多个节点')}if(a==='layout'){setDockActive('layout');openAutoLayoutMenu();setTimeout(()=>setDockActive('select'),120)}if(a==='workflow'){setDockActive('workflow');renderDrawer('workflow')}if(a==='asset'){setDockActive('asset');renderDrawer('asset')}if(a==='history'){setDockActive('history');renderDrawer('history')}if(a==='shortcuts'){setDockActive('shortcuts');renderDrawer('help');setTimeout(()=>$('#drawer')?.scrollTo?.({top:0,behavior:'smooth'}),0)}if(a==='help'){setDockActive('help');renderDrawer('help')}})}
+  function showDockModeMenu(){
+    const btn=bottomDock?.querySelector('[data-dock-action="mode"]');
+    if(!btn)return;
+    if(dockModeMenuOpen && !contextMenu.classList.contains('hidden') && contextMenu.classList.contains('dock-mode-menu')){hideMenus();return}
+    hideMenus();
+    window.__quickAddOpenedAt=Date.now();
+    const current=currentInteractionMode();
+    const row=(mode,label,desc,shortcut,icon)=>`<button class="dock-mode-row ${current===mode?'active':''}" data-mode="${mode}"><i aria-hidden="true">${uiIcon(icon)}</i><span><b>${label}</b><small>${desc}</small></span><em>${shortcut}</em></button>`;
+    contextMenu.className='context-menu dock-mode-menu';
+    contextMenu.innerHTML=`<div class="libtv-add-title">画布操作模式</div>${row('move','移动','拖动节点 / 框选节点','V','move')}${row('grab','抓手工具','拖动画布视图','H','hand')}`;
+    contextMenu.classList.remove('hidden');
+    setDockModeMenuOpen(true);
+    $$('[data-mode]',contextMenu).forEach(b=>b.onclick=()=>{setInteractionMode(b.dataset.mode);hideMenus()});
+    requestAnimationFrame(()=>{
+      const r=contextMenu.getBoundingClientRect(),pad=12,dock=bottomDock?.getBoundingClientRect();
+      if(dock&&r.bottom>dock.top-pad)contextMenu.style.top=Math.max(pad,dock.top-r.height-pad)+'px';
+      else if(r.bottom>window.innerHeight-pad)contextMenu.style.top=Math.max(pad,window.innerHeight-r.height-pad)+'px';
+      if(r.right>window.innerWidth-pad)contextMenu.style.left=Math.max(pad,window.innerWidth-r.width-pad)+'px';
+    });
+  }
+  if(bottomDock){$$('[data-dock-action]',bottomDock).forEach(b=>b.onclick=()=>{const a=b.dataset.dockAction;if(a==='add'){openDockAdd();return}if(a==='mode'){showDockModeMenu();return}if(a==='layout'){setDockActive('layout');openAutoLayoutMenu();setTimeout(()=>setDockActive('select'),120)}if(a==='workflow'){setDockActive('workflow');renderDrawer('workflow')}if(a==='asset'){setDockActive('asset');renderDrawer('asset')}if(a==='history'){setDockActive('history');renderDrawer('history')}if(a==='shortcuts'){setDockActive('shortcuts');renderDrawer('help');setTimeout(()=>$('#drawer')?.scrollTo?.({top:0,behavior:'smooth'}),0)}if(a==='help'){setDockActive('help');renderDrawer('help')}})}
 
 
   // v3.5.2 · Image Studio Polish — explicit working/applied versions, stronger compare,
@@ -3255,6 +3320,10 @@
     if(e.key==='Escape'&&edgeReconnect){e.preventDefault();cleanupEdgeReconnect();return}
     if(e.key==='Escape'&&connectingFrom){e.preventDefault();cleanupConnectionDrag();return}
     if(e.key==='Escape'&&marquee){e.preventDefault();cancelMarquee();return}
+    if(!isTypingTarget()&&!e.metaKey&&!e.ctrlKey&&!e.altKey){
+      if(e.key.toLowerCase()==='v'){e.preventDefault();setInteractionMode('move');hideMenus();return}
+      if(e.key.toLowerCase()==='h'){e.preventDefault();setInteractionMode('grab');hideMenus();return}
+    }
     if(e.code==='Space'&&!isTypingTarget()){window.__spaceDown=true;e.preventDefault();return}
     dispatchShortcut(e)
   });
