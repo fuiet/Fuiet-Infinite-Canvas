@@ -790,6 +790,20 @@
   function priorityLabel(v){v=Number(v??50);return v>=80?'高':v<=20?'低':'普通'}
   function nodePriority(n){return Math.max(0,Math.min(100,Number(n?.queuePriority??state.workflowSettings?.defaultPriority??50)))}
   function nodeTaskVisualState(n){const wf=workflowNodeStatus(n.id).status;if(wf)return wf;if(n.frozen)return'frozen';const s=String(n.taskStatus||'');if(['queued','polling','retrying','running','fallback'].includes(s))return s==='queued'?'pending':'running';if(['succeeded','failed','canceled'].includes(s))return s;return''}
+  function defaultNodeName(type){return({text:'文本节点',image:'图片节点',video:'视频节点',audio:'音频节点',script:'脚本生成器',director:'导演台'})[type]||labelForType(type)}
+  function nodeSequenceNumber(id){const idx=state.nodes.findIndex(n=>n.id===id);return idx>=0?idx+1:1}
+  function nodeTitleBase(n){
+    const raw=String(n?.title||'').trim();
+    const seq=nodeSequenceNumber(n?.id);
+    const base=defaultNodeName(n?.type);
+    const legacy=labelForType(n?.type);
+    if(!raw)return base;
+    if(raw===`${base} ${seq}`||raw===`${legacy} ${seq}`)return base;
+    if((raw.startsWith(`${base} `)||raw.startsWith(`${legacy} `))&&/\d+$/.test(raw))return base;
+    if(/^(文本|图片|视频|音频|脚本|导演台)\s+\d+$/.test(raw))return base;
+    return raw;
+  }
+  function nodeTypeIconName(type){return({text:'subtitle',image:'image',video:'video',audio:'audio',script:'story',director:'camera'})[type]||'fallback'}
 
   function renderNode(n){
     const el = document.createElement('article');
@@ -802,15 +816,17 @@
     el.style.left = n.x+'px'; el.style.top=n.y+'px'; el.style.width=((bigImage?640:n.w)||320)+'px';if(n.type==='image'&&bigImage)el.style.height=Math.max(nodeHeight(n),380)+'px';else if(n.h)el.style.height=nodeHeight(n)+'px';
     let body = '';
     const lowDetail=state.viewport.zoom<.34&&n.id!==selectedId&&n.id!==expandedNodeId;
-    if(lowDetail&&['image','video'].includes(n.type)){body=`<div class="node-low-detail ${n.type}"><i>${n.type==='video'?'▶':'▧'}</i><span>${escapeHtml(n.title||labelForType(n.type))}</span></div>`;}
+    if(lowDetail&&['image','video'].includes(n.type)){body=`<div class="node-low-detail ${n.type}"><i>${n.type==='video'?'▶':'▧'}</i><span>${escapeHtml(nodeTitleBase(n))}</span></div>`;}
     else if(n.type==='image'){
-      const ratioStyle=n.cropRatio&&!n.h?`aspect-ratio:${escapeAttr(n.cropRatio.replace(':','/'))};height:auto;min-height:130px;`:'';
+      const ratioStyle=n.cropRatio&&!n.h?`aspect-ratio:${escapeAttr(n.cropRatio.replace(':','/'))};height:auto;min-height:130px;`:''; 
       const quick=bigImage?`<div class="image-node-try"><div class="image-node-try-label">尝试:</div><button type="button" data-image-quick="repaint">↥ <b>图生图</b></button><button type="button" data-image-quick="upscale">HD <b>图片高清</b></button></div>`:'';
       body = `<div class="image-node-shell ${n.outputUrl?'has-output':''}">${n.outputUrl ? `<div class="media-clip image-node-stage" style="${ratioStyle}"><img class="node-media-img" loading="lazy" decoding="async" style="${mediaTransformStyle(n)}" src="${escapeAttr(n.outputUrl)}" alt="${escapeAttr(n.title||'图片')}"/></div>` : n.content ? `<div class="node-content-img image-node-stage" style="background:${themeBg(n.content)};${mediaTransformStyle(n)}"><div class="job-badge">image</div></div>` : `<div class="image-node-placeholder image-node-stage"><div class="big-icon">▧</div><div class="image-node-copy">拖入图片或点击生成</div></div>`}${quick}</div>`;
     } else if(n.type==='video'){
       body = n.outputUrl ? `<video class="node-media-video" src="${escapeAttr(n.outputUrl)}" controls preload="${n.id===selectedId||n.id===expandedNodeId?'metadata':'none'}" ${n.muted?'muted':''}></video>` : n.content ? `<div class="node-content-video" style="background:${themeBg(n.content)}"><div class="play-icon">▶</div><div class="job-badge">video</div></div>` : `<div class="node-empty"><div class="big-icon">▷</div><div>拖入视频或点击生成</div></div>`;
     } else if(n.type==='text'){
-      body = `<textarea class="node-textarea" data-text-id="${n.id}" spellcheck="false">${escapeHtml(n.text||'')}</textarea>`;
+      const textValue=String(n.text||n.generatedText||'').trim();
+      const textPreview=textValue?escapeHtml(textValue.slice(0,160)):'';
+      body = `<div class="text-node-shell ${textValue?'has-text':''}">${textValue?`<div class="text-node-preview">${textPreview}${textValue.length>160?'…':''}</div>`:`<div class="text-node-placeholder"><span class="text-node-symbol">${uiIcon('subtitle')}</span><span>双击节点开始创作</span></div>`}<div class="text-node-try">尝试：</div><button type="button" data-text-quick="manual"><span>${uiIcon('subtitle')}</span><b>自己编写内容</b></button><button type="button" data-text-quick="video"><span>${uiIcon('video')}</span><b>文生视频</b></button><button type="button" data-text-quick="image"><span>${uiIcon('image')}</span><b>图片反推提示词</b></button><button type="button" data-text-quick="audio"><span>${uiIcon('audio')}</span><b>文字生音乐</b></button></div>`;
     } else if(n.type==='audio'){
       if(n.outputUrl) body=`<audio class="node-media-audio" src="${escapeAttr(n.outputUrl)}" controls></audio>`;
       else { const bars = Array.from({length:84},(_,i)=>`<i style="height:${14 + ((i*17)%52)}px"></i>`).join(''); body = `<div class="audio-wave">${bars}</div>`; }
@@ -824,7 +840,7 @@
     const progress=['pending','running'].includes(visualStatus)?Math.max(visualStatus==='pending'?4:8,Math.min(100,Number(n.taskProgress||0))):0;
     const statusLabel=visualStatus?workflowStatusLabel(visualStatus):'';
     el.innerHTML = `
-      <div class="node-header"><div class="node-badge"><span class="node-dot"></span><span>${n.title||labelForType(n.type)}</span></div>${n.toolParams?.shotId?`<button class="node-shot-chip" data-shot-back="${n.id}">Shot ${scriptShotForProductionNode(n)?.no||''}</button>`:''}<div class="node-guard-badges">${n.locked?`<i title="位置已锁定">${uiIcon('lock')}</i>`:''}${n.frozen?`<i title="结果已冻结">${uiIcon('freeze')}</i>`:''}${Number(n.fallbackAttempt||0)>0?`<i title="本次使用备用模型：${escapeAttr(n.lastUsedModelName||'')}">${uiIcon('fallback')}</i>`:''}</div>${visualStatus?`<span class="node-run-status ${visualStatus}">${statusLabel}${visualStatus==='running'&&Number(n.taskProgress)>0?` ${Math.round(n.taskProgress)}%`:''}</span>`:''}<button class="node-menu-btn" aria-label="更多">${uiIcon('dotMenu')}</button></div>
+      <div class="node-header"><div class="node-header-left"><span class="node-type-icon">${uiIcon(nodeTypeIconName(n.type))}</span><span class="node-title-stack"><b>${escapeHtml(nodeTitleBase(n))}</b><small>${nodeSequenceNumber(n.id)}</small></span></div><div class="node-header-right">${n.toolParams?.shotId?`<button class="node-shot-chip" data-shot-back="${n.id}">Shot ${scriptShotForProductionNode(n)?.no||''}</button>`:''}<div class="node-guard-badges">${n.locked?`<i title="位置已锁定">${uiIcon('lock')}</i>`:''}${n.frozen?`<i title="结果已冻结">${uiIcon('freeze')}</i>`:''}${Number(n.fallbackAttempt||0)>0?`<i title="本次使用备用模型：${escapeAttr(n.lastUsedModelName||'')}">${uiIcon('fallback')}</i>`:''}</div>${visualStatus?`<span class="node-run-status ${visualStatus}">${statusLabel}${visualStatus==='running'&&Number(n.taskProgress)>0?` ${Math.round(n.taskProgress)}%`:''}</span>`:''}<button class="node-menu-btn" aria-label="更多">${uiIcon('dotMenu')}</button></div></div>
       <div class="node-body">${body}</div>
       ${nodeInlineCandidateHtml(n)}
       ${versions.length?`<div class="node-result-nav" title="生成结果版本"><button data-result-prev="${n.id}" ${versions.length<2?'disabled':''}>‹</button><span>${activeVersionIndex+1}/${versions.length}</span><button data-result-next="${n.id}" ${versions.length<2?'disabled':''}>›</button>${versions.length>1?`<button class="compare" data-result-compare="${n.id}">对比</button>`:''}</div>`:''}
@@ -1135,6 +1151,7 @@
     $('#generateBtn').onclick=()=>generateForNode(n);$('#generationCostBtn')?.addEventListener('click',()=>openCostDetails([n.id]));
     $('#referenceBtn')?.addEventListener('click',()=>openReferencePicker(n));$('#creativeContextBtn')?.addEventListener('click',()=>openCreativeContextComposer(n));
     $$('[data-gen-tool]',generator).forEach(b=>b.onclick=()=>openFeatureTool(b.dataset.genTool,n));
+    $$('[data-text-quick]',el).forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();if(b.dataset.textQuick==='manual'){selectNode(n.id);expandedNodeId=n.id;render();setTimeout(()=>$('#promptInput')?.focus(),0);return}if(b.dataset.textQuick==='video'){const next=addNode('video',{x:n.x+380,y:n.y},true);next.title='文生视频';next.prompt=String(n.text||n.prompt||'').trim()||'根据文本内容生成视频';saveState();render();setTimeout(()=>openVideoStudio(next),0);return}if(b.dataset.textQuick==='image'){const next=addNode('image',{x:n.x+380,y:n.y},true);next.title='图片反推提示词';next.prompt=String(n.text||n.prompt||'').trim()||'根据图片生成提示词';saveState();render();setTimeout(()=>openImageStudio(next),0);return}if(b.dataset.textQuick==='audio'){const next=addNode('audio',{x:n.x+380,y:n.y},true);next.title='文字生音乐';next.prompt=String(n.text||n.prompt||'').trim()||'根据文字生成音乐';selectNode(next.id);expandedNodeId=next.id;saveState();render();setTimeout(()=>$('#promptInput')?.focus(),0);return}}));
   }
 
   // v3.3 · Creative Context Engine: explicit links + sequence/shot state + prompt mentions + nearby canvas + project assets.
@@ -2050,7 +2067,7 @@
   function screenToWorld(x,y){ const rect=viewport.getBoundingClientRect(); return {x:(x-rect.left-state.viewport.x)/state.viewport.zoom,y:(y-rect.top-state.viewport.y)/state.viewport.zoom}; }
 
   function addNode(type,worldPt,silent=false){
-    snapshot(); const same=state.nodes.filter(x=>x.type===type).length+1;const n={id:uid('n'),type,x:worldPt.x,y:worldPt.y,w:type==='image'?620:type==='script'?310:type==='director'?420:320,title:labelForType(type)+' '+same,prompt:'',providerId:'',modelId:'',modelName:'',selected:false}; if(type==='text') n.text=''; if(type==='image'||type==='video') n.content=''; if(type==='script') ensureScriptData(n); if(type==='director') ensureDirectorData(n); ensureDefaultModel(n);state.nodes.push(n); selectNode(n.id); saveState(); if(!silent)showToast('已创建'+labelForType(type)+'节点');return n;
+    snapshot(); const same=state.nodes.length+1;const n={id:uid('n'),type,x:worldPt.x,y:worldPt.y,w:type==='image'?620:type==='script'?310:type==='director'?420:320,title:`${defaultNodeName(type)} ${same}`,prompt:'',providerId:'',modelId:'',modelName:'',selected:false}; if(type==='text') n.text=''; if(type==='image'||type==='video') n.content=''; if(type==='script') ensureScriptData(n); if(type==='director') ensureDirectorData(n); ensureDefaultModel(n);state.nodes.push(n); selectNode(n.id); saveState(); if(!silent)showToast('已创建'+labelForType(type)+'节点');return n;
   }
 
   function openLocalUpload(p){
