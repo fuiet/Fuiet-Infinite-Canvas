@@ -237,11 +237,18 @@
     next.nodes=next.nodes.map(n=>{const x={rotation:0,mirrorX:false,mirrorY:false,cropRatio:'',toolParams:{},scriptData:null,directorData:null,resultVersions:[],activeResultVersionId:'',h:null,locked:false,frozen:false,queuePriority:null,fallbackModels:[],lastUsedProviderId:'',lastUsedModelId:'',lastUsedModelName:'',...n,toolParams:n.toolParams||{},resultVersions:Array.isArray(n.resultVersions)?n.resultVersions:[],fallbackModels:Array.isArray(n.fallbackModels)?n.fallbackModels:[]};if(x.type==='script'&&(!x.w||x.w===470||x.w===500))x.w=310;if(!x.resultVersions.length&&x.taskStatus==='succeeded'&&(x.outputUrl||x.generatedText||x.generatedResult)){x.resultVersions=[{id:`legacy_${x.id}`,outputUrl:x.outputUrl||'',text:x.type==='text'?(x.text||x.generatedText||''):(x.generatedText||''),generatedResult:x.generatedResult??null,prompt:x.prompt||'',modelName:x.modelName||'',createdAt:x.updatedAt||new Date(0).toISOString()}];x.activeResultVersionId=x.resultVersions[0].id}return x;});
     return next;
   }
+  function errorText(value){
+    if(value==null)return'';
+    if(typeof value==='string')return value;
+    if(value instanceof Error)return value.message||String(value);
+    if(typeof value==='object')return String(value.message||value.error||value.detail||value.reason||value.msg||value.title||'').trim()||JSON.stringify(value);
+    return String(value);
+  }
   async function apiJson(url,options={}){
     const res=await fetch(url,{headers:{'Content-Type':'application/json',...(options.headers||{})},credentials:'same-origin',...options});
     let body={}; try{body=await res.json()}catch{}
-    if(res.status===401){authenticated=false;openLoginModal();throw new Error(body.error||'需要访问密码');}
-    if(!res.ok) throw new Error(body.error||`请求失败 ${res.status}`);
+    if(res.status===401){authenticated=false;openLoginModal();throw new Error(errorText(body.error)||'需要访问密码');}
+    if(!res.ok) throw new Error(errorText(body.error)||`请求失败 ${res.status}`);
     return body;
   }
   async function checkAuth(){
@@ -249,7 +256,7 @@
   }
   function openLoginModal(){
     if(!loginModal)return;loginModal.innerHTML=`<div class="login-dialog"><div class="login-logo">${uiIcon('workflow')}</div><h2>Canvas Studio</h2><p>此部署启用了管理员访问密码。它不是会员系统，只用于保护供应商密钥、项目和生成任务。</p><input id="loginPassword" type="password" placeholder="访问密码" autocomplete="current-password"><button id="loginSubmit">进入工作台</button><div id="loginError"></div></div>`;loginModal.classList.remove('hidden');
-    $('#loginSubmit',loginModal).onclick=async()=>{const btn=$('#loginSubmit',loginModal),pwd=$('#loginPassword',loginModal).value;btn.disabled=true;try{const r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({password:pwd})});const b=await r.json();if(!r.ok)throw new Error(b.error||'登录失败');authenticated=true;loginModal.classList.add('hidden');await loadProviders();await ensureServerProject();render();}catch(e){$('#loginError',loginModal).textContent=e.message}finally{btn.disabled=false}};
+    $('#loginSubmit',loginModal).onclick=async()=>{const btn=$('#loginSubmit',loginModal),pwd=$('#loginPassword',loginModal).value;btn.disabled=true;try{const r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({password:pwd})});const b=await r.json();if(!r.ok)throw new Error(errorText(b.error)||'登录失败');authenticated=true;loginModal.classList.add('hidden');await loadProviders();await ensureServerProject();render();}catch(e){$('#loginError',loginModal).textContent=errorText(e)}finally{btn.disabled=false}};
     $('#loginPassword',loginModal)?.addEventListener('keydown',e=>{if(e.key==='Enter')$('#loginSubmit',loginModal).click()});
   }
   async function loadProviders(){
@@ -1281,7 +1288,7 @@
         const h={id:uid('h'),sourceNodeId:n.id,title:`${labelForType(n.type)}生成_${String(state.history.length+1).padStart(2,'0')}`,kind:labelForType(n.type),type:n.type,theme:n.content||'city',outputUrl:n.outputUrl||'',text:n.text||n.generatedText||'',prompt:n.prompt||'',providerId:attempt.providerId,modelId:attempt.modelId,modelName:attempt.modelName,createdAt:new Date().toISOString(),parameters:{aspectRatio:n.aspectRatio,duration:n.duration,resolution:n.resolution,...(n.toolParams||{})}};state.history.unshift(h);recordNodeResultVersion(n,{historyId:h.id,providerId:attempt.providerId,modelId:attempt.modelId,modelName:attempt.modelName});syncGeneratedAssetResult(n,h);saveState();render();if(!silent)showToast(ai?`备用模型生成完成 · ${attempt.modelName}`:`生成完成 · 已保留 ${n.resultVersions.length} 个结果版本`);return n;
       }catch(err){lastError=err;n.taskStatus=err.message==='任务已取消'?'canceled':'failed';n.taskError=err.message;saveState();render();if(err.message==='任务已取消')break;if(ai<chain.length-1){if(!silent)showToast(`${attempt.modelName} 失败，自动切换备用模型…`);continue}break}
     }
-    const err=lastError||new Error('所有模型均生成失败');n.taskStatus=err.message==='任务已取消'?'canceled':'failed';n.taskError=err.message;saveState();render();if(!silent)showToast('生成失败：'+err.message);throw err;
+    const err=lastError||new Error('所有模型均生成失败');const msg=errorText(err)||'所有模型均生成失败';n.taskStatus=msg==='任务已取消'?'canceled':'failed';n.taskError=msg;saveState();render();if(!silent)showToast('生成失败：'+msg);throw new Error(msg);
   }
   function syncGeneratedAssetResult(n,h){
     const aid=n.toolParams?.assetId||n.toolParams?.scriptAssetId;if(!aid)return;
@@ -1758,7 +1765,7 @@
     if(!backendOnline){showToast('API 网关未连接');return}const pid=n.scriptProviderId,mid=n.scriptModelId;if(!pid||!mid){showToast('请选择文本 API 供应商与模型');return}
     const schema={style:'统一视觉风格',assets:{characters:[{name:'角色名',description:'身份外形服装',prompt:'用于一致性生成的视觉提示词'}],scenes:[{name:'场景名',description:'空间布局和光线',prompt:'场景一致性提示词'}],props:[{name:'道具名',description:'外观归属',prompt:'道具一致性提示词'}]},shots:[{scene:'场景名',characters:['角色名'],props:['道具名'],shotSize:'全景/中景/近景/特写',action:'可视化动作与调度',dialogue:'对白或旁白',duration:3,imagePrompt:'只写本镜头额外图像信息',videoPrompt:'运镜、动作、声音额外信息'}]};
     const prompt=`你是影视分镜与资产拆解引擎。把用户剧本拆成可直接进入 AI 影视生产线的结构化 JSON。必须只返回一个合法 JSON 对象，不要 Markdown，不要解释。\n要求：1) 先抽取角色、场景、道具资产；2) 每个镜头引用明确资产名称；3) 镜头动作必须可视化；4) 时长为数字秒；5) 不要凭空增加重要人物；6) imagePrompt/videoPrompt 只写该镜头额外信息，统一资产由系统之后自动合成。\n严格结构示例：${JSON.stringify(schema)}\n\n用户剧本：\n${n.sourceText||''}`;
-    showToast('正在用第三方文本模型结构化拆解剧本与资产…');try{const created=await apiJson('/api/tasks',{method:'POST',body:JSON.stringify({providerId:pid,modelId:mid,nodeType:'text',prompt,references:collectReferences(n.id),parameters:{operation:'script_breakdown',responseFormat:'json_object',schema}})});const info=await waitTask(created.task.id);if(info?.status!=='succeeded')throw new Error(info?.error||'脚本拆解失败');const text=String(info.output?.value??info.output?.text??info.output?.url??'');applyScriptBreakdownText(n,text);closeFeatureModal();openScriptEditor(n,'shots');showToast('剧本、角色、场景、道具与镜头已结构化拆解');}catch(e){showToast('拆解失败：'+e.message)}
+    showToast('正在用第三方文本模型结构化拆解剧本与资产…');try{const created=await apiJson('/api/tasks',{method:'POST',body:JSON.stringify({providerId:pid,modelId:mid,nodeType:'text',prompt,references:collectReferences(n.id),parameters:{operation:'script_breakdown',responseFormat:'json_object',schema}})});const info=await waitTask(created.task.id);if(info?.status!=='succeeded')throw new Error(errorText(info?.error)||'脚本拆解失败');const text=String(info.output?.value??info.output?.text??info.output?.url??'');applyScriptBreakdownText(n,text);closeFeatureModal();openScriptEditor(n,'shots');showToast('剧本、角色、场景、道具与镜头已结构化拆解');}catch(e){showToast('拆解失败：'+errorText(e))}
   }
   function applyScriptBreakdownText(n,text){
     const d=ensureScriptData(n),parsed=extractStructuredJson(text);let obj=parsed;if(Array.isArray(parsed))obj={shots:parsed};if(!obj||!Array.isArray(obj.shots)){const lines=String(text||'').split(/\n+/).map(x=>x.trim()).filter(x=>x.length>4).slice(0,24);obj={assets:{characters:[],scenes:[],props:[]},shots:lines.map((x,i)=>({scene:'场景',characters:[],props:[],shotSize:['全景','中景','近景'][i%3],action:x,dialogue:'',duration:3,imagePrompt:'',videoPrompt:''}))};showToast('供应商没有返回合法 JSON，已使用安全降级拆分')}

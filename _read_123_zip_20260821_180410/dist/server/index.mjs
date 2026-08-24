@@ -3,6 +3,7 @@ const projects = new Map();
 const providers = new Map();
 function json(body, status = 200){ return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } }); }
 function clone(value){ return JSON.parse(JSON.stringify(value ?? null)); }
+function errorText(value){ if(value==null)return ''; if(typeof value==='string')return value; if(typeof value==='object')return String(value.message||value.error||value.detail||value.reason||value.msg||value.title||'').trim()||JSON.stringify(value); return String(value); }
 function projectPayload(id, body = {}){ const now = new Date().toISOString(); return { id, name: body.name || '未命名画布', data: body.data || {}, version: 1, createdAt: now, updatedAt: now }; }
 function providerDefaults(input = {}){
   return {
@@ -48,7 +49,7 @@ async function fetchJson(url, options = {}, provider = {}){
   const text = await res.text();
   let data = {};
   try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
-  if (!res.ok) throw new Error(data.error || text || `HTTP ${res.status}`);
+  if (!res.ok) throw new Error(errorText(data.error) || text || `HTTP ${res.status}`);
   return data;
 }
 function joinUrl(base, route){ return String(base || '').replace(/\/+$/,'') + '/' + String(route || '').replace(/^\/+/, ''); }
