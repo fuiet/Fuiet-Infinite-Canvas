@@ -29,6 +29,32 @@ function providerDefaults(input = {}){
     models: Array.isArray(input.models) ? input.models.map(m => ({ ...m })) : [],
   };
 }
+function normalizeModel(m = {}){
+  const modality = ['text','image','video','audio','script'].includes(m.modality) ? m.modality : 'text';
+  return {
+    id: String(m.id || '').trim(),
+    name: String(m.name || m.id || '未命名模型').trim(),
+    enabled: m.enabled !== false,
+    modality,
+    adapterKey: String(m.adapterKey || 'auto').trim() || 'auto',
+    operationRoutes: (m.operationRoutes && typeof m.operationRoutes === 'object') ? m.operationRoutes : {},
+    createPath: String(m.createPath || '').trim(),
+    method: String(m.method || 'POST').toUpperCase(),
+    responseMode: m.responseMode === 'async' ? 'async' : 'sync',
+    requestTemplate: m.requestTemplate ?? { model: '{{model}}', prompt: '{{prompt}}' },
+    outputPath: String(m.outputPath || '').trim(),
+    taskIdPath: String(m.taskIdPath || '').trim(),
+    pollPath: String(m.pollPath || '').trim(),
+    statusPath: String(m.statusPath || '').trim(),
+    progressPath: String(m.progressPath || '').trim(),
+    successValues: Array.isArray(m.successValues) ? m.successValues : ['succeeded','completed','success'],
+    failureValues: Array.isArray(m.failureValues) ? m.failureValues : ['failed','error','cancelled','canceled'],
+    pollIntervalMs: Math.max(500, Number(m.pollIntervalMs || 1500)),
+    timeoutMs: Math.max(5000, Number(m.timeoutMs || 20 * 60 * 1000)),
+    capabilities: (m.capabilities && typeof m.capabilities === 'object') ? m.capabilities : {},
+    pricing: (m.pricing && typeof m.pricing === 'object') ? m.pricing : {},
+  };
+}
 function publicProvider(provider){
   const p = providerDefaults(provider);
   delete p.apiKey;
@@ -216,6 +242,17 @@ function taskPublic(task){
     logs: task.logs || [],
   };
 }
+function taskProviderSnapshot(task){
+  const snap = task?.payload?.providerSnapshot;
+  if (!snap || typeof snap !== 'object') return null;
+  const provider = providerDefaults({ ...snap, id: task.providerId || snap.id || '' });
+  if (task?.payload?.modelSnapshot) provider.models = [normalizeModel(task.payload.modelSnapshot)];
+  else if (Array.isArray(snap.models)) provider.models = snap.models.map(normalizeModel);
+  return provider;
+}
+function resolveTaskProvider(task){
+  return providers.get(task.providerId) || taskProviderSnapshot(task);
+}
 function updateTask(task, patch = {}){
   Object.assign(task, patch, { updatedAt: new Date().toISOString() });
   tasks.set(task.id, task);
@@ -228,10 +265,14 @@ function taskLog(task, message, level = 'info'){
 }
 function resolveTaskModel(provider, task){
   const wanted = normalizeModality(task.nodeType);
-  return (provider.models || []).find(m => m.id === task.modelId && m.enabled !== false && normalizeModality(m.modality) === wanted) || null;
+  const model = (provider?.models || []).find(m => m.id === task.modelId && m.enabled !== false && normalizeModality(m.modality) === wanted) || null;
+  if (model) return model;
+  const snap = task?.payload?.modelSnapshot;
+  if (snap && String(snap.id || '') === String(task.modelId || '')) return normalizeModel(snap);
+  return null;
 }
 async function executeTask(task){
-  const provider = providers.get(task.providerId);
+  const provider = resolveTaskProvider(task);
   if (!provider) throw new Error('供应商不存在');
   const model = resolveTaskModel(provider, task);
   if (!model) throw new Error('模型不存在或已停用');

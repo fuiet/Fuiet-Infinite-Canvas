@@ -1,6 +1,7 @@
 (()=>{
   const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>Array.from(r.querySelectorAll(s));
   let providers=[], draftProviders=[], activeProvider='all', activeType='all', query='', enabledOnly=false, dirty=false, autoSaveTimer=null, saving=false;
+  const PROVIDERS_STORAGE_KEY='canvas-studio-providers-v1';
   const labels={text:'文本',image:'图片',video:'视频',audio:'音频'};
   const adapterLabels={auto:'自动适配','openai-chat':'OpenAI 对话','openai-responses':'OpenAI 响应','openai-image':'OpenAI 图像','openai-audio-speech':'OpenAI 语音','generic-sync':'通用同步接口','generic-async':'通用异步任务','standard-video-async-v1':'标准异步视频协议 v1','comfyui-workflow':'ComfyUI 工作流'};
   function resolvedAdapter(p,m){const r=m.adapterResolved||{};if(r.key)return r;const k=m.adapterKey&&m.adapterKey!=='auto'?m.adapterKey:(p.protocol==='comfyui'?'comfyui-workflow':m.modality==='video'&&p.videoProtocol==='standard-video-async-v1'?'standard-video-async-v1':p.protocol==='openai-compatible'?(m.modality==='text'?'openai-chat':m.modality==='image'?'openai-image':m.modality==='audio'?'openai-audio-speech':'generic-async'):(m.responseMode==='async'?'generic-async':'generic-sync'));return{key:k,label:adapterLabels[k]||k,ready:['openai-chat','openai-responses','openai-image','openai-audio-speech','standard-video-async-v1','comfyui-workflow'].includes(k)||Boolean(m.createPath)}}
@@ -8,6 +9,8 @@
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const attr=s=>esc(s).replace(/`/g,'&#96;');
   async function api(path,opt={}){const res=await fetch(path,{headers:{'Content-Type':'application/json',...(opt.headers||{})},...opt});let data={};try{data=await res.json()}catch{}if(!res.ok)throw new Error(data.error||`HTTP ${res.status}`);return data}
+  function loadLocalProviders(){try{const raw=JSON.parse(localStorage.getItem(PROVIDERS_STORAGE_KEY));return Array.isArray(raw)?raw:[]}catch{return[]}}
+  function saveLocalProviders(list){try{localStorage.setItem(PROVIDERS_STORAGE_KEY,JSON.stringify(Array.isArray(list)?list:[]))}catch{}}
   function markDirty(){
     dirty=true;
     $('#saveState').textContent='正在自动保存…';
@@ -67,6 +70,7 @@
   function renderList(){syncVisibleRows();const items=filtered();$('#modelList').innerHTML=items.length?items.map(rowHtml).join(''):`<div class="empty-state">没有符合当前筛选条件的模型</div>`;bindRows()}
   function render(){renderSidebar();renderSummary();renderList();$$('.provider-filter').forEach(b=>b.classList.toggle('active',b.dataset.provider===activeProvider));$$('.type-tab').forEach(b=>b.classList.toggle('active',b.dataset.type===activeType))}
   async function load(){try{const out=await api('/api/providers');providers=out.providers||[];draftProviders=clone(providers);const q=new URLSearchParams(location.search),requested=q.get('provider');if(requested&&draftProviders.some(p=>p.id===requested))activeProvider=requested;render();$('#saveState').textContent='自动保存已开启'}catch(e){$('#modelList').innerHTML=`<div class="empty-state">无法读取模型：请确认服务已启动并检查登录状态。<br><br>如果设置了访问密码，请先返回画布完成登录。</div>`}}
+  async function load(){try{const out=await api('/api/providers');const remote=out.providers||[];const local=loadLocalProviders();if(remote.length){const localById=new Map(local.map(p=>[p.id,p]));providers=remote.map(p=>({...p,...(localById.get(p.id)||{}),models:Array.isArray((localById.get(p.id)||{}).models)?(localById.get(p.id)||{}).models:p.models||[]}));saveLocalProviders(providers);}else providers=local.length?local:[];draftProviders=clone(providers);const q=new URLSearchParams(location.search),requested=q.get('provider');if(requested&&draftProviders.some(p=>p.id===requested))activeProvider=requested;render();$('#saveState').textContent='自动保存已开启'}catch(e){const local=loadLocalProviders();providers=local;draftProviders=clone(local);if(draftProviders.length){render();$('#saveState').textContent='已恢复本地缓存';return}$('#modelList').innerHTML=`<div class="empty-state">无法读取模型：请确认服务已启动并检查登录状态。<br><br>如果设置了访问密码，请先返回画布完成登录。</div>`}}
   async function saveAll(silent=false){
     if(saving)return;
     clearTimeout(autoSaveTimer);
@@ -76,7 +80,9 @@
     saving=true;$('#saveState').textContent=silent?'正在自动保存…':'正在保存…';
     try{
       for(const p of draftProviders){const payload=clone(p);payload.apiKey='';delete payload.hasApiKey;await api('/api/providers',{method:'POST',body:JSON.stringify(payload)})}
-      const fresh=await api('/api/providers');providers=fresh.providers||[];draftProviders=clone(providers);
+      const fresh=await api('/api/providers');providers=fresh.providers||[];
+      draftProviders=clone(draftProviders);
+      saveLocalProviders(draftProviders);
       dirty=false;$('#saveState').textContent='已保存 · 画布已可用';
       if(!silent)showToast(`已保存 ${flattened().length} 个模型`);
       setTimeout(()=>{if(!dirty)$('#saveState').textContent='自动保存已开启'},1800);
