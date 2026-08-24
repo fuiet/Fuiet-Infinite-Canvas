@@ -52,9 +52,9 @@
     context:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.8 14.2a3.6 3.6 0 1 1 0-4.4"/><path d="M13.4 12h4.1"/><path d="M11.5 3.5h5A3 3 0 0 1 19.5 6.5v11a3 3 0 0 1-3 3h-5"/><path d="M8.5 20.5h-1a3 3 0 0 1-3-3v-11a3 3 0 0 1 3-3h1"/></svg>`,
     link:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.2 14.8 6.8 17a3.5 3.5 0 1 1-4.9-4.9l2.2-2.2"/><path d="M14.8 9.2 17 7a3.5 3.5 0 1 1 4.9 4.9l-2.2 2.2"/><path d="M8.5 15.5 15.5 8.5"/></svg>`,
     close:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12"/><path d="M18 6 6 18"/></svg>`,
-    select:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 4 7.5 16 2.1-6 6.4-2.2L5 4Z"/></svg>`,
-    move:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 4 7.5 16 2.1-6 6.4-2.2L5 4Z"/></svg>`,
-    hand:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 11V7.6a1.2 1.2 0 0 1 2.4 0V11"/><path d="M10.4 10.8V6.9a1.2 1.2 0 0 1 2.4 0v3.9"/><path d="M12.8 10.8V7.4a1.2 1.2 0 0 1 2.4 0v3.4"/><path d="M15.2 11V8.8a1.2 1.2 0 0 1 2.4 0v5c0 2.7-2.2 4.9-4.9 4.9h-2.5c-2.2 0-4.2-1.4-4.9-3.5L5 12.5"/></svg>`,
+    select:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.2 4.8 17.9 11 12.4 12.3 10.2 19 5.2 4.8Z"/></svg>`,
+    move:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.2 4.8 17.9 11 12.4 12.3 10.2 19 5.2 4.8Z"/></svg>`,
+    hand:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.2 11V7.7a1.2 1.2 0 0 1 2.4 0V11"/><path d="M10.6 10.8V6.9a1.2 1.2 0 0 1 2.4 0v3.9"/><path d="M13 10.8V7.5a1.2 1.2 0 0 1 2.4 0v3.3"/><path d="M15.4 11V8.8a1.2 1.2 0 0 1 2.4 0v5c0 2.7-2.2 4.9-4.9 4.9h-2.5c-2.2 0-4.2-1.4-4.9-3.5L5 12.5"/></svg>`,
     layout:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4v16"/><path d="M16 4v16"/><path d="M4 8h16"/><path d="M4 16h16"/></svg>`,
     workflow:`<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="12" cy="18" r="2"/><path d="M8.1 7.1 10.9 15M15.9 7.1 13.1 15M8.3 6h7.4"/></svg>`,
     asset:`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6 4.5 8.2 12 12.8l7.5-4.6L12 3.6Z"/><path d="M4.5 15.2 12 19.8l7.5-4.6"/><path d="M4.5 11.1 12 15.7l7.5-4.6"/></svg>`,
@@ -2923,10 +2923,12 @@
     setDockModeMenuOpen(true);
     $$('[data-mode]',contextMenu).forEach(b=>b.onclick=()=>{setInteractionMode(b.dataset.mode);hideMenus()});
     requestAnimationFrame(()=>{
-      const r=contextMenu.getBoundingClientRect(),pad=12,dock=bottomDock?.getBoundingClientRect();
-      if(dock&&r.bottom>dock.top-pad)contextMenu.style.top=Math.max(pad,dock.top-r.height-pad)+'px';
-      else if(r.bottom>window.innerHeight-pad)contextMenu.style.top=Math.max(pad,window.innerHeight-r.height-pad)+'px';
-      if(r.right>window.innerWidth-pad)contextMenu.style.left=Math.max(pad,window.innerWidth-r.width-pad)+'px';
+      const pad=12,menu=contextMenu.getBoundingClientRect(),anchor=btn.getBoundingClientRect();
+      const center=anchor.left+anchor.width/2;
+      const left=Math.max(pad,Math.min(center-menu.width/2,window.innerWidth-menu.width-pad));
+      const top=Math.max(pad,Math.min(anchor.top-menu.height-12,window.innerHeight-menu.height-pad));
+      contextMenu.style.left=`${left}px`;
+      contextMenu.style.top=`${top}px`;
     });
   }
   if(bottomDock){$$('[data-dock-action]',bottomDock).forEach(b=>b.onclick=()=>{const a=b.dataset.dockAction;if(a==='add'){openDockAdd();return}if(a==='mode'){showDockModeMenu();return}if(a==='layout'){setDockActive('layout');openAutoLayoutMenu();setTimeout(()=>setDockActive('select'),120)}if(a==='workflow'){setDockActive('workflow');renderDrawer('workflow')}if(a==='asset'){setDockActive('asset');renderDrawer('asset')}if(a==='history'){setDockActive('history');renderDrawer('history')}if(a==='shortcuts'){setDockActive('shortcuts');renderDrawer('help');setTimeout(()=>$('#drawer')?.scrollTo?.({top:0,behavior:'smooth'}),0)}if(a==='help'){setDockActive('help');renderDrawer('help')}})}
