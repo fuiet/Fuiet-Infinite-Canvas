@@ -2086,7 +2086,7 @@
     const drawResults=()=>{rows=buildRows();active=Math.max(0,Math.min(active,Math.max(0,rows.length-1)));results.innerHTML=rows.map((r,i)=>`<button class="command-palette-row ${i===active?'active':''}" data-palette-index="${i}"><i>${escapeHtml(r.icon||'•')}</i><span><b>${escapeHtml(r.label)}</b><small>${r.kind==='node'?(source?'创建并自动连线':'创建节点'):'画布命令'}</small></span><em>${i===active?'↵':''}</em></button>`).join('')||'<div class="command-palette-empty">没有匹配结果</div>';$$('[data-palette-index]',results).forEach(b=>b.onclick=()=>execute(rows[Number(b.dataset.paletteIndex)]))};
     input?.addEventListener('input',()=>{active=0;drawResults()});input?.addEventListener('keydown',e=>{if(e.key==='ArrowDown'){e.preventDefault();active=Math.min(rows.length-1,active+1);drawResults()}else if(e.key==='ArrowUp'){e.preventDefault();active=Math.max(0,active-1);drawResults()}else if(e.key==='Enter'){e.preventDefault();execute(rows[active])}else if(e.key==='Escape'){e.preventDefault();hideMenus()}});drawResults();requestAnimationFrame(()=>input?.focus());
   }
-  function showQuickAdd(x,y,p,fromNodeId=null){
+  function showQuickAdd(x,y,p,fromNodeId=null,{preferAboveToolbar=false}={}){
     const source=fromNodeId&&state.nodes.find(n=>n.id===fromNodeId),allowed=new Set(compatibleDownstreamTypes(source));
     const nodeItems=NODE_PALETTE_ITEMS.filter(it=>!source||allowed.has(it.baseType||it.type));
     const resourceItems=source?[]:[
@@ -2124,7 +2124,12 @@
     contextMenu.innerHTML=`<div class="libtv-add-title">${source?`从「${escapeHtml(source.title||labelForType(source.type))}」继续`:'添加节点'}</div>${nodeItems.map(it=>row({kind:'node',...it,children:['script'].includes(it.type)})).join('')}${resourceItems.length?`<div class="libtv-add-title resource">添加资源</div>${resourceItems.map(it=>row({kind:'action',...it})).join('')}`:''}`;
     contextMenu.classList.remove('hidden');
     $$('[data-kind]',contextMenu).forEach(b=>b.onclick=()=>{const item=b.dataset.kind==='node'?nodeItems.find(x=>x.type===b.dataset.id):resourceItems.find(x=>x.id===b.dataset.id);if(item)runItem({kind:b.dataset.kind,...item})});
-    requestAnimationFrame(()=>{const r=contextMenu.getBoundingClientRect(),pad=12;if(r.bottom>window.innerHeight-pad)contextMenu.style.top=Math.max(pad,window.innerHeight-r.height-pad)+'px';if(r.right>window.innerWidth-pad)contextMenu.style.left=Math.max(pad,window.innerWidth-r.width-pad)+'px'});
+    requestAnimationFrame(()=>{
+      const r=contextMenu.getBoundingClientRect(),pad=12,dock=preferAboveToolbar?bottomDock?.getBoundingClientRect():null;
+      if(dock&&r.bottom>dock.top-pad)contextMenu.style.top=Math.max(pad,dock.top-r.height-pad)+'px';
+      else if(r.bottom>window.innerHeight-pad)contextMenu.style.top=Math.max(pad,window.innerHeight-r.height-pad)+'px';
+      if(r.right>window.innerWidth-pad)contextMenu.style.left=Math.max(pad,window.innerWidth-r.width-pad)+'px';
+    });
   }
   function showCanvasContext(x,y,p){ showQuickAdd(x,y,p); }
   function nodeContextPrimaryHtml(n,many){if(many||!n)return'';if(n.type==='image')return `<div class="menu-section-label">图片创作</div><button class="menu-item strong" data-act="image-studio">打开 Image Studio</button><button class="menu-item" data-act="image-storyboard">创建 Storyboard</button><button class="menu-item" data-act="image-video">创建图转视频节点</button><div class="menu-sep"></div>`;if(n.type==='video')return `<div class="menu-section-label">视频创作</div><button class="menu-item strong" data-act="video-studio">打开 Video Studio</button><button class="menu-item" data-act="video-analysis">逐帧拉片</button><button class="menu-item" data-act="video-compose">视频合成</button><div class="menu-sep"></div>`;if(n.type==='script')return `<div class="menu-section-label">脚本</div><button class="menu-item strong" data-act="script-studio">打开 Script Studio</button><button class="menu-item" data-act="script-storyboard">从脚本创建 Storyboard</button><div class="menu-sep"></div>`;if(n.type==='audio')return `<div class="menu-section-label">音频</div><button class="menu-item strong" data-act="audio-trim">截取 / 编辑音频</button><div class="menu-sep"></div>`;return''}
@@ -2856,7 +2861,7 @@
     const r=viewport.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,btn=bottomDock?.querySelector('[data-dock-action="add"]'),br=btn?.getBoundingClientRect();
     if(quickAddMenuOpen && !contextMenu.classList.contains('hidden') && contextMenu.classList.contains('libtv-add-menu')){hideMenus();return}
     window.__quickAddOpenedAt=Date.now();
-    showQuickAdd(br?br.left:cx,br?br.top-460:cy,screenToWorld(cx,cy-190));
+    showQuickAdd(br?br.left:cx,br?br.top-460:cy,screenToWorld(cx,cy-190),null,{preferAboveToolbar:true});
     setDockAddOpen(true);
   }
   if(bottomDock){$$('[data-dock-action]',bottomDock).forEach(b=>b.onclick=()=>{const a=b.dataset.dockAction;if(a==='add'){openDockAdd();return}if(a==='select'){setDockActive('select');viewport.focus();showToast('选择工具 · 单击节点，框选多个节点')}if(a==='layout'){setDockActive('layout');openAutoLayoutMenu();setTimeout(()=>setDockActive('select'),120)}if(a==='workflow'){setDockActive('workflow');renderDrawer('workflow')}if(a==='asset'){setDockActive('asset');renderDrawer('asset')}if(a==='history'){setDockActive('history');renderDrawer('history')}if(a==='shortcuts'){setDockActive('shortcuts');renderDrawer('help');setTimeout(()=>$('#drawer')?.scrollTo?.({top:0,behavior:'smooth'}),0)}if(a==='help'){setDockActive('help');renderDrawer('help')}})}
