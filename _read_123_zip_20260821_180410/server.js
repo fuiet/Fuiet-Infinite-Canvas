@@ -580,6 +580,28 @@ function renderPathTemplate(text, ctx) {
   return String(text || '').replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, k) => encodeURIComponent(String(ctxGet(ctx, k) ?? '')));
 }
 
+function normalizeVideoRequestBody(body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return body;
+  const out = { ...body };
+  for (const key of ['images', 'videos', 'audios', 'references']) {
+    if (typeof out[key] !== 'string') continue;
+    const raw = out[key].trim();
+    if (!raw) {
+      out[key] = [];
+      continue;
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      out[key] = Array.isArray(parsed) ? parsed : [parsed];
+      continue;
+    } catch {}
+    if (raw.includes('\n')) out[key] = raw.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    else if (raw.includes(',')) out[key] = raw.split(',').map(s => s.trim()).filter(Boolean);
+    else out[key] = [raw];
+  }
+  return out;
+}
+
 function providerHeaders(provider, extra={}) {
   const headers = { 'Content-Type': 'application/json', ...(provider.defaultHeaders || {}), ...extra };
   const encrypted = String(provider.apiKeyEncrypted || '');
@@ -759,10 +781,11 @@ async function executeGeneric(task, provider, model, payload) {
   if(effectiveResponseMode==='async'&&resume?.id){
     upstreamTaskId=String(resume.id);updateTask(task,{progress:Math.max(12,task.progress||0)});taskLog(task,`恢复轮询上游任务：${upstreamTaskId}`);
   }else{
+    const requestBody = task.nodeType === 'video' ? normalizeVideoRequestBody(body) : body;
     created = await fetchJson(url, {
       method: opConfig.method || model.method || 'POST',
       headers: providerHeaders(provider),
-      body: ['GET','HEAD'].includes(opConfig.method||model.method) ? undefined : JSON.stringify(body),
+      body: ['GET','HEAD'].includes(opConfig.method||model.method) ? undefined : JSON.stringify(requestBody),
       timeoutMs: Math.min(model.timeoutMs, 120000), provider
     });
     updateTask(task, { progress: 20 });

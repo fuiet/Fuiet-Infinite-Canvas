@@ -236,6 +236,24 @@ function renderTemplate(value, ctx = {}){
   }
   return value;
 }
+function normalizeVideoRequestBody(body){
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return body;
+  const out = { ...body };
+  for (const key of ['images','videos','audios','references']) {
+    if (typeof out[key] !== 'string') continue;
+    const raw = out[key].trim();
+    if (!raw) { out[key] = []; continue; }
+    try {
+      const parsed = JSON.parse(raw);
+      out[key] = Array.isArray(parsed) ? parsed : [parsed];
+      continue;
+    } catch {}
+    if (raw.includes('\n')) out[key] = raw.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    else if (raw.includes(',')) out[key] = raw.split(',').map(s => s.trim()).filter(Boolean);
+    else out[key] = [raw];
+  }
+  return out;
+}
 function normalizeOutput(value, modality){
   if (value == null) return { type:'json', value:null };
   if (typeof value === 'string') {
@@ -354,7 +372,7 @@ async function executeTask(task){
   }
   updateTask(task, { status:'running', progress: 12, error: null, attempt: Number(task.attempt || 0) + 1 });
   const requestOptions = { method: opConfig.method || model.method || 'POST', timeoutMs: 120000, provider };
-  if (!['GET', 'HEAD'].includes(String(requestOptions.method || '').toUpperCase())) requestOptions.body = JSON.stringify(body);
+  if (!['GET', 'HEAD'].includes(String(requestOptions.method || '').toUpperCase())) requestOptions.body = JSON.stringify(task.nodeType === 'video' ? normalizeVideoRequestBody(body) : body);
   if (isAudio) {
     const res = await fetch(joinUrl(provider.baseUrl, route), { ...requestOptions, headers: providerHeaders(provider, { 'Content-Type': 'application/json' }) });
     if (!res.ok) throw new Error(`上游 API ${res.status}`);
