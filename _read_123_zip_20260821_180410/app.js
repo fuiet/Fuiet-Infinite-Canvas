@@ -334,6 +334,9 @@
     if(['audio','音频','speech','tts','music'].includes(v))return 'audio';
     return v;
   }
+  function providerHasApiKey(p){
+    return Boolean(String(p?.apiKey||p?.apiKeyEncrypted||'').trim()) || p?.hasApiKey===true;
+  }
   function modelForNode(n){const p=providerById(n.providerId);return p?.models?.find(m=>m.id===n.modelId&&normalizeClientModality(m.modality)===n.type)||null}
   function modelRuntimeReady(p,m){
     if(!m||m.enabled===false)return false;
@@ -341,6 +344,7 @@
     if(m.adapterResolved&&m.adapterResolved.ready===true)return true;
     if(p?.protocol==='comfyui')return true;
     if(p?.protocol==='openai-compatible'&&['text','image','audio'].includes(normalizeClientModality(m.modality)))return true;
+    if(normalizeClientModality(m.modality)==='video'&&p?.protocol!=='comfyui'&&(p?.videoProtocol==='standard-video-async-v1'||providerHasApiKey(p)))return true;
     return Boolean(String(m.createPath||'').trim()) || normalizeClientModality(m.modality)==='text';
   }
   function allModelsForType(type){

@@ -363,6 +363,9 @@ function publicProvider(p) {
   };
 }
 function uid(prefix='id_') { return prefix + crypto.randomBytes(8).toString('hex'); }
+function providerHasApiKey(provider) {
+  return Boolean(String(provider?.apiKeyEncrypted || '').trim());
+}
 
 function normalizeVideoProtocolConfig(input={}, existing={}) {
   const raw=(input&&typeof input==='object')?input:{};
@@ -383,6 +386,7 @@ function normalizeVideoProtocolConfig(input={}, existing={}) {
 }
 
 function normalizeProvider(input, existing) {
+  const normalizedModels = Array.isArray(input.models) ? input.models.map(normalizeModel) : (existing?.models || []);
   const p = {
     id: input.id || existing?.id || uid('prv_'),
     name: String(input.name || existing?.name || '未命名供应商').trim(),
@@ -403,7 +407,7 @@ function normalizeProvider(input, existing) {
     uploadOutputPath: String(input.uploadOutputPath ?? existing?.uploadOutputPath ?? 'data.url'),
     allowPrivateHosts: input.allowPrivateHosts === true || (input.allowPrivateHosts == null && existing?.allowPrivateHosts === true),
     downloadOutputs: input.downloadOutputs === false ? false : (existing?.downloadOutputs === false ? false : true),
-    models: Array.isArray(input.models) ? input.models.map(normalizeModel) : (existing?.models || []),
+    models: normalizedModels,
     createdAt: existing?.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     apiKeyEncrypted: existing?.apiKeyEncrypted || ''
@@ -411,6 +415,11 @@ function normalizeProvider(input, existing) {
   if (typeof input.apiKey === 'string' && input.apiKey.trim()) {
     const normalizedKey = normalizeApiKeyValue(input.apiKey, p.authScheme, p.authHeader);
     if (normalizedKey) p.apiKeyEncrypted = encryptSecret(normalizedKey);
+  }
+  const hasVideoModels = (p.models || []).some(m => String(m?.modality || '').trim() === 'video');
+  if (p.protocol !== 'comfyui' && hasVideoModels && providerHasApiKey(p) && p.videoProtocol === 'auto') {
+    p.videoProtocol = 'standard-video-async-v1';
+    p.videoProtocolConfig = normalizeVideoProtocolConfig(p.videoProtocolConfig, existing?.videoProtocolConfig);
   }
   p.models=(p.models||[]).map(m=>({...m,adapterKey:m.adapterKey||'auto'}));
   return p;
@@ -504,7 +513,7 @@ function inferAdapterKey(provider,model){
   const explicit=String(model?.adapterKey||'auto');if(explicit&&explicit!=='auto')return explicit;
   if(provider?.protocol==='comfyui')return 'comfyui-workflow';
   const mod=model?.modality||'image';
-  if(mod==='video'&&provider?.videoProtocol==='standard-video-async-v1')return 'standard-video-async-v1';
+  if(mod==='video'&&(provider?.videoProtocol==='standard-video-async-v1'||(providerHasApiKey(provider)&&provider?.videoProtocol!=='auto')))return 'standard-video-async-v1';
   if(provider?.protocol==='openai-compatible'){
     if(mod==='text'||mod==='script')return 'openai-chat';
     if(mod==='image')return 'openai-image';
@@ -519,7 +528,7 @@ function inferAdapterKey(provider,model){
 function adapterInfo(provider,model){const key=inferAdapterKey(provider,model);return {key,label:ADAPTER_CATALOG[key]?.label||key,ready:adapterReady(provider,model,key)};}
 function adapterReady(provider,model,key=inferAdapterKey(provider,model)){
   if(['openai-chat','openai-responses','openai-image','openai-audio-speech','comfyui-workflow'].includes(key))return true;
-  if(key==='standard-video-async-v1')return model?.modality==='video'&&provider?.videoProtocol==='standard-video-async-v1';
+  if(key==='standard-video-async-v1')return model?.modality==='video'&&providerHasApiKey(provider);
   return Boolean(String(model?.createPath||'').trim());
 }
 function semanticContext(references=[]){
