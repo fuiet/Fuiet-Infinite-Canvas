@@ -180,8 +180,10 @@ html,body,.app-shell{background:var(--lib-bg)!important;color:var(--lib-text)}
   stroke-linecap:round!important;
   stroke-linejoin:round!important;
   fill:none!important;
+  transition:transform .16s ease,opacity .16s ease!important;
 }
 .dock-btn.primary .ui-icon{width:16px!important;height:16px!important;stroke-width:2.1!important}
+.dock-btn.primary.open .ui-icon{transform:rotate(45deg)!important}
 .dock-separator{height:24px!important;background:#4b4f56!important}
 
 .context-menu.libtv-add-menu{

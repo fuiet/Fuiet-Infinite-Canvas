@@ -25,6 +25,7 @@
   const agentPanel = $('#agentPanel');
   const emptyQuickBar = $('#emptyQuickBar');
   const bottomDock = $('#bottomDock');
+  let quickAddMenuOpen = false;
   const storyboardBtn = $('#storyboardBtn');
   const workflowViewBtn = $('#workflowViewBtn');
   const storyboardViewBtn = $('#storyboardViewBtn');
@@ -2060,9 +2061,12 @@
     {type:'text',icon:'☰',label:'文本',keywords:'text prompt llm 文本 提示词'},
     {type:'image',icon:'▧',label:'图片',keywords:'image picture img 图片 图像'},
     {type:'video',icon:'▷',label:'视频',keywords:'video movie 视频'},
+    {type:'smart-edit',baseType:'video',icon:'✂',label:'视频编辑',badge:'Beta',keywords:'smart edit video editor 视频编辑 智能剪辑'},
+    {type:'director',baseType:'director',icon:'◇',label:'导演台',badge:'NEW',keywords:'director 3d camera 导演 摄像机'},
+    {type:'frame-analysis',baseType:'video',icon:'▣',label:'逐帧拉片',badge:'SD 2.5',keywords:'analysis frame by frame shot video breakdown 逐帧拉片'},
     {type:'audio',icon:'≋',label:'音频',keywords:'audio music sound 音频 音乐'},
-    {type:'script',icon:'▤',label:'脚本',keywords:'script storyboard shot 脚本 分镜'},
-    {type:'director',icon:'◇',label:'导演台',keywords:'director 3d camera 导演 摄像机'}
+    {type:'script',icon:'▤',label:'脚本',keywords:'script storyboard shot 脚本 分镜',children:true},
+    {type:'asset-library',baseType:'asset-library',icon:'◇',label:'素材库',keywords:'asset library 素材库 资源',children:true}
   ];
   function paletteCanvasActions(){return [
     {id:'paste',icon:'⌘V',label:'粘贴图片段',keywords:'paste clipboard 粘贴',enabled:()=>Boolean(clipboard||loadCanvasClipboard()),run:p=>pasteClipboard(p)},
@@ -2084,20 +2088,34 @@
   }
   function showQuickAdd(x,y,p,fromNodeId=null){
     const source=fromNodeId&&state.nodes.find(n=>n.id===fromNodeId),allowed=new Set(compatibleDownstreamTypes(source));
-    const nodeItems=NODE_PALETTE_ITEMS.filter(it=>!source||allowed.has(it.type));
+    const nodeItems=NODE_PALETTE_ITEMS.filter(it=>!source||allowed.has(it.baseType||it.type));
     const resourceItems=source?[]:[
       {id:'asset',icon:'◇',label:'素材库',run:()=>renderDrawer('asset')},
       {id:'upload',icon:'↥',label:'上传',run:point=>openLocalUpload(point)},
       {id:'history',icon:'♧',label:'从生成历史中选择',run:()=>renderDrawer('history')}
     ];
     const runItem=item=>{
-      if(item.kind==='node')runPaletteNode(item.type,p,fromNodeId);
-      else item.run?.(p);
+      if(item.kind==='node'){
+        if(item.type==='smart-edit'){
+          const node=runPaletteNode('video',p,fromNodeId);
+          if(node){node.title='视频编辑';saveState();render();setTimeout(()=>openVideoTool('智能剪辑',node),0)}
+        }else if(item.type==='frame-analysis'){
+          const node=runPaletteNode('video',p,fromNodeId);
+          if(node){node.title='逐帧拉片';saveState();render();setTimeout(()=>openVideoTool('逐帧拉片',node),0)}
+        }else if(item.type==='director'){
+          const node=runPaletteNode('director',p,fromNodeId);
+          if(node){node.title='导演台';saveState();render();setTimeout(()=>openDirectorConsole(node),0)}
+        }else if(item.type==='asset-library'){
+          renderDrawer('asset');
+        }else{
+          runPaletteNode(item.type,p,fromNodeId);
+        }
+      }else item.run?.(p);
       contextMenu.classList.add('hidden');
       contextMenu.classList.remove('quick-add-menu','libtv-add-menu','command-palette');
     };
     const row=item=>{
-      const tag=item.type==='director'?'<em class="libtv-badge cyan">NEW</em>':item.type==='video'?'<em class="libtv-badge muted">Beta</em>':'';
+      const tag=item.badge?`<em class="libtv-badge ${item.badge==='NEW'?'cyan':'muted'}">${escapeHtml(item.badge)}</em>`:'';
       return `<button class="libtv-add-row" data-kind="${item.kind}" data-id="${escapeAttr(item.type||item.id)}"><i>${escapeHtml(item.icon||'＋')}</i><span>${escapeHtml(item.label)}</span>${tag}${item.children?'<b>›</b>':''}</button>`;
     };
     contextMenu.className='context-menu quick-add-menu libtv-add-menu';
@@ -2554,7 +2572,12 @@
   }
 
 
-  function hideMenus(){ contextMenu.classList.add('hidden');contextMenu.classList.remove('quick-add-menu'); projectMenu.classList.add('hidden'); modelPicker?.classList.add('hidden'); }
+  function setDockAddOpen(open){
+    quickAddMenuOpen=!!open;
+    bottomDock?.classList.toggle('add-open',!!open);
+    bottomDock?.querySelector('[data-dock-action="add"]')?.classList.toggle('open',!!open);
+  }
+  function hideMenus(){ contextMenu.classList.add('hidden');contextMenu.classList.remove('quick-add-menu'); projectMenu.classList.add('hidden'); modelPicker?.classList.add('hidden'); setDockAddOpen(false); }
   function showToast(msg){ toast.textContent=msg;toast.classList.remove('hidden');clearTimeout(window.__toastTimer);window.__toastTimer=setTimeout(()=>toast.classList.add('hidden'),1700); }
   function labelForType(t){ return ({text:'文本',image:'图片',video:'视频',audio:'音频',script:'脚本',director:'导演台'})[t] || t; }
   function escapeHtml(s=''){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
@@ -2829,7 +2852,13 @@
   }
 
   function setDockActive(action){if(!bottomDock)return;$$('[data-dock-action]',bottomDock).forEach(b=>b.classList.toggle('active',b.dataset.dockAction===action||b.dataset.dockAction==='select'&&action==='select'))}
-  function openDockAdd(){const r=viewport.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,btn=bottomDock?.querySelector('[data-dock-action="add"]'),br=btn?.getBoundingClientRect();window.__quickAddOpenedAt=Date.now();showQuickAdd(br?br.left:cx,br?br.top-460:cy,screenToWorld(cx,cy-190));}
+  function openDockAdd(){
+    const r=viewport.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,btn=bottomDock?.querySelector('[data-dock-action="add"]'),br=btn?.getBoundingClientRect();
+    if(quickAddMenuOpen && !contextMenu.classList.contains('hidden') && contextMenu.classList.contains('libtv-add-menu')){hideMenus();return}
+    window.__quickAddOpenedAt=Date.now();
+    showQuickAdd(br?br.left:cx,br?br.top-460:cy,screenToWorld(cx,cy-190));
+    setDockAddOpen(true);
+  }
   if(bottomDock){$$('[data-dock-action]',bottomDock).forEach(b=>b.onclick=()=>{const a=b.dataset.dockAction;if(a==='add'){openDockAdd();return}if(a==='select'){setDockActive('select');viewport.focus();showToast('选择工具 · 单击节点，框选多个节点')}if(a==='layout'){setDockActive('layout');openAutoLayoutMenu();setTimeout(()=>setDockActive('select'),120)}if(a==='workflow'){setDockActive('workflow');renderDrawer('workflow')}if(a==='asset'){setDockActive('asset');renderDrawer('asset')}if(a==='history'){setDockActive('history');renderDrawer('history')}if(a==='shortcuts'){setDockActive('shortcuts');renderDrawer('help');setTimeout(()=>$('#drawer')?.scrollTo?.({top:0,behavior:'smooth'}),0)}if(a==='help'){setDockActive('help');renderDrawer('help')}})}
 
 

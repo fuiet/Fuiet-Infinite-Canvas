@@ -195,8 +195,9 @@ button{cursor:pointer}
 .dock-btn.active{background:#31353a;color:#fff}
 .dock-btn.primary{width:34px;height:34px;background:#eff0ee;color:#1a1c20;font-size:24px;box-shadow:0 1px 0 rgba(255,255,255,.5) inset,0 0 0 1px rgba(0,0,0,.04)}
 .dock-btn.primary:hover{background:#fff}
-.dock-btn .ui-icon{width:18px;height:18px;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;fill:none;flex:none}
+.dock-btn .ui-icon{width:18px;height:18px;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;fill:none;flex:none;transition:transform .16s ease,opacity .16s ease}
 .dock-btn.primary .ui-icon{width:16px;height:16px;stroke-width:2.1}
+.dock-btn.primary.open .ui-icon{transform:rotate(45deg)}
 .dock-separator{width:1px;height:24px;background:#4b4f56;margin:0 4px}
 .bottom-center-hint{bottom:76px!important;opacity:.58}
 @media(max-width:760px){.bottom-dock{bottom:10px}.dock-btn{width:32px;height:32px}.bottom-center-hint{display:none}}
