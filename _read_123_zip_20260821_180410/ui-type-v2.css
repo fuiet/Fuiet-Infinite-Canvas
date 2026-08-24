@@ -3,14 +3,14 @@
  */
 :root{
   --ui-font-family:Inter,"SF Pro Display","SF Pro Text","PingFang SC","Microsoft YaHei",system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-  --ui-type-2xs:11px;
-  --ui-type-xs:12px;
-  --ui-type-sm:13px;
-  --ui-type-md:14px;
-  --ui-type-lg:16px;
-  --ui-type-xl:19px;
-  --ui-type-2xl:22px;
-  --ui-line:1.5;
+  --ui-type-2xs:12px;
+  --ui-type-xs:13px;
+  --ui-type-sm:14px;
+  --ui-type-md:15px;
+  --ui-type-lg:17px;
+  --ui-type-xl:20px;
+  --ui-type-2xl:24px;
+  --ui-line:1.55;
 }
 html,body,button,input,select,textarea{font-family:var(--ui-font-family)!important;text-rendering:geometricPrecision;-webkit-font-smoothing:antialiased}
 body{font-size:var(--ui-type-md)!important;line-height:var(--ui-line)}
@@ -44,3 +44,107 @@ small,.muted,.meta,.hint{font-size:var(--ui-type-xs)!important}
 .models-title{font-size:var(--ui-type-xl)!important}.models-subtitle{font-size:var(--ui-type-sm)!important}
 .sidebar-label,.provider-filter,.provider-settings,.model-card,.model-card input,.model-card select,.model-card textarea{font-size:var(--ui-type-sm)!important}
 .overview-heading{font-size:var(--ui-type-lg)!important}.overview-copy p,.model-meta,.field-help{font-size:var(--ui-type-xs)!important}
+
+/* Readability uplift: lift the smallest labels and metadata without changing layout */
+.workspace-name,
+.canvas-switcher,
+.canvas-switcher:after,
+.project-menu,
+.menu-item,
+.drawer-title,
+.drawer-row b,
+.drawer-item b,
+.model-name,
+.model-provider,
+.row-action,
+.model-enabled,
+.field label,
+.field small,
+.summary-chip,
+.provider-filter b,
+.overview-copy p,
+.enabled-only,
+.page-toast,
+.storyboard-view-head p,
+.storyboard-view-summary span,
+.storyboard-board-head,
+.storyboard-shot-index span,
+.storyboard-shot-index i,
+.storyboard-shot-copy p,
+.storyboard-shot-copy small,
+.storyboard-media-meta span,
+.storyboard-shot-actions button,
+.storyboard-audio-card b,
+.storyboard-audio-card small,
+.node-header,
+.node-footer,
+.node-empty,
+.node-empty small,
+.node-textarea,
+.script-table,
+.script-node-compact,
+.director-node-preview,
+.text-node-preview,
+.image-node-copy,
+.text-node-try,
+.image-node-try-label,
+.script-try-label,
+.agent-title span,
+.agent-meta,
+.agent-bubble b,
+.agent-bubble p,
+.agent-skills-head b,
+.agent-skill-copy b,
+.agent-skill-copy span,
+.agent-pill,
+.timeline-head span,
+.timeline-controls>span,
+.nle-commandbar button,
+.nle-inspector b,
+.nle-track-name b,
+.nle-clip>b,
+.nle-clip>span,
+.v36-top>span,
+.v36-top>mark,
+.v36-left>header,
+.v36-left>header span,
+.v36-left>header button,
+.v36-tree-row b,
+.v36-tree-row small,
+.v36-tree-row em,
+.v36-ref b,
+.v36-ref small,
+.v36-empty,
+.v36-main>header,
+.v36-transport button,
+.v36-transport select,
+.v36-transport span,
+.v36-main>footer>header,
+.v36-ver span,
+.v36-ver b,
+.v36-ver small,
+.v36-right>nav button,
+.v36-inspector>.tabs,
+.v36-inspector>header b,
+.v36-inspector>header small,
+.v36-inspector label,
+.v36-inspector>p,
+.v36-inspector button.block,
+.v36-cap b,
+.v36-cap span,
+.v36-compare-modes button,
+.v36-compare-actions button,
+.v362-metric,
+.v362-audio-diagram,
+.v362-last,
+.v362-marker-row b,
+.v362-marker-row small,
+.v362-timeline-marker{
+  font-size:var(--ui-type-xs)!important;
+}
+.workspace-name{font-size:var(--ui-type-md)!important}
+.canvas-switcher{font-size:var(--ui-type-md)!important}
+.canvas-switcher:after{font-size:var(--ui-type-md)!important}
+.models-subtitle,.overview-copy p,.field-help,.model-meta,.summary-chip,.storyboard-view-head p,.storyboard-view-summary span,.storyboard-shot-index span,.storyboard-shot-copy p,.storyboard-shot-copy small,.storyboard-audio-card small,.agent-title span,.agent-meta,.agent-skill-copy span,.timeline-head span,.timeline-controls>span,.nle-clip>span,.v36-top>span,.v36-top>mark,.v36-left>header span,.v36-tree-row small,.v36-ref small,.v36-empty,.v36-main>header,.v36-transport button,.v36-transport select,.v36-transport span,.v36-main>footer>header,.v36-ver span,.v36-ver small,.v36-right>nav button,.v36-inspector>.tabs,.v36-inspector>header small,.v36-inspector label,.v36-inspector>p,.v36-inspector button.block,.v36-cap span,.v36-compare-modes button,.v36-compare-actions button,.v362-last,.v362-marker-row small{
+  line-height:1.55!important;
+}
