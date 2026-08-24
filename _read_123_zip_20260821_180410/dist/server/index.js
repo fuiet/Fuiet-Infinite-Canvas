@@ -13,7 +13,7 @@ export default {
     if(path === '/api/queue' && request.method === 'GET') return json({ paused: false, concurrency: 0, running: 0, queued: 0 });
     if(path === '/api/projects' && request.method === 'GET') return json({ projects: Array.from(projects.values()).map(p => ({ id: p.id, name: p.name, version: p.version, createdAt: p.createdAt, updatedAt: p.updatedAt })) });
     if(path === '/api/projects' && request.method === 'POST'){ const body = await request.json().catch(() => ({})); const id = body.id || ('proj_' + crypto.randomUUID().replace(/-/g, '').slice(0, 12)); const project = projectPayload(id, body); projects.set(id, project); return json({ project }, 201); }
-    const projectMatch = path.match(/^/api/projects/([^/]+)$/);
+    const projectMatch = path.match(/^\/api\/projects\/([^/]+)$/);
     if(projectMatch){
       const id = decodeURIComponent(projectMatch[1]);
       if(request.method === 'GET'){ const project = projects.get(id); return project ? json({ project }) : json({ error: '项目不存在' }, 404); }
