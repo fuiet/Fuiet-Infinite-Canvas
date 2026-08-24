@@ -145,27 +145,44 @@ html,body,.app-shell{background:var(--lib-bg)!important;color:var(--lib-text)}
 .backend-dot.online{background:var(--lib-cyan)!important;box-shadow:none!important}
 
 .bottom-dock{
-  height:56px!important;
-  padding:7px!important;
-  gap:5px!important;
-  border-radius:13px!important;
-  background:rgba(38,38,38,.97)!important;
-  border:1px solid var(--lib-border)!important;
-  box-shadow:0 14px 38px rgba(0,0,0,.38)!important;
-  backdrop-filter:blur(14px)!important;
+  height:52px!important;
+  padding:7px 10px!important;
+  gap:6px!important;
+  border-radius:16px!important;
+  background:rgba(33,35,39,.96)!important;
+  border:1px solid #3a3d42!important;
+  box-shadow:0 12px 28px rgba(0,0,0,.36),inset 0 1px 0 rgba(255,255,255,.03)!important;
+  backdrop-filter:blur(16px)!important;
 }
 .dock-btn{
-  width:40px!important;
-  height:40px!important;
-  border-radius:9px!important;
+  width:38px!important;
+  height:38px!important;
+  border-radius:10px!important;
   background:transparent!important;
-  color:#ededed!important;
+  color:#d7dbe0!important;
   border:1px solid rgba(255,255,255,.035)!important;
+  transition:background .15s ease,color .15s ease,transform .15s ease!important;
 }
-.dock-btn:hover,.dock-btn.active:not(.primary){background:#363636!important;color:#fff!important}
-.dock-btn.primary{background:#f0f0f0!important;color:#111!important}
-.bottom-dock .ui-icon{width:19px!important;height:19px!important;stroke-width:2!important}
-.dock-separator{height:28px!important;background:#464646!important}
+.dock-btn:hover,.dock-btn.active:not(.primary){background:#34383d!important;color:#fff!important}
+.dock-btn.primary{
+  width:34px!important;
+  height:34px!important;
+  background:#eff0ee!important;
+  color:#1a1c20!important;
+  box-shadow:0 1px 0 rgba(255,255,255,.5) inset,0 0 0 1px rgba(0,0,0,.04)!important;
+}
+.dock-btn.primary:hover{background:#fff!important}
+.bottom-dock .ui-icon{
+  width:18px!important;
+  height:18px!important;
+  stroke:currentColor!important;
+  stroke-width:1.9!important;
+  stroke-linecap:round!important;
+  stroke-linejoin:round!important;
+  fill:none!important;
+}
+.dock-btn.primary .ui-icon{width:16px!important;height:16px!important;stroke-width:2.1!important}
+.dock-separator{height:24px!important;background:#4b4f56!important}
 
 .context-menu.libtv-add-menu{
   width:196px!important;
