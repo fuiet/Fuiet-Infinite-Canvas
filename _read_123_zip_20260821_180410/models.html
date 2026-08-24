@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>全部模型 · 画布工作室</title>
+  <link rel="stylesheet" href="./models.css" />
+  <link rel="stylesheet" href="./ui-type-v2.css" />
+</head>
+<body>
+  <div class="models-page">
+    <header class="models-topbar">
+      <div class="models-brand">
+        <button id="backCanvas" class="icon-button" title="返回画布">←</button>
+        <div>
+          <div class="models-title">全部模型</div>
+          <div class="models-subtitle">集中查看和配置你已选择导入的第三方接口模型</div>
+        </div>
+      </div>
+      <div class="models-top-actions">
+        <span id="saveState" class="save-state"></span>
+        <button id="expandAll" class="soft-button">全部展开</button>
+        <button id="collapseAll" class="soft-button">全部收起</button>
+        <button id="addModel" class="soft-button">＋ 手动添加</button>
+        <button id="saveAll" class="primary-button">保存全部</button>
+      </div>
+    </header>
+
+    <div class="models-shell">
+      <aside class="models-sidebar">
+        <div class="sidebar-label">供应商</div>
+        <button class="provider-filter active" data-provider="all"><span>全部供应商</span><b id="allProviderCount">0</b></button>
+        <div id="providerFilters"></div>
+        <div class="sidebar-divider"></div>
+        <button id="openProviderSettings" class="provider-settings">⚙ 接口供应商设置</button>
+      </aside>
+
+      <main class="models-main">
+        <section class="models-overview">
+          <div class="overview-copy">
+            <div class="overview-heading"><span>全部模型配置</span><strong id="totalCount">0</strong></div>
+            <p>这里只显示你在“拉取模型”时主动勾选导入的模型，以及手动添加的模型。未选择的供应商模型不会进入这里。</p>
+          </div>
+          <div id="summaryStrip" class="summary-strip"></div>
+        </section>
+
+        <section class="models-controls">
+          <div class="search-wrap"><span>⌕</span><input id="modelSearch" placeholder="搜索模型名称、模型 ID 或供应商"></div>
+          <div class="type-tabs" id="typeTabs">
+            <button class="type-tab active" data-type="all">全部</button>
+            <button class="type-tab" data-type="text">文本</button>
+            <button class="type-tab" data-type="image">图片</button>
+            <button class="type-tab" data-type="video">视频</button>
+            <button class="type-tab" data-type="audio">音频</button>
+          </div>
+          <label class="enabled-only"><input id="enabledOnly" type="checkbox">只看已启用</label>
+        </section>
+
+        <section id="modelList" class="standalone-model-list"></section>
+      </main>
+    </div>
+  </div>
+
+  <div id="toast" class="page-toast hidden"></div>
+  <script src="./models.js"></script>
+  <script src="./ui-zh.js"></script>
+</body>
+</html>

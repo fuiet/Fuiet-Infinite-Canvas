@@ -1,0 +1,46 @@
+/* Canvas Studio · Typography System v2
+ * Shared by Canvas + Models. One consistent, slightly larger UI type scale.
+ */
+:root{
+  --ui-font-family:Inter,"SF Pro Display","SF Pro Text","PingFang SC","Microsoft YaHei",system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --ui-type-2xs:11px;
+  --ui-type-xs:12px;
+  --ui-type-sm:13px;
+  --ui-type-md:14px;
+  --ui-type-lg:16px;
+  --ui-type-xl:19px;
+  --ui-type-2xl:22px;
+  --ui-line:1.5;
+}
+html,body,button,input,select,textarea{font-family:var(--ui-font-family)!important;text-rendering:geometricPrecision;-webkit-font-smoothing:antialiased}
+body{font-size:var(--ui-type-md)!important;line-height:var(--ui-line)}
+button,input,select,textarea{font-size:var(--ui-type-sm)!important}
+small,.muted,.meta,.hint{font-size:var(--ui-type-xs)!important}
+
+/* Canvas chrome */
+.brand-text{font-size:var(--ui-type-lg)!important}
+.project-name,.drawer,.drawer button,.drawer input,.drawer select,.drawer textarea{font-size:var(--ui-type-sm)!important}
+.top-icon,.dock-btn,.pill-btn{font-size:var(--ui-type-sm)!important}
+.node-header,.node-footer,.node-result-nav,.node-run-status,.node-candidate-rail{font-size:var(--ui-type-xs)!important}
+.node-badge>span:last-child{font-size:var(--ui-type-sm)!important;font-weight:620}
+.node-empty,.node-textarea,.script-table,.script-node-compact,.director-node-preview{font-size:var(--ui-type-sm)!important}
+.node-textarea{line-height:1.65!important}
+.tool-btn,.selection-toolbar-label,.context-menu,.project-menu,.menu-item{font-size:var(--ui-type-sm)!important}
+.context-menu .context-title{font-size:var(--ui-type-xs)!important}
+.generator-panel,.generator-panel button,.generator-panel select,.generator-panel textarea{font-size:var(--ui-type-sm)!important}
+.generator-panel textarea{font-size:var(--ui-type-md)!important}
+.model-pill b,.gen-title,.detail-ui-head b{font-size:var(--ui-type-md)!important}
+.micro-action,.micro-icon,.micro-select,.generation-cost{font-size:var(--ui-type-xs)!important}
+.bottom-center-hint{font-size:var(--ui-type-xs)!important}
+.empty-canvas-hint b{font-size:var(--ui-type-xl)!important}
+.empty-canvas-hint span{font-size:var(--ui-type-sm)!important}
+.empty-canvas-hint small{font-size:var(--ui-type-xs)!important}
+.toast{font-size:var(--ui-type-sm)!important}
+.feature-modal,.feature-modal button,.feature-modal input,.feature-modal select,.feature-modal textarea{font-size:var(--ui-type-sm)!important}
+.feature-modal h1{font-size:var(--ui-type-2xl)!important}.feature-modal h2{font-size:var(--ui-type-xl)!important}.feature-modal h3{font-size:var(--ui-type-lg)!important}
+
+/* Models page */
+.models-page,.models-page button,.models-page input,.models-page select,.models-page textarea{font-size:var(--ui-type-sm)!important}
+.models-title{font-size:var(--ui-type-xl)!important}.models-subtitle{font-size:var(--ui-type-sm)!important}
+.sidebar-label,.provider-filter,.provider-settings,.model-card,.model-card input,.model-card select,.model-card textarea{font-size:var(--ui-type-sm)!important}
+.overview-heading{font-size:var(--ui-type-lg)!important}.overview-copy p,.model-meta,.field-help{font-size:var(--ui-type-xs)!important}
