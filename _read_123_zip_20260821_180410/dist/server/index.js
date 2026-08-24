@@ -4,6 +4,17 @@ const providers = new Map();
 function json(body, status = 200){ return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } }); }
 function clone(value){ return JSON.parse(JSON.stringify(value ?? null)); }
 function errorText(value){ if(value==null)return ''; if(typeof value==='string')return value; if(typeof value==='object')return String(value.message||value.error||value.detail||value.reason||value.msg||value.title||'').trim()||JSON.stringify(value); return String(value); }
+function normalizeApiKeyValue(value, authScheme='Bearer', authHeader='Authorization') {
+  let key = String(value || '').trim();
+  if (!key) return '';
+  key = key.replace(/^Authorization\s*:\s*/i, '').trim();
+  const scheme = String(authScheme || '').trim();
+  if ((String(authHeader || '').toLowerCase() === 'authorization' || /^bearer$/i.test(scheme)) && /^bearer\s+/i.test(key)) {
+    key = key.replace(/^bearer\s+/i, '').trim();
+  }
+  if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) key = key.slice(1,-1).trim();
+  return key;
+}
 function projectPayload(id, body = {}){ const now = new Date().toISOString(); return { id, name: body.name || '未命名画布', data: body.data || {}, version: 1, createdAt: now, updatedAt: now }; }
 function providerDefaults(input = {}){
   return {
@@ -13,7 +24,7 @@ function providerDefaults(input = {}){
     videoProtocol: String(input.videoProtocol || 'auto').trim(),
     videoProtocolConfig: { pollPath:'/v1/video/generations/{{taskId}}', taskIdPath:'', statusPath:'', progressPath:'', outputPath:'', successValues:['succeeded','completed','success','done','finished'], failureValues:['failed','error','cancelled','canceled'], pollIntervalMs:1500, timeoutMs:1200000, ...(input.videoProtocolConfig || {}) },
     baseUrl: String(input.baseUrl || '').trim(),
-    apiKey: String(input.apiKey || input.apiKeyPlain || '').trim(),
+    apiKey: normalizeApiKeyValue(input.apiKey || input.apiKeyPlain || '', input.authScheme || 'Bearer', input.authHeader || 'Authorization'),
     authHeader: String(input.authHeader || 'Authorization').trim(),
     authScheme: String(input.authScheme || 'Bearer').trim(),
     testPath: String(input.testPath || '').trim(),
@@ -62,7 +73,7 @@ function publicProvider(provider){
 }
 function providerHeaders(provider, extra = {}){
   const headers = { 'Content-Type': 'application/json', ...(provider.defaultHeaders || {}), ...extra };
-  const key = String(provider.apiKey || '').trim();
+  const key = normalizeApiKeyValue(provider.apiKey || '', provider.authScheme || 'Bearer', provider.authHeader || 'Authorization');
   if (key) {
     const headerName = provider.authHeader || 'Authorization';
     const scheme = String(provider.authScheme || '').trim();
