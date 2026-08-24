@@ -239,6 +239,19 @@
   function saveLocalProviders(list){
     try{localStorage.setItem(PROVIDERS_STORAGE_KEY,JSON.stringify(Array.isArray(list)?list:[]))}catch{}
   }
+  async function restoreProvidersToServer(list){
+    if(!Array.isArray(list)||!list.length)return [];
+    for(const p of list){
+      const payload=clone(p);
+      if(!String(payload.apiKey||'').trim())delete payload.apiKey;
+      delete payload.hasApiKey;
+      await apiJson('/api/providers',{method:'POST',body:JSON.stringify(payload)});
+    }
+    const fresh=await apiJson('/api/providers');
+    const remote=Array.isArray(fresh.providers)?fresh.providers:[];
+    if(remote.length)saveLocalProviders(remote);
+    return remote;
+  }
   function migrateState(input){
     const next=input||defaultState();
     next.nodes=(next.nodes||[]).map(n=>({providerId:'',modelId:'',modelName:'',...n,providerId:n.providerId||'',modelId:n.modelId||'',modelName:n.modelName||''}));
@@ -279,7 +292,17 @@
         providers=remote.map(p=>({...p,...(localById.get(p.id)||{}),models:Array.isArray((localById.get(p.id)||{}).models)?(localById.get(p.id)||{}).models:p.models||[]})).filter(Boolean);
         saveLocalProviders(providers);
       }
-      else if(local.length){providers=local;}
+      else if(local.length){
+        providers=local;
+        try{
+          const restored=await restoreProvidersToServer(local);
+          if(restored.length){
+            const localById=new Map(local.map(p=>[p.id,p]));
+            providers=restored.map(p=>({...p,...(localById.get(p.id)||{}),models:Array.isArray((localById.get(p.id)||{}).models)?(localById.get(p.id)||{}).models:p.models||[]})).filter(Boolean);
+            saveLocalProviders(providers);
+          }
+        }catch{}
+      }
       else providers=[];
       backendOnline=true;
     }catch(e){
