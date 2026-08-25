@@ -462,26 +462,51 @@ function providerHasKey(provider) {
   return Boolean(String(provider?.apiKey || provider?.apiKeyEncrypted || '').trim()) || provider?.hasApiKey === true;
 }
 
+
+function providerAdapter(model) {
+  const modality = String(model?.modality || 'text');
+  const key = modality === 'text' || modality === 'script' ? 'openai-chat'
+    : modality === 'image' ? 'openai-image'
+    : modality === 'audio' ? 'openai-audio-speech'
+    : modality === 'video' ? 'standard-video-async-v1' : 'auto';
+  return { key, label:'自动适配', ready:Boolean(model?.id) };
+}
 function publicProvider(provider) {
   const out = clone(provider);
   delete out.apiKey;
+  delete out.apiKeyEncrypted;
   out.hasApiKey = providerHasKey(provider);
+  out.models = (out.models || []).map(model => ({ ...model, adapterResolved:providerAdapter(model) }));
   return out;
 }
 
+
+function cleanApiKey(value) {
+  return String(value || '').trim().replace(/^authorization\s*:\s*/i, '').replace(/^bearer\s+/i, '').trim();
+}
+function providerNameFromUrl(baseUrl) {
+  try { return new URL(baseUrl).hostname.replace(/^api\./i, '') || 'API 供应商'; }
+  catch { return 'API 供应商'; }
+}
 function normalizeProvider(input, existing = null) {
   const current = existing ? clone(existing) : {};
-  const next = { ...current, ...clone(input || {}) };
+  const incoming = clone(input || {});
+  const next = { ...current, ...incoming };
   next.id = String(next.id || current.id || uid('provider_')).trim();
-  next.name = String(next.name || current.name || '新供应商').trim();
-  next.baseUrl = String(next.baseUrl || current.baseUrl || '').trim();
+  next.baseUrl = String(next.baseUrl || current.baseUrl || '').trim().replace(/\/+$/, '');
+  const incomingKey = cleanApiKey(incoming.apiKey);
+  if (incomingKey) next.apiKey = incomingKey;
+  else if (current.apiKey) next.apiKey = current.apiKey;
+  else delete next.apiKey;
+  const rawName = String(incoming.name || current.name || '').trim();
+  next.name = rawName && rawName !== '新供应商' ? rawName : providerNameFromUrl(next.baseUrl);
   next.protocol = String(next.protocol || current.protocol || 'openai-compatible');
-  next.videoProtocol = String(next.videoProtocol || current.videoProtocol || next.protocol || 'openai-compatible');
+  next.videoProtocol = String(next.videoProtocol || current.videoProtocol || 'auto');
   next.videoProtocolConfig = next.videoProtocolConfig || current.videoProtocolConfig || {};
   next.authHeader = String(next.authHeader || current.authHeader || 'Authorization');
-  next.authScheme = String(next.authScheme || current.authScheme || 'Bearer');
-  next.testPath = String(next.testPath || current.testPath || '/v1/models');
-  next.modelsPath = String(next.modelsPath || current.modelsPath || '/v1/models');
+  next.authScheme = String(next.authScheme ?? current.authScheme ?? 'Bearer');
+  next.testPath = String(next.testPath || current.testPath || '').trim();
+  next.modelsPath = String(next.modelsPath || current.modelsPath || '').trim();
   next.referenceTransport = String(next.referenceTransport || current.referenceTransport || 'url');
   next.publicBaseUrl = String(next.publicBaseUrl || current.publicBaseUrl || '').trim();
   next.uploadPath = String(next.uploadPath || current.uploadPath || '').trim();
@@ -489,31 +514,27 @@ function normalizeProvider(input, existing = null) {
   next.uploadOutputPath = String(next.uploadOutputPath || current.uploadOutputPath || '').trim();
   next.allowPrivateHosts = Boolean(next.allowPrivateHosts ?? current.allowPrivateHosts ?? false);
   next.downloadOutputs = Boolean(next.downloadOutputs ?? current.downloadOutputs ?? true);
-  next.defaultHeaders = next.defaultHeaders || current.defaultHeaders || {};
+  next.defaultHeaders = next.defaultHeaders && typeof next.defaultHeaders === 'object' ? next.defaultHeaders : {};
   next.models = Array.isArray(next.models) ? next.models : Array.isArray(current.models) ? current.models : [];
-  next.models = next.models.map((m, idx) => normalizeModel(m, idx));
+  next.models = next.models.map((model, idx) => normalizeModel(model, idx));
   return next;
 }
+
 
 function normalizeModel(input, idx = 0) {
   const next = clone(input || {});
   next.id = String(next.id || `model_${idx + 1}`).trim();
   next.name = String(next.name || next.id || `模型 ${idx + 1}`).trim();
-  next.modality = String(next.modality || 'text');
+  next.modality = ['text','script','image','video','audio'].includes(String(next.modality)) ? String(next.modality) : 'text';
   next.enabled = next.enabled !== false;
   next.adapterKey = String(next.adapterKey || 'auto');
-  next.method = String(next.method || 'POST');
-  next.responseMode = String(next.responseMode || 'sync');
-  next.createPath = String(next.createPath || '').trim();
-  next.outputPath = String(next.outputPath || '').trim();
-  next.taskIdPath = String(next.taskIdPath || '').trim();
-  next.pollPath = String(next.pollPath || '').trim();
-  next.statusPath = String(next.statusPath || '').trim();
-  next.progressPath = String(next.progressPath || '').trim();
-  next.successValues = Array.isArray(next.successValues) ? next.successValues : ['completed', 'succeeded', 'success'];
-  next.failureValues = Array.isArray(next.failureValues) ? next.failureValues : ['failed', 'error', 'canceled'];
-  next.pollIntervalMs = Number(next.pollIntervalMs || 1500);
-  next.timeoutMs = Number(next.timeoutMs || 1200000);
+  next.method = String(next.method || 'POST').toUpperCase();
+  next.responseMode = String(next.responseMode || (next.modality === 'video' ? 'async' : 'sync'));
+  for (const key of ['createPath','outputPath','taskIdPath','pollPath','statusPath','progressPath']) next[key] = String(next[key] || '').trim();
+  next.successValues = Array.isArray(next.successValues) ? next.successValues : ['completed','succeeded','success','done','finished'];
+  next.failureValues = Array.isArray(next.failureValues) ? next.failureValues : ['failed','error','canceled','cancelled'];
+  next.pollIntervalMs = Math.max(500, Number(next.pollIntervalMs || 1500));
+  next.timeoutMs = Math.max(5000, Number(next.timeoutMs || 1200000));
   next.requestTemplate = next.requestTemplate && typeof next.requestTemplate === 'object' ? next.requestTemplate : {};
   next.operationRoutes = next.operationRoutes && typeof next.operationRoutes === 'object' ? next.operationRoutes : {};
   next.capabilities = next.capabilities && typeof next.capabilities === 'object' ? next.capabilities : {};
@@ -521,19 +542,33 @@ function normalizeModel(input, idx = 0) {
   return next;
 }
 
-function routeForTask(model, nodeType) {
+
+function defaultRouteFor(nodeType) {
+  if (nodeType === 'text' || nodeType === 'script') return {createPath:'/v1/chat/completions',responseMode:'sync',outputPath:'choices.0.message.content'};
+  if (nodeType === 'image') return {createPath:'/v1/images/generations',responseMode:'sync',outputPath:'data.0.url'};
+  if (nodeType === 'audio') return {createPath:'/v1/audio/speech',responseMode:'sync',outputPath:''};
+  if (nodeType === 'video') return {createPath:'/v1/video/generations',responseMode:'async',taskIdPath:'',pollPath:'/v1/video/generations/{{taskId}}',statusPath:'',progressPath:'',outputPath:''};
+  return {createPath:'',responseMode:'sync',outputPath:''};
+}
+function routeForTask(provider, model, nodeType) {
   const routes = model?.operationRoutes && typeof model.operationRoutes === 'object' ? model.operationRoutes : {};
-  const key = nodeType === 'video' ? 'generate' : nodeType === 'image' ? 'generate' : nodeType === 'audio' ? 'generate' : 'generate';
+  const override = routes.generate || {};
+  const defaults = defaultRouteFor(nodeType);
   return {
-    ...(routes[key] || {}),
-    createPath: routes[key]?.createPath || model?.createPath || '',
-    method: routes[key]?.method || model?.method || 'POST',
-    responseMode: routes[key]?.responseMode || model?.responseMode || 'sync',
-    outputPath: routes[key]?.outputPath || model?.outputPath || '',
-    taskIdPath: routes[key]?.taskIdPath || model?.taskIdPath || '',
-    pollPath: routes[key]?.pollPath || model?.pollPath || '',
-    statusPath: routes[key]?.statusPath || model?.statusPath || '',
-    progressPath: routes[key]?.progressPath || model?.progressPath || ''
+    ...defaults,...override,
+    createPath:override.createPath || model?.createPath || defaults.createPath,
+    method:override.method || model?.method || 'POST',
+    responseMode:override.responseMode || model?.responseMode || defaults.responseMode,
+    outputPath:override.outputPath || model?.outputPath || defaults.outputPath,
+    taskIdPath:override.taskIdPath || model?.taskIdPath || defaults.taskIdPath || '',
+    pollPath:override.pollPath || model?.pollPath || defaults.pollPath || '',
+    statusPath:override.statusPath || model?.statusPath || defaults.statusPath || '',
+    progressPath:override.progressPath || model?.progressPath || defaults.progressPath || '',
+    successValues:override.successValues || model?.successValues,
+    failureValues:override.failureValues || model?.failureValues,
+    pollIntervalMs:override.pollIntervalMs || model?.pollIntervalMs,
+    timeoutMs:override.timeoutMs || model?.timeoutMs,
+    requestTemplate:override.requestTemplate || model?.requestTemplate || {}
   };
 }
 
@@ -555,13 +590,15 @@ function buildHeaders(provider, model) {
   return headers;
 }
 
+
 function resolveUrl(baseUrl, maybePath) {
-  if (!maybePath) return String(baseUrl || '').trim();
-  try {
-    return new URL(maybePath, baseUrl).toString();
-  } catch {
-    return String(maybePath).trim();
-  }
+  const route = String(maybePath || '').trim();
+  if (/^https?:\/\//i.test(route)) return route;
+  const base = String(baseUrl || '').trim().replace(/\/+$/, '');
+  if (!route) return base;
+  let suffix = route;
+  if (/\/v1$/i.test(base) && /^\/v1(?:\/|$)/i.test(suffix)) suffix = suffix.replace(/^\/v1/i, '');
+  return base + '/' + suffix.replace(/^\/+/, '');
 }
 
 function buildTaskContext(task, provider, model, route) {
@@ -595,83 +632,85 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 20000) {
   }
 }
 
-async function tryProviderGeneration(task, provider, model) {
-  if (!provider || !model) return null;
-  const route = routeForTask(model, task.nodeType);
-  if (!route.createPath || !provider.baseUrl) return null;
-  const ctx = buildTaskContext(task, provider, model, route);
-  const requestTemplate = route.requestTemplate || model.requestTemplate || {};
-  const bodyObject = replacePlaceholders(requestTemplate, ctx);
-  const url = resolveUrl(provider.baseUrl, route.createPath);
-  const method = String(route.method || 'POST').toUpperCase();
-  const res = await fetchWithTimeout(url, {
-    method,
-    headers: buildHeaders(provider, model),
-    body: method === 'GET' || method === 'HEAD' ? undefined : JSON.stringify(bodyObject)
-  }, Number(route.timeoutMs || model.timeoutMs || 30000));
-  const textBody = await res.text();
-  let parsed = textBody;
-  try { parsed = JSON.parse(textBody); } catch {}
-  let output = extractOutput(parsed, task.nodeType);
-  if (!output && route.outputPath) {
-    const value = getPath(parsed, route.outputPath);
-    if (urlLike(value)) output = { type: 'url', value: value.trim(), sourceUrl: value.trim() };
-    else if (typeof value === 'string' && value.trim()) output = { type: task.nodeType === 'text' || task.nodeType === 'script' ? 'text' : 'text', value: value.trim() };
-  }
-  if (output) return { output, raw: parsed, sourceUrl: url };
 
-  if ((route.responseMode || model.responseMode) === 'async') {
-    const taskId = route.taskIdPath ? getPath(parsed, route.taskIdPath) : getPath(parsed, 'id');
-    if (taskId && route.pollPath) {
-      const deadline = Date.now() + Math.max(5000, Number(route.timeoutMs || model.timeoutMs || 30000));
-      const pollDelay = Math.max(500, Number(route.pollIntervalMs || model.pollIntervalMs || 1500));
-      const successValues = new Set((route.successValues || model.successValues || ['completed', 'succeeded', 'success']).map(v => String(v).toLowerCase()));
-      const failureValues = new Set((route.failureValues || model.failureValues || ['failed', 'error', 'canceled']).map(v => String(v).toLowerCase()));
-      let latest = parsed;
-      while (Date.now() < deadline) {
-        await new Promise(r => setTimeout(r, pollDelay));
-        const pollUrl = resolveUrl(provider.baseUrl, route.pollPath.replace(/\{\{\s*taskId\s*\}\}/g, encodeURIComponent(String(taskId))));
-        const pollRes = await fetchWithTimeout(pollUrl, { method: 'GET', headers: buildHeaders(provider, model) }, 20000);
-        const pollText = await pollRes.text();
-        try { latest = JSON.parse(pollText); } catch { latest = pollText; }
-        const statusValue = String(getPath(latest, route.statusPath || 'status') || '').toLowerCase();
-        if (failureValues.has(statusValue)) throw new Error(`第三方任务失败：${statusValue || 'failed'}`);
-        if (successValues.has(statusValue) || getPath(latest, route.outputPath)) {
-          const nextOut = extractOutput(latest, task.nodeType) || (route.outputPath ? extractOutput(getPath(latest, route.outputPath), task.nodeType) : null);
-          if (nextOut) return { output: nextOut, raw: latest, sourceUrl: pollUrl };
-        }
-      }
-    }
+function defaultRequestBody(task, model) {
+  const payload = task?.payload || {}, parameters = payload.parameters || {}, prompt = String(payload.prompt || '');
+  if (task.nodeType === 'text' || task.nodeType === 'script') return {model:model.id,messages:[{role:'user',content:prompt}]};
+  if (task.nodeType === 'image') {
+    const body={model:model.id,prompt,n:Number(parameters.count||1)};
+    if(parameters.size)body.size=parameters.size;
+    if(parameters.aspectRatio)body.aspect_ratio=parameters.aspectRatio;
+    return body;
   }
-  return null;
+  if (task.nodeType === 'audio') return {model:model.id,input:prompt,voice:parameters.voice||'alloy',response_format:parameters.responseFormat||'mp3'};
+  const body={model:model.id,prompt,duration:Number(parameters.duration||5),ratio:parameters.ratio||parameters.aspectRatio||'16:9'};
+  if(parameters.resolution)body.resolution=parameters.resolution;
+  const refs=Array.isArray(payload.references)?payload.references:[];
+  const images=refs.filter(x=>x?.type==='image'&&x.url).map(x=>x.url),videos=refs.filter(x=>x?.type==='video'&&x.url).map(x=>x.url),audios=refs.filter(x=>x?.type==='audio'&&x.url).map(x=>x.url);
+  if(images.length)body.images=images;if(videos.length)body.videos=videos;if(audios.length)body.audios=audios;
+  for(const [key,value] of Object.entries(parameters))if(!['count','aspectRatio','ratio','duration','resolution'].includes(key)&&!key.startsWith('_'))body[key]=value;
+  return body;
+}
+function firstPath(obj,paths){for(const path of paths){const value=getPath(obj,path);if(value!==undefined&&value!==null&&value!=='')return value}return undefined}
+function bytesToBase64(buffer){const bytes=new Uint8Array(buffer);let binary='';for(let i=0;i<bytes.length;i+=0x8000)binary+=String.fromCharCode(...bytes.subarray(i,i+0x8000));return btoa(binary)}
+async function parseProviderResponse(res,nodeType){
+  const contentType=String(res.headers.get('content-type')||'').toLowerCase();
+  if(nodeType==='audio'&&!contentType.includes('json')&&res.ok){const buffer=await res.arrayBuffer();return{__binaryOutput:{type:'url',value:`data:${contentType.split(';')[0]||'audio/mpeg'};base64,${bytesToBase64(buffer)}`}}}
+  const raw=await res.text();let parsed=raw;try{parsed=raw?JSON.parse(raw):{}}catch{}
+  if(!res.ok){const detail=typeof parsed==='string'?parsed:JSON.stringify(parsed);throw new Error(`上游 API ${res.status}：${detail.slice(0,600)||res.statusText}`)}
+  return parsed;
+}
+function outputFromResponse(parsed,nodeType,route){
+  if(parsed?.__binaryOutput)return parsed.__binaryOutput;
+  if(nodeType==='image'){const b64=firstPath(parsed,['data.0.b64_json','data.0.b64','b64_json']);if(typeof b64==='string'&&b64)return{type:'url',value:`data:image/png;base64,${b64}`}}
+  if(route.outputPath){const explicit=extractOutput(getPath(parsed,route.outputPath),nodeType);if(explicit)return explicit}
+  return extractOutput(parsed,nodeType);
+}
+async function tryProviderGeneration(task,provider,model){
+  if(!provider)throw new Error('API 供应商不存在');
+  if(!model?.id)throw new Error('所选模型不存在');
+  if(!provider.baseUrl)throw new Error('API Base URL 不能为空');
+  const route=routeForTask(provider,model,task.nodeType);
+  if(!route.createPath)throw new Error(`无法自动识别模型「${model.name||model.id}」的生成接口`);
+  const ctx=buildTaskContext(task,provider,model,route),hasTemplate=route.requestTemplate&&Object.keys(route.requestTemplate).length>0;
+  const bodyObject=hasTemplate?replacePlaceholders(route.requestTemplate,ctx):defaultRequestBody(task,model);
+  const url=resolveUrl(provider.baseUrl,route.createPath),method=String(route.method||'POST').toUpperCase();
+  const res=await fetchWithTimeout(url,{method,headers:buildHeaders(provider,model),body:method==='GET'||method==='HEAD'?undefined:JSON.stringify(bodyObject)},Math.min(Number(route.timeoutMs||120000),120000));
+  const parsed=await parseProviderResponse(res,task.nodeType),immediate=outputFromResponse(parsed,task.nodeType,route);
+  if(immediate)return{output:immediate,raw:parsed,sourceUrl:url};
+  if(route.responseMode!=='async')throw new Error('上游请求成功，但响应中没有识别到可用结果');
+  const taskId=route.taskIdPath?getPath(parsed,route.taskIdPath):firstPath(parsed,['id','task_id','taskId','data.id','data.task_id','data.taskId','task.id','result.id']);
+  if(!taskId)throw new Error('视频任务已提交，但响应中没有识别到任务 ID（支持 id、task_id、data.id 等常见字段）');
+  if(!route.pollPath)throw new Error('视频任务已创建，但无法确定查询任务状态的接口');
+  const deadline=Date.now()+Math.max(5000,Number(route.timeoutMs||1200000)),pollDelay=Math.max(500,Number(route.pollIntervalMs||1500));
+  const successValues=new Set((route.successValues||['completed','succeeded','success','done','finished']).map(v=>String(v).toLowerCase())),failureValues=new Set((route.failureValues||['failed','error','canceled','cancelled']).map(v=>String(v).toLowerCase()));
+  while(Date.now()<deadline){
+    await new Promise(resolve=>setTimeout(resolve,pollDelay));
+    const pollPath=route.pollPath.replace(/\{\{\s*taskId\s*\}\}/g,encodeURIComponent(String(taskId))),pollUrl=resolveUrl(provider.baseUrl,pollPath);
+    const pollRes=await fetchWithTimeout(pollUrl,{method:'GET',headers:buildHeaders(provider,model)},30000),latest=await parseProviderResponse(pollRes,task.nodeType);
+    const statusRaw=route.statusPath?getPath(latest,route.statusPath):firstPath(latest,['status','data.status','state','data.state','task.status','result.status']),status=String(statusRaw||'').toLowerCase();
+    const progressRaw=route.progressPath?getPath(latest,route.progressPath):firstPath(latest,['progress','data.progress','percent','data.percent','task.progress']),progress=Number(progressRaw);
+    if(Number.isFinite(progress)){task.progress=Math.max(20,Math.min(96,progress));task.updatedAt=new Date().toISOString();await persistTasks()}
+    if(failureValues.has(status))throw new Error(`上游任务失败：${status||'unknown'}`);
+    const output=outputFromResponse(latest,task.nodeType,route);
+    if(output)return{output,raw:latest,sourceUrl:pollUrl};
+    if(successValues.has(status))throw new Error(`上游任务状态为 ${status}，但响应中没有识别到结果 URL`);
+  }
+  throw new Error('上游任务超时');
 }
 
-async function processTask(task) {
-  task.status = 'running';
-  task.progress = 12;
-  task.updatedAt = new Date().toISOString();
-  await persistTasks();
 
-  const provider = globalState.providers?.find(p => p.id === task.providerId) || task.payload?.providerSnapshot || null;
-  const model = provider?.models?.find(m => m.id === task.modelId) || task.payload?.modelSnapshot || null;
-  let output = null;
-
-  try {
-    output = await tryProviderGeneration(task, provider, model);
-  } catch (error) {
-    task.logs = [...(task.logs || []), { time: new Date().toISOString(), level: 'warn', message: String(error?.message || error) }];
+async function processTask(task){
+  task.status='running';task.progress=8;task.error=null;task.updatedAt=new Date().toISOString();await persistTasks();
+  try{
+    const savedProvider=(globalState.providers||[]).find(p=>p.id===task.providerId),provider=savedProvider||task.payload?.providerSnapshot||null;
+    const model=provider?.models?.find(m=>m.id===task.modelId)||task.payload?.modelSnapshot||null,result=await tryProviderGeneration(task,provider,model);
+    if(!result?.output)throw new Error('上游响应中没有识别到有效生成结果');
+    task.output=result.output;task.status='succeeded';task.progress=100;task.error=null;task.updatedAt=new Date().toISOString();task.logs=[...(task.logs||[]),{time:task.updatedAt,level:'info',message:'任务完成'}];
+  }catch(error){
+    task.output=null;task.status='failed';task.error=String(error?.message||error);task.updatedAt=new Date().toISOString();task.logs=[...(task.logs||[]),{time:task.updatedAt,level:'error',message:task.error}];
   }
-
-  if (!output) output = placeholderOutput(task);
-
-  task.output = output;
-  task.status = 'succeeded';
-  task.progress = 100;
-  task.error = null;
-  task.updatedAt = new Date().toISOString();
-  task.logs = [...(task.logs || []), { time: task.updatedAt, level: 'info', message: '任务完成' }];
-  await persistTasks();
-  return task;
+  await persistTasks();return task;
 }
 
 async function persistProviders() {
@@ -836,159 +875,63 @@ async function getMedia(id, req) {
   });
 }
 
-async function testProviderConfig(body) {
-  const provider = normalizeProvider(body);
-  const target = resolveUrl(provider.baseUrl, provider.testPath || '/v1/models');
-  const res = await fetchWithTimeout(target, {
-    method: 'GET',
-    headers: buildHeaders(provider, {})
-  }, 15000);
-  let data = null;
-  try { data = await res.json(); } catch {}
-  const models = Array.isArray(data?.data) ? data.data : Array.isArray(data?.models) ? data.models : [];
-  return {
-    ok: res.ok,
-    endpoint: target,
-    modelCount: models.length,
-    warning: res.ok ? '' : `HTTP ${res.status}`
-  };
+
+function modelEndpointCandidates(provider){
+  if(provider.modelsPath)return[provider.modelsPath];
+  const base=String(provider.baseUrl||'').replace(/\/+$/,'');
+  return /\/v1$/i.test(base)?['/models','/v1/models']:['/v1/models','/models'];
+}
+function inferModality(item,id,name){
+  const explicit=String(item?.modality||item?.model_type||item?.category||'').toLowerCase(),capabilities=Array.isArray(item?.capabilities)?item.capabilities.join(' '):String(item?.capabilities||''),hay=`${explicit} ${capabilities} ${id} ${name}`.toLowerCase();
+  if(/(video|seedance|kling|hailuo|vidu|pixverse|runway|sora|veo|wan[-_. ]?2|hunyuan.*video|ltx.*video)/.test(hay))return'video';
+  if(/(image|flux|seedream|dall[-_. ]?e|imagen|recraft|ideogram|sdxl|stable.*diffusion|qwen.*image|nano.*banana)/.test(hay))return'image';
+  if(/(audio|speech|tts|voice|music|eleven|mureka|suno|whisper)/.test(hay))return'audio';
+  return'text';
+}
+function extractModelArray(data){if(Array.isArray(data))return data;for(const path of ['data','models','items','result.data','result.models','data.models','data.items']){const value=getPath(data,path);if(Array.isArray(value))return value}return[]}
+function normalizeDiscoveredModels(data){
+  const seen=new Set(),models=[];
+  for(const [idx,item] of extractModelArray(data).entries()){
+    const raw=typeof item==='string'?{id:item,name:item}:(item||{}),id=String(raw.id||raw.model||raw.model_id||raw.slug||raw.key||raw.name||'').trim();
+    if(!id||seen.has(id))continue;seen.add(id);
+    const name=String(raw.name||raw.title||id),modality=inferModality(raw,id,name);
+    models.push(normalizeModel({id,name,modality,enabled:true,adapterKey:'auto',capabilities:raw.capabilities&&typeof raw.capabilities==='object'?raw.capabilities:{}},idx));
+  }
+  return models;
+}
+async function discoverProviderModels(body){
+  const existing=body?.id?(globalState.providers||[]).find(p=>p.id===body.id):null,provider=normalizeProvider(body,existing||null);
+  if(!provider.baseUrl)throw new Error('API Base URL 不能为空');
+  const errors=[];
+  for(const endpoint of modelEndpointCandidates(provider)){
+    const target=resolveUrl(provider.baseUrl,endpoint);
+    try{
+      const res=await fetchWithTimeout(target,{method:'GET',headers:buildHeaders(provider,{})},15000),data=await parseProviderResponse(res,'text'),models=normalizeDiscoveredModels(data);
+      if(models.length)return{ok:true,endpoint,models,count:models.length,modelCount:models.length,suggestedProtocol:'openai-compatible'};
+      errors.push(`${endpoint}：已连接，但没有识别到模型列表`);
+    }catch(error){errors.push(`${endpoint}：${String(error?.message||error)}`)}
+  }
+  throw new Error(`无法拉取模型。已自动尝试 /v1/models 和 /models。原因：${errors.join('；')}`);
+}
+async function testProviderConfig(body){const discovered=await discoverProviderModels(body);return{ok:true,endpoint:discovered.endpoint,modelCount:discovered.models.length}}
+async function testProviderAuth(body){const discovered=await discoverProviderModels(body);return{ok:true,endpoint:discovered.endpoint,modelCount:discovered.models.length,mode:'model-list'}}
+async function diagnoseProvider(body){
+  try{const discovered=await discoverProviderModels(body);return{ok:true,connection:{ok:true,endpoint:discovered.endpoint},auth:{ok:true,endpoint:discovered.endpoint,mode:'model-list'},models:{ready:discovered.models.length,total:discovered.models.length,pending:0},warnings:[]}}
+  catch(error){const message=String(error?.message||error);return{ok:false,connection:{ok:false,error:message},auth:{ok:false,error:message},models:{ready:0,total:0,pending:0},warnings:[message]}}
 }
 
-async function testProviderAuth(body) {
-  const provider = normalizeProvider(body);
-  const target = resolveUrl(provider.baseUrl, provider.testPath || '/v1/models');
-  const res = await fetchWithTimeout(target, {
-    method: 'GET',
-    headers: buildHeaders(provider, {})
-  }, 15000);
-  return {
-    ok: res.ok,
-    endpoint: target,
-    status: res.status,
-    modelId: Array.isArray(body?.models) ? body.models[0]?.id || '' : ''
-  };
-}
 
-async function diagnoseProvider(body) {
-  const provider = normalizeProvider(body);
-  let connection;
-  let auth;
-  let models = { ready: 0, total: Array.isArray(provider.models) ? provider.models.length : 0, pending: 0 };
-  try {
-    connection = await testProviderConfig(provider);
-  } catch (error) {
-    connection = { ok: false, error: String(error?.message || error) };
-  }
-  try {
-    auth = await testProviderAuth(provider);
-  } catch (error) {
-    auth = { ok: false, error: String(error?.message || error) };
-  }
-  if (Array.isArray(provider.models)) {
-    models.ready = provider.models.filter(m => m.enabled !== false).length;
-    models.pending = provider.models.filter(m => m.enabled === false).length;
-  }
-  return {
-    ok: Boolean(connection?.ok),
-    connection,
-    auth,
-    models,
-    warnings: []
-  };
-}
-
-async function discoverProviderModels(body) {
-  const provider = normalizeProvider(body);
-  const target = resolveUrl(provider.baseUrl, provider.modelsPath || provider.testPath || '/v1/models');
-  try {
-    const res = await fetchWithTimeout(target, {
-      method: 'GET',
-      headers: buildHeaders(provider, {})
-    }, 15000);
-    const raw = await res.text();
-    let data = null;
-    try { data = JSON.parse(raw); } catch {}
-    const list = Array.isArray(data?.data) ? data.data : Array.isArray(data?.models) ? data.models : [];
-    const models = list.map((item, idx) => {
-      const id = String(item?.id || item?.model || item?.name || `model_${idx + 1}`);
-      const lower = id.toLowerCase();
-      const modality = /video|kling|sora|wan|veo|movie|runway|seed-?video/i.test(lower) ? 'video'
-        : /audio|speech|tts|sound/i.test(lower) ? 'audio'
-        : /image|img|flux|stable|midjourney|nano/i.test(lower) ? 'image'
-        : 'text';
-      return {
-        id,
-        name: String(item?.name || item?.title || id),
-        modality,
-        enabled: true,
-        adapterKey: 'auto',
-        capabilities: {}
-      };
-    });
-    return {
-      ok: true,
-      endpoint: target,
-      models,
-      modelCount: models.length
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      endpoint: target,
-      models: Array.isArray(provider.models) ? provider.models : [],
-      modelCount: Array.isArray(provider.models) ? provider.models.length : 0,
-      warning: String(error?.message || error)
-    };
-  }
-}
-
-async function handleTaskPost(body) {
-  const now = new Date().toISOString();
-  const task = {
-    id: uid('task_'),
-    status: 'queued',
-    progress: 0,
-    providerId: String(body.providerId || ''),
-    modelId: String(body.modelId || ''),
-    nodeType: String(body.nodeType || ''),
-    payload: clone(body || {}),
-    output: null,
-    error: null,
-    createdAt: now,
-    updatedAt: now,
-    attempt: 0,
-    maxRetries: Math.max(0, Math.min(5, Number(body.maxRetries ?? 1))),
-    priority: Math.max(0, Math.min(100, Number(body.priority ?? 50))),
-    cancelRequested: false,
-    logs: []
-  };
-  if (!task.providerId || !task.modelId || !['text', 'image', 'video', 'audio', 'script'].includes(task.nodeType)) {
-    return json({ error: '任务参数不完整' }, 400);
-  }
-  globalState.tasks.unshift(task);
-  await persistTasks();
-  task.status = 'running';
-  task.progress = 22;
-  task.updatedAt = new Date().toISOString();
-  await persistTasks();
-
-  try {
-    await new Promise(r => setTimeout(r, 120));
-    const provider = clone(body.providerSnapshot || globalState.providers.find(p => p.id === task.providerId) || {});
-    const model = clone(body.modelSnapshot || provider.models?.find?.(m => m.id === task.modelId) || {});
-    const actual = await tryProviderGeneration(task, provider, model).catch(() => null);
-    task.output = actual?.output || placeholderOutput(task);
-  } catch {
-    task.output = placeholderOutput(task);
-  }
-
-  task.status = 'succeeded';
-  task.progress = 100;
-  task.error = null;
-  task.updatedAt = new Date().toISOString();
-  task.logs = [...(task.logs || []), { time: task.updatedAt, level: 'info', message: '任务完成' }];
-  await persistTasks();
-  return json({ task: taskPublic(task) }, 202);
+async function handleTaskPost(body,ctx){
+  const now=new Date().toISOString(),safePayload=clone(body||{});
+  if(safePayload.providerSnapshot){delete safePayload.providerSnapshot.apiKey;delete safePayload.providerSnapshot.apiKeyEncrypted}
+  const task={id:uid('task_'),status:'queued',progress:0,providerId:String(body.providerId||''),modelId:String(body.modelId||''),nodeType:String(body.nodeType||''),payload:safePayload,output:null,error:null,createdAt:now,updatedAt:now,attempt:0,maxRetries:Math.max(0,Math.min(5,Number(body.maxRetries??1))),priority:Math.max(0,Math.min(100,Number(body.priority??50))),cancelRequested:false,logs:[]};
+  if(!task.providerId||!task.modelId||!['text','image','video','audio','script'].includes(task.nodeType))return json({error:'任务参数不完整'},400);
+  const provider=(globalState.providers||[]).find(p=>p.id===task.providerId);
+  if(!provider)return json({error:'API 供应商不存在'},404);
+  if(!(provider.models||[]).some(model=>model.id===task.modelId))return json({error:'所选模型不存在'},404);
+  globalState.tasks.unshift(task);await persistTasks();
+  const running=processTask(task);if(ctx?.waitUntil)ctx.waitUntil(running);else await running;
+  return json({task:taskPublic(task)},202);
 }
 
 function updateTaskOnList(taskId, patch) {
@@ -1165,14 +1108,24 @@ async function handleRequest(request, env) {
 
   if (pathname === '/api/providers' && request.method === 'POST') {
     const body = await readBody(request);
-    const next = normalizeProvider(body, body.id ? globalState.providers.find(p => p.id === body.id) : null);
-    if (!next.baseUrl) return json({ error: 'Base URL 不能为空' }, 400);
-    if (!Array.isArray(next.models) || !next.models.length) next.models = [];
+    const existing = body.id ? globalState.providers.find(p => p.id === body.id) : null;
+    const next = normalizeProvider(body, existing || null);
+    if (!next.baseUrl) return json({ error: 'API Base URL 不能为空' }, 400);
+    if (!providerHasKey(next)) return json({ error: 'API Key 不能为空' }, 400);
+    if (!Array.isArray(next.models) || !next.models.length) {
+      try {
+        const discovered = await discoverProviderModels(next);
+        next.models = discovered.models;
+        next.protocol = discovered.suggestedProtocol || 'openai-compatible';
+      } catch (error) {
+        return json({ error: String(error?.message || error) }, 502);
+      }
+    }
     const idx = globalState.providers.findIndex(p => p.id === next.id);
     if (idx >= 0) globalState.providers[idx] = next;
     else globalState.providers.push(next);
     await persistProviders();
-    return json({ provider: publicProvider(next) });
+    return json({ provider: publicProvider(next), modelCount: next.models.length, autoConfigured: true });
   }
 
   if (pathname === '/api/providers/test-config' && request.method === 'POST') {
@@ -1252,7 +1205,7 @@ async function handleRequest(request, env) {
 
   if (pathname === '/api/tasks' && request.method === 'POST') {
     const body = await readBody(request);
-    return handleTaskPost(body);
+    return handleTaskPost(body, ctx);
   }
 
   const taskMatch = pathname.match(/^\/api\/tasks\/([^/]+)$/);
