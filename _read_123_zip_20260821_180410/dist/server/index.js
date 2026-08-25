@@ -687,9 +687,12 @@ async function tryProviderGeneration(task,provider,model){
     const failureValues=new Set((route.failureValues||['failed','error','canceled','cancelled']).map(v=>String(v).toLowerCase()));
     const successValues=new Set((route.successValues||['completed','succeeded','success','done','finished']).map(v=>String(v).toLowerCase()));
     if(failureValues.has(status)){const detailRaw=firstPath(latest,['error.message','error','message','data.error.message','data.error','data.message','task.error','result.error.message','result.error','result.message']);const detail=detailRaw&&typeof detailRaw==='object'?JSON.stringify(detailRaw):String(detailRaw||'');throw new Error(`上游任务失败（${status||'unknown'}）${detail?`：${detail.slice(0,600)}`:''}`);}
-    const output=outputFromResponse(latest,task.nodeType,route);
+    const succeeded=successValues.has(status);
+    if(status&&!succeeded)return{pending:true,progress:Number.isFinite(progress)?Math.max(20,Math.min(96,progress)):Math.min(94,Number(task.progress||20)+3)};
+    let output=outputFromResponse(latest,task.nodeType,route);
+    if(['image','video','audio'].includes(task.nodeType)&&output?.type!=='url')output=null;
     if(output)return{output,raw:latest,sourceUrl:pollUrl};
-    if(successValues.has(status))throw new Error(`上游任务状态为 ${status}，但响应中没有识别到结果 URL`);
+    if(succeeded)throw new Error(`上游任务状态为 ${status}，但响应中没有识别到结果 URL`);
     return{pending:true,progress:Number.isFinite(progress)?Math.max(20,Math.min(96,progress)):Math.min(94,Number(task.progress||20)+3)};
   }
 
