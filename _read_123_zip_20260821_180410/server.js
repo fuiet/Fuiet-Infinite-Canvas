@@ -719,8 +719,39 @@ function normalizeOutput(value, modality, provider) {
     return normalizeOutput(first, modality, provider);
   }
   if (typeof value === 'object') {
-    const url = value.url || value.uri || value.href || value.file_url || value.fileUrl;
-    if (url) return normalizeOutput(url, modality, provider);
+    const urlKeys = [
+      'url','uri','href','file_url','fileUrl','fileURL','download_url','downloadUrl',
+      'video_url','videoUrl','image_url','imageUrl','audio_url','audioUrl','source_url','sourceUrl'
+    ];
+    for (const key of urlKeys) {
+      const candidate = value?.[key];
+      if (typeof candidate === 'string' && candidate.trim()) return normalizeOutput(candidate, modality, provider);
+    }
+    const nestedPaths = [
+      'data.url','data.video_url','data.videoUrl','data.image_url','data.imageUrl','data.audio_url','data.audioUrl',
+      'result.url','result.video_url','result.videoUrl','result.image_url','result.imageUrl','result.audio_url','result.audioUrl',
+      'output.url','output.video_url','output.videoUrl','output.image_url','output.imageUrl','output.audio_url','output.audioUrl',
+      'outputs.0.url','outputs.0.video_url','outputs.0.videoUrl','outputs.0.image_url','outputs.0.imageUrl','outputs.0.audio_url','outputs.0.audioUrl',
+      'images.0.url','videos.0.url','audio.0.url'
+    ];
+    for (const p of nestedPaths) {
+      const candidate = deepGet(value, p);
+      if (typeof candidate === 'string' && candidate.trim()) return normalizeOutput(candidate, modality, provider);
+    }
+    const stack = [value];
+    const seen = new Set();
+    while (stack.length) {
+      const current = stack.pop();
+      if (!current || typeof current !== 'object' || seen.has(current)) continue;
+      seen.add(current);
+      for (const v of Object.values(current)) {
+        if (typeof v === 'string' && /^(https?:\/\/|\/media\/|data:)/i.test(v.trim())) {
+          return normalizeOutput(v, modality, provider);
+        }
+        if (Array.isArray(v)) stack.push(...v);
+        else if (v && typeof v === 'object') stack.push(v);
+      }
+    }
     const text = value.text || value.content;
     if (typeof text === 'string') return { type:'text', value:text };
   }

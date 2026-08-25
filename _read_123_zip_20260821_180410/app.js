@@ -1405,6 +1405,29 @@
 
   function recordNodeResultVersion(n,{historyId='',outputUrl=n.outputUrl||'',text=n.type==='text'?(n.text||n.generatedText||''):(n.generatedText||''),generatedResult=n.generatedResult??null,providerId=n.providerId||'',modelId=n.modelId||'',modelName=n.modelName||''}={}){n.resultVersions=Array.isArray(n.resultVersions)?n.resultVersions:[];const v={id:uid('rv'),outputUrl:outputUrl||'',text:text||'',generatedText:n.generatedText||'',generatedResult,prompt:n.prompt||'',providerId,modelId,modelName,historyId,createdAt:new Date().toISOString(),parameters:{aspectRatio:n.aspectRatio,duration:n.duration,resolution:n.resolution,videoMode:n.videoMode,...(n.toolParams||{})}};n.resultVersions=[...n.resultVersions.filter(x=>x.id!==v.id),v].slice(-50);n.activeResultVersionId=v.id;return v}
 
+  function resolveGeneratedOutputUrl(output){
+    if(!output)return '';
+    if(typeof output==='string')return /^(https?:\/\/|data:|\/media\/)/i.test(output.trim())?output.trim():'';
+    if(Array.isArray(output))return resolveGeneratedOutputUrl(output.find(Boolean));
+    if(typeof output==='object'){
+      const directKeys=['value','url','uri','href','file_url','fileUrl','fileURL','download_url','downloadUrl','video_url','videoUrl','image_url','imageUrl','audio_url','audioUrl','source_url','sourceUrl'];
+      for(const key of directKeys){
+        const v=output?.[key];
+        if(typeof v==='string'&&/^(https?:\/\/|data:|\/media\/)/i.test(v.trim()))return v.trim();
+      }
+      const nestedPaths=['data.url','data.video_url','data.videoUrl','data.image_url','data.imageUrl','data.audio_url','data.audioUrl','result.url','result.video_url','result.videoUrl','result.image_url','result.imageUrl','output.url','output.video_url','output.videoUrl','output.image_url','output.imageUrl','outputs.0.url','outputs.0.video_url','outputs.0.videoUrl','videos.0.url','images.0.url','audio.0.url'];
+      for(const p of nestedPaths){
+        const v=deepGet(output,p);
+        if(typeof v==='string'&&/^(https?:\/\/|data:|\/media\/)/i.test(v.trim()))return v.trim();
+      }
+      for(const v of Object.values(output)){
+        const nested=resolveGeneratedOutputUrl(v);
+        if(nested)return nested;
+      }
+    }
+    return '';
+  }
+
 
   function fallbackModelChain(n){
     const refs=[{providerId:n.providerId,modelId:n.modelId,primary:true},...(state.workflowSettings?.autoFallback===false?[]:(n.fallbackModels||[]))],seen=new Set(),out=[];for(const ref of refs){const key=`${ref.providerId}:${ref.modelId}`;if(!ref.providerId||!ref.modelId||seen.has(key))continue;seen.add(key);const provider=providerById(ref.providerId),model=provider?.models?.find(m=>m.id===ref.modelId&&m.enabled!==false&&normalizeClientModality(m.modality)===n.type);if(provider&&model&&modelRuntimeReady(provider,model))out.push({provider,model,providerId:provider.id,modelId:model.id,modelName:model.name||model.id,primary:Boolean(ref.primary)})}return out;
@@ -1426,7 +1449,12 @@
       try{
         let info=null;const canAdopt=n.taskId&&n.taskProviderId===attempt.providerId&&n.taskModelId===attempt.modelId&&['queued','running','polling','retrying'].includes(n.taskStatus);if(canAdopt){try{const existing=(await apiJson('/api/tasks/'+encodeURIComponent(n.taskId))).task;if(existing&&!['failed','canceled','succeeded'].includes(existing.status))info=await monitorNodeTask(n,n.taskId,attempt)}catch{}}
         if(!info){const created=await apiJson('/api/tasks',{method:'POST',body:JSON.stringify({providerId:attempt.providerId,modelId:attempt.modelId,providerSnapshot:snapshotProviderForTask(attempt.provider),modelSnapshot:attempt.model,nodeType:n.type,prompt:n.prompt||'',references:refs,maxRetries:state.workflowSettings?.maxRetries??1,priority:nodePriority(n),parameters:{aspectRatio:n.aspectRatio||caps.aspectRatios?.[0]||'16:9',count:n.count||1,duration:n.duration||caps.durations?.[0]||5,resolution:n.resolution||caps.resolutions?.[0]||'720p',capabilities:caps,creativeContext:buildCreativeContextPacket(n),...(n.toolParams||{})}})});n.taskId=created.task.id;n.taskProviderId=attempt.providerId;n.taskModelId=attempt.modelId;n.taskStatus=created.task.status;n.taskProgress=created.task.progress||0;saveState();render();info=await monitorNodeTask(n,n.taskId,attempt)}
-        const out=info.output||{};if(out.type==='url')n.outputUrl=out.value;else if(out.type==='text'){if(n.type==='text')n.text=out.value;else n.generatedText=out.value}else n.generatedResult=out.value;n.taskStatus='succeeded';n.taskProgress=100;n.taskError='';n.outputSourceUrl=out.sourceUrl||'';n.lastUsedProviderId=attempt.providerId;n.lastUsedModelId=attempt.modelId;n.lastUsedModelName=attempt.modelName;n.fallbackAttempt=ai;
+        const out=info.output||{};const resolvedUrl=resolveGeneratedOutputUrl(out.value??out);if(resolvedUrl)n.outputUrl=resolvedUrl;
+        if(out.type==='url'&&!n.outputUrl)n.outputUrl=String(out.value||'').trim();
+        else if(out.type==='text'){if(n.type==='text')n.text=out.value;else n.generatedText=out.value}
+        else if(out.type!=='url'&&out.value!==undefined)n.generatedResult=out.value;
+        if(!n.outputUrl&&n.type==='video'){const fallbackUrl=resolveGeneratedOutputUrl(n.generatedResult)||resolveGeneratedOutputUrl(n.toolParams?.output)||resolveGeneratedOutputUrl(n.toolParams?.result);if(fallbackUrl)n.outputUrl=fallbackUrl}
+        n.taskStatus='succeeded';n.taskProgress=100;n.taskError='';n.outputSourceUrl=out.sourceUrl||'';n.lastUsedProviderId=attempt.providerId;n.lastUsedModelId=attempt.modelId;n.lastUsedModelName=attempt.modelName;n.fallbackAttempt=ai;
         const h={id:uid('h'),sourceNodeId:n.id,title:`${labelForType(n.type)}生成_${String(state.history.length+1).padStart(2,'0')}`,kind:labelForType(n.type),type:n.type,theme:n.content||'city',outputUrl:n.outputUrl||'',text:n.text||n.generatedText||'',prompt:n.prompt||'',providerId:attempt.providerId,modelId:attempt.modelId,modelName:attempt.modelName,createdAt:new Date().toISOString(),parameters:{aspectRatio:n.aspectRatio,duration:n.duration,resolution:n.resolution,videoMode:n.videoMode,...(n.toolParams||{})}};state.history.unshift(h);recordNodeResultVersion(n,{historyId:h.id,providerId:attempt.providerId,modelId:attempt.modelId,modelName:attempt.modelName});syncGeneratedAssetResult(n,h);saveState();render();if(!silent)showToast(ai?`备用模型生成完成 · ${attempt.modelName}`:`生成完成 · 已保留 ${n.resultVersions.length} 个结果版本`);return n;
       }catch(err){lastError=err;n.taskStatus=err.message==='任务已取消'?'canceled':'failed';n.taskError=err.message;saveState();render();if(err.message==='任务已取消')break;if(ai<chain.length-1){if(!silent)showToast(`${attempt.modelName} 失败，自动切换备用模型…`);continue}break}
     }
