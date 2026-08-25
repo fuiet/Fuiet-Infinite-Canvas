@@ -3,6 +3,7 @@ const SAMPLE_AUDIO_URL = 'https://interactive-examples.mdn.mozilla.net/media/cc0
 
 const globalState = globalThis.__canvasWorkerState || (globalThis.__canvasWorkerState = {
   booted: false,
+  supabase: null,
   providers: null,
   projects: null,
   tasks: null,
@@ -19,6 +20,171 @@ function clone(value) {
 
 function uid(prefix = 'id_') {
   return prefix + crypto.randomUUID().replace(/-/g, '').slice(0, 12);
+}
+
+function getSupabaseConfig(env) {
+  const url = String(env?.SUPABASE_URL || '').trim().replace(/\/+$/, '');
+  const key = String(env?.SUPABASE_SERVICE_ROLE_KEY || env?.SUPABASE_ANON_KEY || '').trim();
+  if (!url || !key) return null;
+  return { url, key };
+}
+
+function supabaseHeaders(cfg, extra = {}) {
+  const headers = new Headers({
+    apikey: cfg.key,
+    authorization: `Bearer ${cfg.key}`,
+    ...extra
+  });
+  return headers;
+}
+
+async function supabaseRequest(env, path, { method = 'GET', body, headers = {}, query = '' } = {}) {
+  const cfg = getSupabaseConfig(env);
+  if (!cfg) throw new Error('Supabase 未配置');
+  const url = new URL(`${cfg.url}/rest/v1/${String(path).replace(/^\/+/, '')}`);
+  if (query) {
+    const q = new URLSearchParams(query);
+    for (const [k, v] of q.entries()) url.searchParams.set(k, v);
+  }
+  const reqHeaders = supabaseHeaders(cfg, headers);
+  const init = { method, headers: reqHeaders };
+  if (body !== undefined) {
+    if (!reqHeaders.has('content-type')) reqHeaders.set('content-type', 'application/json');
+    init.body = typeof body === 'string' ? body : JSON.stringify(body);
+  }
+  const res = await fetch(url, init);
+  const raw = await res.text();
+  let data = null;
+  try { data = raw ? JSON.parse(raw) : null; } catch {}
+  if (!res.ok) {
+    const message = data?.message || data?.error || raw || `Supabase ${res.status}`;
+    throw new Error(message);
+  }
+  return data;
+}
+
+function supabaseStorageBucket(env) {
+  return String(env?.SUPABASE_STORAGE_BUCKET || 'canvas-media').trim() || 'canvas-media';
+}
+
+async function supabaseStorageRequest(env, bucket, objectPath, { method = 'GET', body, headers = {} } = {}) {
+  const cfg = getSupabaseConfig(env);
+  if (!cfg) throw new Error('Supabase 未配置');
+  const url = new URL(`${cfg.url}/storage/v1/object/${encodeURIComponent(bucket)}/${String(objectPath).split('/').map(encodeURIComponent).join('/')}`);
+  const reqHeaders = supabaseHeaders(cfg, headers);
+  const init = { method, headers: reqHeaders };
+  if (body !== undefined) {
+    init.body = body;
+  }
+  const res = await fetch(url, init);
+  if (!res.ok) {
+    const raw = await res.text();
+    throw new Error(raw || `Storage ${res.status}`);
+  }
+  return res;
+}
+
+function hydrateProjectRow(row) {
+  const data = clone(row?.data || {});
+  const out = {
+    ...data,
+    id: String(row?.id || data.id || uid('proj_')),
+    name: String(row?.name || data.name || '未命名画布'),
+    createdAt: row?.created_at || data.createdAt || new Date().toISOString(),
+    updatedAt: row?.updated_at || data.updatedAt || new Date().toISOString()
+  };
+  if (Array.isArray(out.versions)) out.versions = out.versions.map(v => clone(v));
+  if (out.data && typeof out.data === 'object') out.data = clone(out.data);
+  return out;
+}
+
+function serializeProjectRow(project) {
+  const data = clone(project || {});
+  return {
+    id: String(project?.id || uid('proj_')),
+    name: String(project?.name || '未命名画布'),
+    data
+  };
+}
+
+function hydrateProviderRow(row) {
+  const data = clone(row?.data || {});
+  const out = {
+    ...data,
+    id: String(row?.id || data.id || uid('provider_')),
+    name: String(row?.name || data.name || '新供应商'),
+    createdAt: row?.created_at || data.createdAt || new Date().toISOString(),
+    updatedAt: row?.updated_at || data.updatedAt || new Date().toISOString()
+  };
+  if (Array.isArray(out.models)) out.models = out.models.map(m => clone(m));
+  return out;
+}
+
+function serializeProviderRow(provider) {
+  return {
+    id: String(provider?.id || uid('provider_')),
+    name: String(provider?.name || '新供应商'),
+    data: clone(provider || {})
+  };
+}
+
+function hydrateTaskRow(row) {
+  const payload = clone(row?.payload || {});
+  const out = {
+    ...payload,
+    id: String(row?.id || payload.id || uid('task_')),
+    status: String(row?.status || payload.status || 'queued'),
+    progress: Number(row?.progress ?? payload.progress ?? 0),
+    providerId: String(row?.provider_id || payload.providerId || ''),
+    modelId: String(row?.model_id || payload.modelId || ''),
+    nodeId: String(row?.node_id || payload.nodeId || ''),
+    nodeType: String(row?.node_type || payload.nodeType || ''),
+    payload: clone(payload),
+    output: clone(row?.output ?? payload.output ?? null),
+    error: row?.error ?? payload.error ?? null,
+    createdAt: row?.created_at || payload.createdAt || new Date().toISOString(),
+    updatedAt: row?.updated_at || payload.updatedAt || new Date().toISOString(),
+    attempt: Number(payload.attempt ?? 0),
+    maxRetries: Number(payload.maxRetries ?? 1),
+    priority: Number(payload.priority ?? 50),
+    cancelRequested: Boolean(payload.cancelRequested ?? false),
+    logs: Array.isArray(payload.logs) ? payload.logs.map(x => clone(x)) : []
+  };
+  return out;
+}
+
+function serializeTaskRow(task) {
+  const payload = clone(task?.payload || {});
+  payload.attempt = Number(task?.attempt ?? payload.attempt ?? 0);
+  payload.maxRetries = Number(task?.maxRetries ?? payload.maxRetries ?? 1);
+  payload.priority = Number(task?.priority ?? payload.priority ?? 50);
+  payload.cancelRequested = Boolean(task?.cancelRequested ?? payload.cancelRequested ?? false);
+  payload.logs = Array.isArray(task?.logs) ? clone(task.logs) : Array.isArray(payload.logs) ? payload.logs : [];
+  payload.status = String(task?.status || payload.status || 'queued');
+  payload.progress = Number(task?.progress ?? payload.progress ?? 0);
+  payload.providerId = String(task?.providerId || payload.providerId || '');
+  payload.modelId = String(task?.modelId || payload.modelId || '');
+  payload.nodeId = String(task?.nodeId || payload.nodeId || '');
+  payload.nodeType = String(task?.nodeType || payload.nodeType || '');
+  payload.output = clone(task?.output ?? payload.output ?? null);
+  payload.error = task?.error ?? payload.error ?? null;
+  payload.createdAt = task?.createdAt || payload.createdAt || new Date().toISOString();
+  payload.updatedAt = task?.updatedAt || payload.updatedAt || new Date().toISOString();
+  return {
+    id: String(task?.id || uid('task_')),
+    project_id: String(task?.projectId || task?.project_id || ''),
+    provider_id: String(task?.providerId || task?.provider_id || ''),
+    model_id: String(task?.modelId || task?.model_id || ''),
+    node_id: String(task?.nodeId || task?.node_id || ''),
+    node_type: String(task?.nodeType || task?.node_type || ''),
+    status: String(task?.status || 'queued'),
+    progress: Number(task?.progress ?? 0),
+    payload,
+    output: clone(task?.output ?? null),
+    error: task?.error ?? null,
+    created_at: task?.createdAt || task?.created_at || new Date().toISOString(),
+    updated_at: task?.updatedAt || task?.updated_at || new Date().toISOString()
+  };
 }
 
 function json(body, status = 200, extraHeaders = {}) {
@@ -55,17 +221,70 @@ function html(body, status = 200, extraHeaders = {}) {
 }
 
 async function readJSONStore(name, fallback) {
+  const cfg = globalState.supabase;
+  if (cfg && ['providers', 'projects', 'tasks'].includes(name)) {
+    try {
+      const rows = await supabaseRequest({ SUPABASE_URL: cfg.url, SUPABASE_SERVICE_ROLE_KEY: cfg.key }, name, {
+        method: 'GET',
+        query: 'select=*'
+      });
+      const list = Array.isArray(rows) ? rows : [];
+      if (name === 'providers') return list.map(hydrateProviderRow);
+      if (name === 'projects') return list.map(hydrateProjectRow);
+      if (name === 'tasks') return list.map(hydrateTaskRow);
+    } catch (error) {
+      console.warn(`[canvas] failed to read ${name} from supabase`, error);
+    }
+  }
   if (globalState[name] !== null && globalState[name] !== undefined) return clone(globalState[name]);
   return clone(fallback);
 }
 
 async function writeJSONStore(name, value) {
+  const cfg = globalState.supabase;
+  if (cfg && ['providers', 'projects', 'tasks'].includes(name)) {
+    const rows = Array.isArray(value) ? value : [];
+    const serialized = name === 'providers'
+      ? rows.map(serializeProviderRow)
+      : name === 'projects'
+        ? rows.map(serializeProjectRow)
+        : rows.map(serializeTaskRow);
+    const currentRows = await supabaseRequest({ SUPABASE_URL: cfg.url, SUPABASE_SERVICE_ROLE_KEY: cfg.key }, name, {
+      method: 'GET',
+      query: 'select=id'
+    }).catch(() => []);
+    const currentIds = new Set(Array.isArray(currentRows) ? currentRows.map(row => String(row?.id || '')) : []);
+    const nextIds = new Set(serialized.map(row => String(row.id || '')));
+    const removed = [...currentIds].filter(id => id && !nextIds.has(id));
+    if (removed.length) {
+      for (const id of removed) {
+        try {
+          await supabaseRequest({ SUPABASE_URL: cfg.url, SUPABASE_SERVICE_ROLE_KEY: cfg.key }, name, {
+            method: 'DELETE',
+            query: `id=eq.${id}`
+          });
+        } catch (error) {
+          console.warn(`[canvas] failed to delete stale ${name} row ${id}`, error);
+        }
+      }
+    }
+    if (serialized.length) {
+      await supabaseRequest({ SUPABASE_URL: cfg.url, SUPABASE_SERVICE_ROLE_KEY: cfg.key }, name, {
+        method: 'POST',
+        query: 'on_conflict=id',
+        headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+        body: serialized
+      });
+    }
+  }
   globalState[name] = clone(value);
   return value;
 }
 
 async function ensureBootstrap(env) {
   if (globalState.booted) return;
+  const supabase = getSupabaseConfig(env);
+  globalState.supabase = supabase ? { ...supabase, bucket: supabaseStorageBucket(env) } : null;
   globalState.providers = await readJSONStore('providers', []);
   globalState.projects = await readJSONStore('projects', []);
   globalState.tasks = await readJSONStore('tasks', []);
@@ -523,18 +742,41 @@ async function handleUpload(request, url) {
   if (!bytes.byteLength) return json({ error: '空文件' }, 400);
   const contentType = String(request.headers.get('content-type') || 'application/octet-stream').split(';')[0];
   const ext = name.includes('.') ? name.slice(name.lastIndexOf('.')).toLowerCase() : '';
-  const id = `${uid('media_')}${ext || ''}`;
-  const response = new Response(bytes, {
-    headers: {
-      'content-type': contentType,
-      'cache-control': 'public, max-age=31536000, immutable'
+  const storageName = `${uid('media_')}${ext || ''}`;
+  const now = new Date().toISOString();
+  globalState.media.set(storageName, { bytes, contentType, name, size: bytes.byteLength, createdAt: now });
+  if (globalState.supabase) {
+    try {
+      const bucket = supabaseStorageBucket({ SUPABASE_STORAGE_BUCKET: globalState.supabase.bucket });
+      await supabaseStorageRequest({ SUPABASE_URL: globalState.supabase.url, SUPABASE_SERVICE_ROLE_KEY: globalState.supabase.key }, bucket, storageName, {
+        method: 'POST',
+        headers: {
+          'content-type': contentType,
+          'x-upsert': 'true'
+        },
+        body: bytes
+      });
+      await supabaseRequest({ SUPABASE_URL: globalState.supabase.url, SUPABASE_SERVICE_ROLE_KEY: globalState.supabase.key }, 'media_assets', {
+        method: 'POST',
+        body: [{
+          project_id: null,
+          task_id: null,
+          kind: contentType.startsWith('video/') ? 'video' : contentType.startsWith('audio/') ? 'audio' : contentType.startsWith('image/') ? 'image' : 'file',
+          storage_path: storageName,
+          public_url: `/media/${storageName}`,
+          mime_type: contentType,
+          metadata: { name, size: bytes.byteLength, mediaId: storageName },
+          created_at: now
+        }]
+      }).catch(() => {});
+    } catch (error) {
+      console.warn('[canvas] supabase upload failed, keeping in-memory media only', error);
     }
-  });
-  globalState.media.set(id, { bytes, contentType, name, size: bytes.byteLength });
+  }
   return json({
     ok: true,
-    url: `/media/${id}`,
-    name: id,
+    url: `/media/${storageName}`,
+    name: storageName,
     size: bytes.byteLength,
     mime: contentType,
     meta: { size: bytes.byteLength, mime: contentType }
@@ -543,6 +785,24 @@ async function handleUpload(request, url) {
 
 async function getMedia(id, req) {
   let cached = globalState.media.get(id);
+  if (!cached && globalState.supabase) {
+    try {
+      const bucket = supabaseStorageBucket({ SUPABASE_STORAGE_BUCKET: globalState.supabase.bucket });
+      const res = await supabaseStorageRequest({ SUPABASE_URL: globalState.supabase.url, SUPABASE_SERVICE_ROLE_KEY: globalState.supabase.key }, bucket, id, {
+        method: 'GET'
+      });
+      const bytes = await res.arrayBuffer();
+      cached = {
+        bytes,
+        contentType: res.headers.get('content-type') || 'application/octet-stream',
+        name: id,
+        size: bytes.byteLength
+      };
+      globalState.media.set(id, cached);
+    } catch (error) {
+      console.warn('[canvas] failed to load media from supabase', error);
+    }
+  }
   if (!cached) return json({ error: 'media not found' }, 404);
   const range = String(req.headers.get('range') || '').match(/bytes=(\d*)-(\d*)/);
   const total = cached.bytes.byteLength;
