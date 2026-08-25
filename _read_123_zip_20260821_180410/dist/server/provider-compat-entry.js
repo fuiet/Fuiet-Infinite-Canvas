@@ -118,6 +118,12 @@ async function handleProviderDraft(request, env, ctx, pathname) {
   }
 
   body.ownerId = owner;
+  // Private /media URLs are not usable by third-party providers once media is owner-protected.
+  // New providers therefore default to a server-prepared data URL unless explicitly configured.
+  if (!body.referenceTransport) body.referenceTransport = existing?.referenceTransport || 'data-url';
+  // Cloudflare production must never let a browser opt into private-network SSRF.
+  body.allowPrivateHosts = false;
+
   const response = await secureWorker.fetch(rewriteJsonRequest(request, body), env, ctx);
   return pathname === '/api/providers' ? scrubProviderResponse(response) : response;
 }
