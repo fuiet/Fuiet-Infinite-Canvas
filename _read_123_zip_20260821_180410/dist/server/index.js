@@ -31,15 +31,24 @@ const ALLOW_CORS = process.env.CANVAS_ALLOW_CORS === '1';
 const FFMPEG_BIN = process.env.FFMPEG_PATH || 'ffmpeg';
 const MAGICK_BIN = process.env.MAGICK_PATH || 'magick';
 const FFPROBE_BIN = process.env.FFPROBE_PATH || 'ffprobe';
-
-fs.mkdirSync(DATA_DIR, { recursive: true });
-fs.mkdirSync(MEDIA_DIR, { recursive: true });
-if (!fs.existsSync(PROVIDERS_FILE)) fs.writeFileSync(PROVIDERS_FILE, '[]\n');
-if (!fs.existsSync(SECRET_FILE)) fs.writeFileSync(SECRET_FILE, crypto.randomBytes(32));
-if (!fs.existsSync(BLENDER_TOKEN_FILE)) fs.writeFileSync(BLENDER_TOKEN_FILE, crypto.randomBytes(24).toString('hex'));
-if (!fs.existsSync(BLENDER_STATE_FILE)) fs.writeFileSync(BLENDER_STATE_FILE, JSON.stringify({canvas_to_blender:null,blender_to_canvas:null},null,2));
-const MASTER_KEY = fs.readFileSync(SECRET_FILE);
-const store = new CanvasStore(DATA_DIR);
+let store;
+let MASTER_KEY;
+let bootPromise;
+async function ensureBoot() {
+  if (!bootPromise) {
+    bootPromise = (async () => {
+      await fs.promises.mkdir(DATA_DIR, { recursive: true });
+      await fs.promises.mkdir(MEDIA_DIR, { recursive: true });
+      try { await fs.promises.access(PROVIDERS_FILE); } catch { await fs.promises.writeFile(PROVIDERS_FILE, '[]\n'); }
+      try { await fs.promises.access(SECRET_FILE); } catch { await fs.promises.writeFile(SECRET_FILE, crypto.randomBytes(32)); }
+      try { await fs.promises.access(BLENDER_TOKEN_FILE); } catch { await fs.promises.writeFile(BLENDER_TOKEN_FILE, crypto.randomBytes(24).toString('hex')); }
+      try { await fs.promises.access(BLENDER_STATE_FILE); } catch { await fs.promises.writeFile(BLENDER_STATE_FILE, JSON.stringify({canvas_to_blender:null,blender_to_canvas:null},null,2)); }
+      MASTER_KEY = await fs.promises.readFile(SECRET_FILE);
+      store = new CanvasStore(DATA_DIR);
+    })();
+  }
+  return bootPromise;
+}
 let runningTasks = 0;
 const rateBuckets = new Map();
 
@@ -1279,6 +1288,7 @@ function serveStatic(req, res, pathname) {
 
 const server = http.createServer(async (req, res) => {
   try {
+    await ensureBoot();
     const u=new URL(req.url,`http://${req.headers.host||'localhost'}`);const pathname=u.pathname;
     if(!enforceRateLimit(req,res))return;
     if(pathname==='/api/health'&&req.method==='GET')return json(res,200,{ok:true,service:'canvas-provider-gateway',taskConcurrency:TASK_CONCURRENCY,queuePaused:taskQueuePaused,authEnabled:Boolean(ADMIN_PASSWORD)});
@@ -1351,7 +1361,8 @@ const server = http.createServer(async (req, res) => {
 });
 server.listen(PORT, HOST, () => {
   console.log(`Canvas Studio running at http://${HOST}:${PORT}`);
-  console.log(`Provider data: ${PROVIDERS_FILE}`);console.log(`Persistent store: ${path.join(DATA_DIR,'canvas.sqlite')}`);processTaskQueue();
+  console.log(`Provider data: ${PROVIDERS_FILE}`);console.log(`Persistent store: ${path.join(DATA_DIR,'canvas.sqlite')}`);
+  ensureBoot().then(() => processTaskQueue());
 });
 
 
