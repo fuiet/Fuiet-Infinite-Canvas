@@ -611,6 +611,30 @@ async function tryProviderGeneration(task,provider,model){
   if(!provider.baseUrl)throw new Error('API Base URL 不能为空');
   const route=routeForTask(provider,model,task.nodeType);
   if(!route.createPath)throw new Error(`无法自动识别模型「${model.name||model.id}」的生成接口`);
+
+  const upstream=task.payload?._upstream;
+  if(upstream?.taskId){
+    const startedAt=Number(upstream.startedAt||Date.now());
+    if(Date.now()-startedAt>Math.max(5000,Number(route.timeoutMs||1200000)))throw new Error('上游任务超时');
+    const pollTemplate=String(upstream.pollPath||route.pollPath||'');
+    if(!pollTemplate)throw new Error('视频任务已创建，但无法确定查询任务状态的接口');
+    const pollPath=pollTemplate.replace(/\{\{\s*taskId\s*\}\}/g,encodeURIComponent(String(upstream.taskId)));
+    const pollUrl=resolveUrl(provider.baseUrl,pollPath);
+    const pollRes=await fetchWithTimeout(pollUrl,{method:'GET',headers:buildHeaders(provider,model)},30000);
+    const latest=await parseProviderResponse(pollRes,task.nodeType);
+    const statusRaw=route.statusPath?getPath(latest,route.statusPath):firstPath(latest,['status','data.status','state','data.state','task.status','result.status']);
+    const status=String(statusRaw||'').toLowerCase();
+    const progressRaw=route.progressPath?getPath(latest,route.progressPath):firstPath(latest,['progress','data.progress','percent','data.percent','task.progress']);
+    const progress=Number(progressRaw);
+    const failureValues=new Set((route.failureValues||['failed','error','canceled','cancelled']).map(v=>String(v).toLowerCase()));
+    const successValues=new Set((route.successValues||['completed','succeeded','success','done','finished']).map(v=>String(v).toLowerCase()));
+    if(failureValues.has(status))throw new Error(`上游任务失败：${status||'unknown'}`);
+    const output=outputFromResponse(latest,task.nodeType,route);
+    if(output)return{output,raw:latest,sourceUrl:pollUrl};
+    if(successValues.has(status))throw new Error(`上游任务状态为 ${status}，但响应中没有识别到结果 URL`);
+    return{pending:true,progress:Number.isFinite(progress)?Math.max(20,Math.min(96,progress)):Math.min(94,Number(task.progress||20)+3)};
+  }
+
   const ctx=buildTaskContext(task,provider,model,route);
   const explicitRoute=Boolean(model?.createPath||model?.operationRoutes?.generate?.createPath);
   const hasTemplate=explicitRoute&&route.requestTemplate&&Object.keys(route.requestTemplate).length>0;
@@ -619,27 +643,16 @@ async function tryProviderGeneration(task,provider,model){
   const defaultCreateTimeout=task.nodeType==='image'?600000:task.nodeType==='video'?180000:120000;
   const createTimeout=Math.max(30000,Math.min(Number(route.timeoutMs||defaultCreateTimeout),defaultCreateTimeout));
   const res=await fetchWithTimeout(url,{method,headers:buildHeaders(provider,model),body:method==='GET'||method==='HEAD'?undefined:JSON.stringify(bodyObject)},createTimeout);
-  const parsed=await parseProviderResponse(res,task.nodeType),immediate=outputFromResponse(parsed,task.nodeType,route);
+  const parsed=await parseProviderResponse(res,task.nodeType);
+  let immediate=outputFromResponse(parsed,task.nodeType,route);
+  if(['image','video','audio'].includes(task.nodeType)&&immediate?.type!=='url')immediate=null;
   if(immediate)return{output:immediate,raw:parsed,sourceUrl:url};
   if(route.responseMode!=='async')throw new Error('上游请求成功，但响应中没有识别到可用结果');
   const taskId=route.taskIdPath?getPath(parsed,route.taskIdPath):firstPath(parsed,['id','task_id','taskId','data.id','data.task_id','data.taskId','task.id','result.id']);
   if(!taskId)throw new Error('视频任务已提交，但响应中没有识别到任务 ID（支持 id、task_id、data.id 等常见字段）');
   if(!route.pollPath)throw new Error('视频任务已创建，但无法确定查询任务状态的接口');
-  const deadline=Date.now()+Math.max(5000,Number(route.timeoutMs||1200000)),pollDelay=Math.max(500,Number(route.pollIntervalMs||1500));
-  const successValues=new Set((route.successValues||['completed','succeeded','success','done','finished']).map(v=>String(v).toLowerCase())),failureValues=new Set((route.failureValues||['failed','error','canceled','cancelled']).map(v=>String(v).toLowerCase()));
-  while(Date.now()<deadline){
-    await new Promise(resolve=>setTimeout(resolve,pollDelay));
-    const pollPath=route.pollPath.replace(/\{\{\s*taskId\s*\}\}/g,encodeURIComponent(String(taskId))),pollUrl=resolveUrl(provider.baseUrl,pollPath);
-    const pollRes=await fetchWithTimeout(pollUrl,{method:'GET',headers:buildHeaders(provider,model)},30000),latest=await parseProviderResponse(pollRes,task.nodeType);
-    const statusRaw=route.statusPath?getPath(latest,route.statusPath):firstPath(latest,['status','data.status','state','data.state','task.status','result.status']),status=String(statusRaw||'').toLowerCase();
-    const progressRaw=route.progressPath?getPath(latest,route.progressPath):firstPath(latest,['progress','data.progress','percent','data.percent','task.progress']),progress=Number(progressRaw);
-    if(Number.isFinite(progress)){task.progress=Math.max(20,Math.min(96,progress));task.updatedAt=new Date().toISOString();await persistTasks()}
-    if(failureValues.has(status))throw new Error(`上游任务失败：${status||'unknown'}`);
-    const output=outputFromResponse(latest,task.nodeType,route);
-    if(output)return{output,raw:latest,sourceUrl:pollUrl};
-    if(successValues.has(status))throw new Error(`上游任务状态为 ${status}，但响应中没有识别到结果 URL`);
-  }
-  throw new Error('上游任务超时');
+  task.payload={...(task.payload||{}),_upstream:{taskId:String(taskId),pollPath:route.pollPath,startedAt:Date.now()}};
+  return{pending:true,progress:20};
 }
 
 
@@ -648,8 +661,12 @@ async function processTask(task){
   try{
     const savedProvider=(globalState.providers||[]).find(p=>p.id===task.providerId),provider=savedProvider||task.payload?.providerSnapshot||null;
     const model=provider?.models?.find(m=>m.id===task.modelId)||task.payload?.modelSnapshot||null,result=await tryProviderGeneration(task,provider,model);
-    if(!result?.output)throw new Error('上游响应中没有识别到有效生成结果');
-    task.output=result.output;task.status='succeeded';task.progress=100;task.error=null;task.updatedAt=new Date().toISOString();task.logs=[...(task.logs||[]),{time:task.updatedAt,level:'info',message:'任务完成'}];
+    if(result?.pending){
+      task.output=null;task.status='polling';task.progress=Number(result.progress||20);task.error=null;task.updatedAt=new Date().toISOString();
+    }else{
+      if(!result?.output)throw new Error('上游响应中没有识别到有效生成结果');
+      task.output=result.output;task.status='succeeded';task.progress=100;task.error=null;task.updatedAt=new Date().toISOString();task.logs=[...(task.logs||[]),{time:task.updatedAt,level:'info',message:'任务完成'}];
+    }
   }catch(error){
     task.output=null;task.status='failed';task.error=String(error?.message||error);task.updatedAt=new Date().toISOString();task.logs=[...(task.logs||[]),{time:task.updatedAt,level:'error',message:task.error}];
   }
@@ -1137,6 +1154,25 @@ async function handleRequest(request, env, ctx) {
         modelName: m.name
       })))
     });
+  }
+
+  if (pathname === '/api/tasks/poll' && request.method === 'POST') {
+    const body = await readBody(request);
+    const incoming = clone(body.task || {});
+    if (!incoming.id || !incoming.providerId || !incoming.modelId || !incoming.payload?._upstream?.taskId) {
+      return json({ error:'视频轮询参数不完整' }, 400);
+    }
+    let task = (globalState.tasks || []).find(t => t.id === incoming.id);
+    if (!task) {
+      task = incoming;
+      task.output = null;
+      task.error = null;
+      globalState.tasks.unshift(task);
+    } else if (incoming.payload?._upstream) {
+      task.payload = { ...(task.payload || {}), _upstream:incoming.payload._upstream };
+    }
+    await processTask(task);
+    return json({ task:taskPublic(task) });
   }
 
   if (pathname === '/api/tasks' && request.method === 'GET') {
