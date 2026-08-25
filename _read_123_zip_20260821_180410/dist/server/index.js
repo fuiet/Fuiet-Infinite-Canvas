@@ -1,6 +1,3 @@
-const SAMPLE_VIDEO_URL = 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4';
-const SAMPLE_AUDIO_URL = 'https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3';
-
 const globalState = globalThis.__canvasWorkerState || (globalThis.__canvasWorkerState = {
   booted: false,
   supabase: null,
@@ -390,68 +387,6 @@ function extractOutput(result, nodeType) {
     }
   }
   return null;
-}
-
-function escapeXml(text) {
-  return String(text ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[ch]));
-}
-
-function svgPlaceholder(title, subtitle, accent = '#7dd3fc') {
-  const safeTitle = escapeXml(title).slice(0, 48);
-  const safeSub = escapeXml(subtitle).slice(0, 120);
-  const svg = `<?xml version="1.0" encoding="UTF-8"?>
-  <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
-    <defs>
-      <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
-        <stop offset="0%" stop-color="#111827"/>
-        <stop offset="100%" stop-color="#0b0f19"/>
-      </linearGradient>
-    </defs>
-    <rect width="1280" height="720" rx="48" fill="url(#bg)"/>
-    <circle cx="1080" cy="120" r="180" fill="${accent}" fill-opacity="0.16"/>
-    <circle cx="180" cy="580" r="140" fill="#a78bfa" fill-opacity="0.10"/>
-    <rect x="70" y="70" width="430" height="580" rx="28" fill="#202634" stroke="#4b5563" stroke-width="2"/>
-    <rect x="520" y="130" width="610" height="18" rx="9" fill="#334155"/>
-    <rect x="520" y="170" width="520" height="18" rx="9" fill="#334155"/>
-    <rect x="520" y="210" width="420" height="18" rx="9" fill="#334155"/>
-    <text x="520" y="330" fill="#ffffff" font-family="Inter,Segoe UI,Noto Sans SC,sans-serif" font-size="64" font-weight="700">${safeTitle}</text>
-    <text x="520" y="390" fill="#d1d5db" font-family="Inter,Segoe UI,Noto Sans SC,sans-serif" font-size="28">${safeSub}</text>
-    <rect x="520" y="470" width="220" height="56" rx="18" fill="${accent}" fill-opacity="0.18" stroke="${accent}" stroke-opacity="0.55"/>
-    <text x="630" y="506" fill="#e5f6ff" text-anchor="middle" font-family="Inter,Segoe UI,Noto Sans SC,sans-serif" font-size="24" font-weight="600">Canvas Studio</text>
-  </svg>`;
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-}
-
-function placeholderOutput(task) {
-  const prompt = String(task?.payload?.prompt || '').trim();
-  const nodeType = String(task?.nodeType || 'text');
-  if (nodeType === 'image') {
-    const title = prompt ? prompt.slice(0, 28) : '图片生成完成';
-    return {
-      type: 'url',
-      value: svgPlaceholder(title, '当前为可运行的边缘占位图，便于先把画布流程跑通'),
-      sourceUrl: ''
-    };
-  }
-  if (nodeType === 'video') {
-    return {
-      type: 'url',
-      value: SAMPLE_VIDEO_URL,
-      sourceUrl: SAMPLE_VIDEO_URL
-    };
-  }
-  if (nodeType === 'audio') {
-    return {
-      type: 'url',
-      value: SAMPLE_AUDIO_URL,
-      sourceUrl: SAMPLE_AUDIO_URL
-    };
-  }
-  const prefix = nodeType === 'script' ? '【脚本模拟生成】' : '【文本模拟生成】';
-  return {
-    type: 'text',
-    value: `${prefix}\n${prompt || '当前站点已恢复运行，后续可继续接入第三方模型。'}`
-  };
 }
 
 function taskPublic(task) {
