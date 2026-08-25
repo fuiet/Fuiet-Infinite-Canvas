@@ -921,7 +921,7 @@ async function handleProjectRestore(projectId, versionNum) {
   return json({ project: projectPublic(project) });
 }
 
-async function handleRequest(request, env) {
+async function handleRequest(request, env, ctx) {
   await ensureBootstrap(env);
   const url = new URL(request.url);
   const { pathname } = url;
