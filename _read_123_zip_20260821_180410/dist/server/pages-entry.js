@@ -41,11 +41,60 @@ async function blenderToken(request, env, ctx) {
   return json({ token, plugin: '/blender_canvas_bridge.py', pollIntervalMs: 1000 });
 }
 
+function uploadLimit(env) {
+  return Math.max(1024 * 1024, Math.min(100 * 1024 * 1024, Number(env?.CANVAS_MAX_UPLOAD_BYTES || 50 * 1024 * 1024)));
+}
+
+async function boundedUploadRequest(request, env) {
+  const maxBytes = uploadLimit(env);
+  const declared = Number(request.headers.get('content-length') || 0);
+  if (Number.isFinite(declared) && declared > maxBytes) {
+    return { response: json({ error: `上传文件过大，最大允许 ${Math.round(maxBytes / 1024 / 1024)}MB` }, 413) };
+  }
+  if (!request.body) return { request };
+
+  const reader = request.body.getReader();
+  const chunks = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value?.byteLength) continue;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        try { await reader.cancel('upload too large'); } catch {}
+        return { response: json({ error: `上传文件过大，最大允许 ${Math.round(maxBytes / 1024 / 1024)}MB` }, 413) };
+      }
+      chunks.push(value);
+    }
+  } finally {
+    try { reader.releaseLock(); } catch {}
+  }
+
+  const headers = new Headers(request.headers);
+  headers.set('content-length', String(total));
+  const blob = new Blob(chunks, { type: String(headers.get('content-type') || 'application/octet-stream') });
+  return {
+    request: new Request(request.url, {
+      method: request.method,
+      headers,
+      body: blob,
+      redirect: request.redirect
+    })
+  };
+}
+
 export default {
   async fetch(request, env, ctx) {
     const pathname = new URL(request.url).pathname;
     if (pathname === '/api/blender/bridge/token' && request.method === 'GET') {
       return blenderToken(request, env, ctx);
+    }
+    if (pathname === '/api/upload' && request.method === 'POST') {
+      const bounded = await boundedUploadRequest(request, env);
+      if (bounded.response) return bounded.response;
+      request = bounded.request;
     }
     return authWorker.fetch(request, env, ctx);
   }
