@@ -1089,10 +1089,13 @@ async function handleRequest(request, env) {
 }
 
 function setResponseHeaders(resp) {
-  if (!resp.headers.has('x-content-type-options')) {
-    resp.headers.set('x-content-type-options', 'nosniff');
-  }
-  return resp;
+  const headers = new Headers(resp.headers);
+  if (!headers.has('x-content-type-options')) headers.set('x-content-type-options', 'nosniff');
+  return new Response(resp.body, {
+    status: resp.status,
+    statusText: resp.statusText,
+    headers
+  });
 }
 
 export default {
