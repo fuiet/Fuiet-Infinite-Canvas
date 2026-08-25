@@ -2,15 +2,14 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { URL, fileURLToPath } from 'node:url';
+import { URL } from 'node:url';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import dns from 'node:dns/promises';
 import net from 'node:net';
 import { CanvasStore } from './store.js';
 const execFileAsync = promisify(execFile);
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname = path.dirname(process.argv[1] || process.cwd());
 
 const ROOT = __dirname;
 const DATA_DIR = path.join(ROOT, '.data');
@@ -1353,3 +1352,4 @@ server.listen(PORT, HOST, () => {
   console.log(`Canvas Studio running at http://${HOST}:${PORT}`);
   console.log(`Provider data: ${PROVIDERS_FILE}`);console.log(`Persistent store: ${path.join(DATA_DIR,'canvas.sqlite')}`);processTaskQueue();
 });
+
