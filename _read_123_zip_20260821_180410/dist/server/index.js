@@ -628,7 +628,7 @@ async function tryProviderGeneration(task,provider,model){
     const progress=Number(progressRaw);
     const failureValues=new Set((route.failureValues||['failed','error','canceled','cancelled']).map(v=>String(v).toLowerCase()));
     const successValues=new Set((route.successValues||['completed','succeeded','success','done','finished']).map(v=>String(v).toLowerCase()));
-    if(failureValues.has(status))throw new Error(`上游任务失败：${status||'unknown'}`);
+    if(failureValues.has(status)){const detailRaw=firstPath(latest,['error.message','error','message','data.error.message','data.error','data.message','task.error','result.error.message','result.error','result.message']);const detail=detailRaw&&typeof detailRaw==='object'?JSON.stringify(detailRaw):String(detailRaw||'');throw new Error(`上游任务失败（${status||'unknown'}）${detail?`：${detail.slice(0,600)}`:''}`);}
     const output=outputFromResponse(latest,task.nodeType,route);
     if(output)return{output,raw:latest,sourceUrl:pollUrl};
     if(successValues.has(status))throw new Error(`上游任务状态为 ${status}，但响应中没有识别到结果 URL`);
@@ -843,7 +843,7 @@ function modelEndpointCandidates(provider){
 }
 function inferModality(item,id,name){
   const explicit=String(item?.modality||item?.model_type||item?.category||'').toLowerCase(),capabilities=Array.isArray(item?.capabilities)?item.capabilities.join(' '):String(item?.capabilities||''),hay=`${explicit} ${capabilities} ${id} ${name}`.toLowerCase();
-  if(/(video|seedance|kling|hailuo|vidu|pixverse|runway|sora|veo|wan[-_. ]?2|hunyuan.*video|ltx.*video)/.test(hay))return'video';
+  if(/(video|seedance|artsdance|kling|hailuo|vidu|pixverse|runway|sora|veo|wan[-_. ]?2|hunyuan.*video|ltx.*video)/.test(hay))return'video';
   if(/(image|flux|seedream|dall[-_. ]?e|imagen|recraft|ideogram|sdxl|stable.*diffusion|qwen.*image|nano.*banana)/.test(hay))return'image';
   if(/(audio|speech|tts|voice|music|eleven|mureka|suno|whisper)/.test(hay))return'audio';
   return'text';
