@@ -635,6 +635,22 @@ function upstreamErrorDetail(raw,status,statusText=''){
   const detail=typeof parsed==='string'?parsed:firstPath(parsed||{},['error.message','error','message','detail','data.error.message','data.error','data.message'])||raw||statusText;
   return typeof detail==='object'?JSON.stringify(detail):String(detail||`HTTP ${status}`);
 }
+function pollCandidatesFromResponse(parsed,activeRoute,existing=[]){
+  const provided=firstPath(parsed||{},['status_url','statusUrl','poll_url','pollUrl','task_url','taskUrl','urls.status','urls.get','links.status','links.self','data.status_url','data.statusUrl','data.poll_url','data.pollUrl','data.task_url','data.urls.status','data.urls.get','data.links.status','task.status_url','task.poll_url','result.status_url','result.poll_url']);
+  const paths=[
+    provided,
+    activeRoute?.pollPath,
+    ...(Array.isArray(existing)?existing:[]),
+    '/v1/video/generations/{{taskId}}',
+    '/v1/videos/generations/{{taskId}}',
+    '/v1/videos/{{taskId}}',
+    '/v1/video/tasks/{{taskId}}',
+    '/v1/tasks/{{taskId}}',
+    '/v1/task/{{taskId}}',
+    '/v1/generations/{{taskId}}'
+  ].map(x=>String(x||'').trim()).filter(Boolean);
+  return [...new Set(paths)];
+}
 
 async function tryProviderGeneration(task,provider,model){
   if(!provider)throw new Error('API 供应商不存在');
@@ -647,15 +663,26 @@ async function tryProviderGeneration(task,provider,model){
   if(upstream?.taskId){
     const startedAt=Number(upstream.startedAt||Date.now());
     if(Date.now()-startedAt>Math.max(5000,Number(route.timeoutMs||1200000)))throw new Error('上游任务超时');
-    const pollTemplate=String(upstream.pollPath||route.pollPath||'');
-    if(!pollTemplate)throw new Error('视频任务已创建，但无法确定查询任务状态的接口');
-    const pollPath=pollTemplate.replace(/\{\{\s*taskId\s*\}\}/g,encodeURIComponent(String(upstream.taskId)));
-    const pollUrl=resolveUrl(provider.baseUrl,pollPath);
-    const pollRes=await fetchWithTimeout(pollUrl,{method:'GET',headers:buildHeaders(provider,model,upstream.auth||null)},30000);
-    const latest=await parseProviderResponse(pollRes,task.nodeType);
-    const statusRaw=route.statusPath?getPath(latest,route.statusPath):firstPath(latest,['status','data.status','state','data.state','task.status','result.status']);
+    const templates=pollCandidatesFromResponse(null,route,[upstream.pollPath,...(upstream.pollCandidates||[])]);
+    if(!templates.length)throw new Error('视频任务已创建，但无法确定查询任务状态的接口');
+    let latest=null,pollUrl='',selectedTemplate='',lastPollError=null;
+    for(const pollTemplate of templates){
+      const pollPath=pollTemplate.replace(/\{\{\s*taskId\s*\}\}/g,encodeURIComponent(String(upstream.taskId)));
+      pollUrl=resolveUrl(provider.baseUrl,pollPath);
+      const pollRes=await fetchWithTimeout(pollUrl,{method:'GET',headers:buildHeaders(provider,model,upstream.auth||null)},30000);
+      if(pollRes.ok){latest=await parseProviderResponse(pollRes,task.nodeType);selectedTemplate=pollTemplate;break}
+      const raw=await pollRes.text(),detail=upstreamErrorDetail(raw,pollRes.status,pollRes.statusText);
+      lastPollError=new Error(`上游 API ${pollRes.status}：${detail.slice(0,600)}`);
+      if([400,404,405,422].includes(pollRes.status))continue;
+      throw lastPollError;
+    }
+    if(latest===null)throw new Error(`${lastPollError?.message||'无法查询视频任务'}；已自动尝试 ${templates.length} 个常见查询地址`);
+    upstream.pollPath=selectedTemplate;
+    upstream.pollCandidates=[selectedTemplate,...templates.filter(x=>x!==selectedTemplate)];
+    task.payload={...(task.payload||{}),_upstream:upstream};
+    const statusRaw=firstPath(latest,[route.statusPath,'status','data.status','state','data.state','task.status','result.status'].filter(Boolean));
     const status=String(statusRaw||'').toLowerCase();
-    const progressRaw=route.progressPath?getPath(latest,route.progressPath):firstPath(latest,['progress','data.progress','percent','data.percent','task.progress']);
+    const progressRaw=firstPath(latest,[route.progressPath,'progress','data.progress','percent','data.percent','task.progress'].filter(Boolean));
     const progress=Number(progressRaw);
     const failureValues=new Set((route.failureValues||['failed','error','canceled','cancelled']).map(v=>String(v).toLowerCase()));
     const successValues=new Set((route.successValues||['completed','succeeded','success','done','finished']).map(v=>String(v).toLowerCase()));
@@ -697,8 +724,9 @@ async function tryProviderGeneration(task,provider,model){
   if(activeRoute.responseMode!=='async')throw new Error('上游请求成功，但响应中没有识别到可用结果');
   const taskId=activeRoute.taskIdPath?getPath(parsed,activeRoute.taskIdPath):firstPath(parsed,['id','task_id','taskId','request_id','job_id','prediction_id','data.id','data.task_id','data.taskId','data.request_id','data.job_id','task.id','result.id']);
   if(!taskId)throw new Error('视频任务已提交，但响应中没有识别到任务 ID（支持 id、task_id、request_id、job_id、data.id 等常见字段）');
-  if(!activeRoute.pollPath)throw new Error('视频任务已创建，但无法确定查询任务状态的接口');
-  task.payload={...(task.payload||{}),_upstream:{taskId:String(taskId),pollPath:activeRoute.pollPath,auth:activeAuth,startedAt:Date.now()}};
+  const pollCandidates=pollCandidatesFromResponse(parsed,activeRoute,[]);
+  if(!pollCandidates.length)throw new Error('视频任务已创建，但无法确定查询任务状态的接口');
+  task.payload={...(task.payload||{}),_upstream:{taskId:String(taskId),pollPath:pollCandidates[0],pollCandidates,auth:activeAuth,startedAt:Date.now()}};
   return{pending:true,progress:20};
 }
 
