@@ -859,7 +859,7 @@ async function diagnoseProvider(body){
 async function handleTaskPost(body,ctx){
   const now=new Date().toISOString(),safePayload=clone(body||{});
   if(safePayload.providerSnapshot){delete safePayload.providerSnapshot.apiKey;delete safePayload.providerSnapshot.apiKeyEncrypted}
-  const task={id:uid('task_'),status:'queued',progress:0,providerId:String(body.providerId||''),modelId:String(body.modelId||''),nodeType:String(body.nodeType||''),payload:safePayload,output:null,error:null,createdAt:now,updatedAt:now,attempt:0,maxRetries:Math.max(0,Math.min(5,Number(body.maxRetries??1))),priority:Math.max(0,Math.min(100,Number(body.priority??50))),cancelRequested:false,logs:[]};
+  const task={id:crypto.randomUUID(),status:'queued',progress:0,providerId:String(body.providerId||''),modelId:String(body.modelId||''),nodeType:String(body.nodeType||''),payload:safePayload,output:null,error:null,createdAt:now,updatedAt:now,attempt:0,maxRetries:Math.max(0,Math.min(5,Number(body.maxRetries??1))),priority:Math.max(0,Math.min(100,Number(body.priority??50))),cancelRequested:false,logs:[]};
   if(!task.providerId||!task.modelId||!['text','image','video','audio','script'].includes(task.nodeType))return json({error:'任务参数不完整'},400);
   const provider=(globalState.providers||[]).find(p=>p.id===task.providerId);
   if(!provider)return json({error:'API 供应商不存在'},404);
