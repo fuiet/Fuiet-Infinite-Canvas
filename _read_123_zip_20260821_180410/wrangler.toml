@@ -1,0 +1,15 @@
+name = "fuiet-infinite-canvas"
+compatibility_date = "2026-08-25"
+pages_build_output_dir = "."
+
+[vars]
+SUPABASE_STORAGE_BUCKET = "canvas-media"
+CANVAS_TASK_CONCURRENCY = "2"
+CANVAS_ALLOW_PRIVATE_PROVIDER_HOSTS = "0"
+
+# Configure secrets in Cloudflare Pages/Workers settings, not in this file:
+# PROVIDER_SECRET_KEY
+# SUPABASE_URL
+# SUPABASE_SERVICE_ROLE_KEY
+# CANVAS_ADMIN_PASSWORD
+# CANVAS_PUBLIC_BASE_URL=https://fuiet-infinite-canvas.pages.dev
