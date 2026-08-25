@@ -3006,6 +3006,7 @@
     try{
       const out=await apiJson('/api/providers/discover-models',{method:'POST',body:JSON.stringify(d)});
       discoveredModels=out.models||[];discoveredEndpoint=out.endpoint||'';
+      if(out.authHeader){d.authHeader=out.authHeader;d.authScheme=out.authScheme||'';}
       // 如果供应商返回的是标准 OpenAI /v1/models 结构，则自动切换到 OpenAI 兼容适配器。
       // 这样文本模型会自动走 /v1/chat/completions，而不是落入 Generic REST 的未知路由。
       if(d.protocol==='generic-rest'&&out.suggestedProtocol==='openai-compatible'){
