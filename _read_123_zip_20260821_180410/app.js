@@ -297,8 +297,7 @@
       const data=await apiJson('/api/providers');
       const remote=Array.isArray(data.providers)?data.providers:[];
       if(remote.length){
-        const localById=new Map(local.map(p=>[p.id,p]));
-        providers=remote.map(p=>({...p,...(localById.get(p.id)||{}),models:Array.isArray((localById.get(p.id)||{}).models)?(localById.get(p.id)||{}).models:p.models||[]})).filter(Boolean);
+        providers=remote.map(sanitizeProviderForBrowser).filter(Boolean);
         saveLocalProviders(providers);
       }
       else if(local.length){
@@ -306,8 +305,7 @@
         try{
           const restored=await restoreProvidersToServer(local);
           if(restored.length){
-            const localById=new Map(local.map(p=>[p.id,p]));
-            providers=restored.map(p=>({...p,...(localById.get(p.id)||{}),models:Array.isArray((localById.get(p.id)||{}).models)?(localById.get(p.id)||{}).models:p.models||[]})).filter(Boolean);
+            providers=restored.map(sanitizeProviderForBrowser).filter(Boolean);
             saveLocalProviders(providers);
           }
         }catch{}
