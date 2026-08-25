@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import worker from '../dist/server/production-entry.js';
+import worker from '../dist/server/final-entry.js';
 
 const BASE = 'https://canvas.example.test';
 const OWNER_A = '11111111-1111-4111-8111-111111111111';
@@ -72,6 +72,7 @@ async function createProvider(env, id, modelId = 'text-model') {
     }
   });
   assert.equal(result.response.status, 200);
+  assert.equal(result.data.provider.ownerId, undefined);
   return result.data.provider;
 }
 
