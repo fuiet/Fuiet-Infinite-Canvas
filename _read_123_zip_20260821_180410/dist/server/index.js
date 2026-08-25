@@ -1,9 +1,6 @@
 const SAMPLE_VIDEO_URL = 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4';
 const SAMPLE_AUDIO_URL = 'https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3';
 
-const STORE_PREFIX = 'https://canvas-studio-worker.local/store/';
-const MEDIA_PREFIX = 'https://canvas-studio-worker.local/media/';
-
 const globalState = globalThis.__canvasWorkerState || (globalThis.__canvasWorkerState = {
   booted: false,
   providers: null,
@@ -14,9 +11,6 @@ const globalState = globalThis.__canvasWorkerState || (globalThis.__canvasWorker
   sessions: new Map(),
   media: new Map()
 });
-
-const enc = new TextEncoder();
-const dec = new TextDecoder();
 
 function clone(value) {
   if (typeof structuredClone === 'function') return structuredClone(value);
@@ -60,38 +54,13 @@ function html(body, status = 200, extraHeaders = {}) {
   });
 }
 
-function storageKey(name) {
-  return new Request(`${STORE_PREFIX}${encodeURIComponent(name)}`);
-}
-
-function mediaKey(id) {
-  return new Request(`${MEDIA_PREFIX}${encodeURIComponent(id)}`);
-}
-
 async function readJSONStore(name, fallback) {
   if (globalState[name] !== null && globalState[name] !== undefined) return clone(globalState[name]);
-  const res = await caches.default.match(storageKey(name));
-  if (!res) return clone(fallback);
-  try {
-    const data = await res.json();
-    globalState[name] = data;
-    return clone(data);
-  } catch {
-    return clone(fallback);
-  }
+  return clone(fallback);
 }
 
 async function writeJSONStore(name, value) {
   globalState[name] = clone(value);
-  await caches.default.put(
-    storageKey(name),
-    new Response(JSON.stringify(value), {
-      headers: {
-        'content-type': 'application/json; charset=utf-8',
-        'cache-control': 'no-store'
-      }
-    })
-  );
   return value;
 }
 
@@ -555,7 +524,6 @@ async function handleUpload(request, url) {
   const contentType = String(request.headers.get('content-type') || 'application/octet-stream').split(';')[0];
   const ext = name.includes('.') ? name.slice(name.lastIndexOf('.')).toLowerCase() : '';
   const id = `${uid('media_')}${ext || ''}`;
-  const key = mediaKey(id);
   const response = new Response(bytes, {
     headers: {
       'content-type': contentType,
@@ -563,7 +531,6 @@ async function handleUpload(request, url) {
     }
   });
   globalState.media.set(id, { bytes, contentType, name, size: bytes.byteLength });
-  await caches.default.put(key, response.clone());
   return json({
     ok: true,
     url: `/media/${id}`,
@@ -576,18 +543,7 @@ async function handleUpload(request, url) {
 
 async function getMedia(id, req) {
   let cached = globalState.media.get(id);
-  if (!cached) {
-    const stored = await caches.default.match(mediaKey(id));
-    if (!stored) return json({ error: 'media not found' }, 404);
-    const bytes = await stored.arrayBuffer();
-    cached = {
-      bytes,
-      contentType: stored.headers.get('content-type') || 'application/octet-stream',
-      size: bytes.byteLength,
-      name: id
-    };
-    globalState.media.set(id, cached);
-  }
+  if (!cached) return json({ error: 'media not found' }, 404);
   const range = String(req.headers.get('range') || '').match(/bytes=(\d*)-(\d*)/);
   const total = cached.bytes.byteLength;
   const mime = cached.contentType || 'application/octet-stream';
