@@ -442,14 +442,21 @@ function inferCapabilities(raw={},modality='image',id='',name=''){
     cap.supportsCamera=cap.supportsCamera ?? true; cap.supportsStyle=cap.supportsStyle ?? true;
   }else if(modality==='video'){
     cap.durations=arrNumbers(cap.durations||raw.durations||raw.duration_options);if(!cap.durations.length)cap.durations=/seedance.*2\\.5/.test(text)?[4,5,10,15,30]:/h3|minimax/.test(text)?[4,5,6,8,10,12,15]:[4,5,10];
-    cap.resolutions=arrStrings(cap.resolutions||raw.resolutions||raw.sizes);if(!cap.resolutions.length)cap.resolutions=/h3|minimax/.test(text)?['768p','1440p']:['480p','720p','1080p'];
+    const klingFamily=/kling/.test(text);
+    cap.resolutions=arrStrings(cap.resolutions||raw.resolutions||raw.sizes);
+    if(klingFamily){
+      cap.resolutions=cap.resolutions.filter(r=>String(r).toLowerCase()!=='480p');
+      if(!cap.resolutions.length)cap.resolutions=['720p','1080p','2160p'];
+    }else if(!cap.resolutions.length)cap.resolutions=/h3|minimax/.test(text)?['768p','1440p']:['480p','720p','1080p'];
     cap.aspectRatios=arrStrings(cap.aspectRatios||raw.aspect_ratios||raw.aspectRatios);if(!cap.aspectRatios.length)cap.aspectRatios=['16:9','9:16','1:1','4:3','3:4'];
     cap.maxImages=Number(cap.maxImages||raw.max_images||raw.maxImages||(/seedance.*2\\.5/.test(text)?30:/h3|minimax/.test(text)?9:7));
     cap.maxVideos=Number(cap.maxVideos||raw.max_videos||raw.maxVideos||(/seedance.*2\\.5/.test(text)?10:/h3|minimax/.test(text)?3:1));
     cap.maxAudios=Number(cap.maxAudios||raw.max_audios||raw.maxAudios||(/seedance.*2\\.5/.test(text)?10:/h3|minimax/.test(text)?3:1));
     cap.maxReferences=Number(cap.maxReferences||raw.max_references||raw.maxReferences||(/seedance.*2\\.5/.test(text)?50:/h3|minimax/.test(text)?12:Math.max(9,cap.maxImages+cap.maxVideos+cap.maxAudios)));
-    cap.supportsFirstFrame=cap.supportsFirstFrame ?? /seedance|kling|vidu|wan|video|hailuo|pixverse/.test(text);
-    cap.supportsLastFrame=cap.supportsLastFrame ?? /seedance|kling|vidu|video|hailuo|pixverse/.test(text);
+    const frameCap=/seedance|h3|minimax|kling|vidu|wan|hailuo|pixverse|runway|sora|veo|luma/.test(text);
+    cap.supportsTextToVideo=cap.supportsTextToVideo ?? true;
+    cap.supportsFirstFrame=cap.supportsFirstFrame ?? frameCap;
+    cap.supportsLastFrame=cap.supportsLastFrame ?? frameCap;
     cap.supportsImageReference=cap.supportsImageReference ?? true;
     cap.supportsVideoReference=cap.supportsVideoReference ?? (/seedance|h3|minimax|kling.?o|wan|vidu|reference|edit/.test(text)||inputMods.includes('video'));
     cap.supportsAudioReference=cap.supportsAudioReference ?? (/seedance|h3|minimax|kling|wan|audio/.test(text)||inputMods.includes('audio'));
@@ -458,6 +465,12 @@ function inferCapabilities(raw={},modality='image',id='',name=''){
     cap.supportsExtend=cap.supportsExtend ?? /seedance|h3|minimax|extend|continue/.test(text);
     cap.supportsReshoot=cap.supportsReshoot ?? /seedance|h3|minimax|edit/.test(text);
     cap.supportsSubjects=cap.supportsSubjects ?? /kling.?o|kling.?3|vidu|subject/.test(text);
+    if(!Array.isArray(cap.generationModes)||!cap.generationModes.length){
+      cap.generationModes=['text2video'];
+      if(cap.supportsImageReference!==false)cap.generationModes.push('image2video');
+      if(cap.supportsAudioReference||cap.supportsNativeAudio)cap.generationModes.push('audio2video');
+      if(cap.supportsFirstFrame||cap.supportsLastFrame)cap.generationModes.push('frame2video');
+    }
   }else if(modality==='text'){
     cap.supportsVision=cap.supportsVision ?? (/vl|vision|multi.?modal|cvlm|gvlm/.test(text)||inputMods.some(x=>['image','video','audio'].includes(x)));
     cap.supportsVideoUnderstanding=cap.supportsVideoUnderstanding ?? (/vl|vision|gvlm/.test(text)||inputMods.includes('video'));
