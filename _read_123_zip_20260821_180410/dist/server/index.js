@@ -8,6 +8,7 @@ import { promisify } from 'node:util';
 import dns from 'node:dns/promises';
 import net from 'node:net';
 import os from 'node:os';
+import { Readable, Writable } from 'node:stream';
 import { CanvasStore } from './store.js';
 const execFileAsync = promisify(execFile);
 const __dirname = path.dirname(process.argv[1] || process.cwd());
@@ -1286,7 +1287,7 @@ function serveStatic(req, res, pathname) {
   return true;
 }
 
-const server = http.createServer(async (req, res) => {
+async function handleRequest(req, res) {
   try {
     await ensureBoot();
     const u=new URL(req.url,`http://${req.headers.host||'localhost'}`);const pathname=u.pathname;
@@ -1358,11 +1359,44 @@ const server = http.createServer(async (req, res) => {
 
     if(serveStatic(req,res,pathname))return;json(res,404,{error:'Not found'});
   } catch(err){json(res,500,{error:err?.message||String(err)})}
-});
-server.listen(PORT, HOST, () => {
-  console.log(`Canvas Studio running at http://${HOST}:${PORT}`);
-  console.log(`Provider data: ${PROVIDERS_FILE}`);console.log(`Persistent store: ${path.join(DATA_DIR,'canvas.sqlite')}`);
-  ensureBoot().then(() => processTaskQueue());
-});
+}
+
+async function handleFetch(request) {
+  await ensureBoot();
+  const body = request.method === 'GET' || request.method === 'HEAD' ? null : Buffer.from(await request.arrayBuffer());
+  const req = body ? Readable.from([body]) : Readable.from([]);
+  req.method = request.method;
+  req.url = request.url;
+  req.headers = {};
+  for (const [k, v] of request.headers.entries()) req.headers[k.toLowerCase()] = v;
+  req.socket = { remoteAddress: String(request.headers.get('x-forwarded-for') || '127.0.0.1').split(',')[0].trim() };
+  const res = new class extends Writable {
+    constructor(){super();this.headers={};this.statusCode=200;this.body=[];this.ended=false}
+    writeHead(status, headers={}) { this.statusCode = status; for (const [k, v] of Object.entries(headers || {})) this.headers[String(k).toLowerCase()] = v; return this; }
+    setHeader(k, v) { this.headers[String(k).toLowerCase()] = v; }
+    getHeader(k) { return this.headers[String(k).toLowerCase()]; }
+    _write(chunk, _enc, cb) { this.body.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)); cb(); }
+    end(chunk, enc, cb) { if (chunk) this._write(chunk, enc || 'utf8', () => {}); this.ended = true; super.end(cb); }
+  }();
+  await handleRequest(req, res);
+  if (!res.ended) await new Promise(resolve => res.on('finish', resolve));
+  const headers = new Headers();
+  for (const [k, v] of Object.entries(res.headers)) {
+    if (Array.isArray(v)) v.forEach(item => headers.append(k, String(item)));
+    else if (v != null) headers.set(k, String(v));
+  }
+  return new Response(Buffer.concat(res.body), { status: res.statusCode || 200, headers });
+}
+
+if (typeof EdgeRuntime === 'undefined' && typeof process !== 'undefined' && process.versions?.node) {
+  const server = http.createServer(handleRequest);
+  server.listen(PORT, HOST, () => {
+    console.log(`Canvas Studio running at http://${HOST}:${PORT}`);
+    console.log(`Provider data: ${PROVIDERS_FILE}`);console.log(`Persistent store: ${path.join(DATA_DIR,'canvas.sqlite')}`);
+    ensureBoot().then(() => processTaskQueue());
+  });
+}
+
+export default { fetch: handleFetch };
 
 
