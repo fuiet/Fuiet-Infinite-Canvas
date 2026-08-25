@@ -889,9 +889,11 @@ function modelEndpointCandidates(provider){
   return /\/v1$/i.test(base)?['/models','/v1/models']:['/v1/models','/models'];
 }
 function inferModality(item,id,name){
-  const explicit=String(item?.modality||item?.model_type||item?.category||'').toLowerCase(),capabilities=Array.isArray(item?.capabilities)?item.capabilities.join(' '):String(item?.capabilities||''),hay=`${explicit} ${capabilities} ${id} ${name}`.toLowerCase();
-  if(/(video|seedance|artsdance|kling|hailuo|vidu|pixverse|runway|sora|veo|wan[-_. ]?2|hunyuan.*video|ltx.*video)/.test(hay))return'video';
-  if(/(image|flux|seedream|dall[-_. ]?e|imagen|recraft|ideogram|sdxl|stable.*diffusion|qwen.*image|nano.*banana)/.test(hay))return'image';
+  const explicit=[item?.modality,item?.model_type,item?.type,item?.category,item?.task,item?.mode].filter(Boolean).join(' ');
+  let capabilities='';try{capabilities=typeof item?.capabilities==='string'?item.capabilities:JSON.stringify(item?.capabilities||'')}catch{}
+  const hay=`${explicit} ${capabilities} ${item?.owned_by||''} ${item?.description||''} ${id} ${name}`.toLowerCase();
+  if(/(video|text[-_ ]?to[-_ ]?video|image[-_ ]?to[-_ ]?video|seedance|artsdance|kling|hailuo|minimax.*video|vidu|pixverse|runway|gen[-_. ]?[34]|luma|dream[-_. ]?machine|pika|sora|veo|wan[-_. ]?[23]|hunyuan.*video|ltx.*video)/.test(hay))return'video';
+  if(/(image|text[-_ ]?to[-_ ]?image|gpt[-_. ]?image|flux|seedream|dall[-_. ]?e|imagen|recraft|ideogram|sdxl|stable.*diffusion|qwen.*image|nano.*banana)/.test(hay))return'image';
   if(/(audio|speech|tts|voice|music|eleven|mureka|suno|whisper)/.test(hay))return'audio';
   return'text';
 }
