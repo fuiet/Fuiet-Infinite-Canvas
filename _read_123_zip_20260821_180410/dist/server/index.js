@@ -7,12 +7,13 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import dns from 'node:dns/promises';
 import net from 'node:net';
+import os from 'node:os';
 import { CanvasStore } from './store.js';
 const execFileAsync = promisify(execFile);
 const __dirname = path.dirname(process.argv[1] || process.cwd());
 
 const ROOT = __dirname;
-const DATA_DIR = path.join(ROOT, '.data');
+const DATA_DIR = process.env.CANVAS_DATA_DIR || path.join(os.tmpdir(), 'canvas-studio-provider-workbench');
 const PROVIDERS_FILE = path.join(DATA_DIR, 'providers.json');
 const SECRET_FILE = path.join(DATA_DIR, 'secret.key');
 const BLENDER_TOKEN_FILE = path.join(DATA_DIR, 'blender-bridge.token');
@@ -1352,4 +1353,5 @@ server.listen(PORT, HOST, () => {
   console.log(`Canvas Studio running at http://${HOST}:${PORT}`);
   console.log(`Provider data: ${PROVIDERS_FILE}`);console.log(`Persistent store: ${path.join(DATA_DIR,'canvas.sqlite')}`);processTaskQueue();
 });
+
 
