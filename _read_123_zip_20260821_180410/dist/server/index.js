@@ -511,15 +511,21 @@ function routeForTask(provider, model, nodeType) {
   };
 }
 
-function buildHeaders(provider, model) {
+function authCandidates(provider) {
+  const configured={header:String(provider?.authHeader||'Authorization'),scheme:String(provider?.authScheme??'Bearer').trim()};
+  const raw=[configured,{header:'Authorization',scheme:'Bearer'},{header:'x-api-key',scheme:''},{header:'api-key',scheme:''}];
+  const seen=new Set(),out=[];
+  for(const item of raw){const key=`${item.header.toLowerCase()}|${item.scheme.toLowerCase()}`;if(!seen.has(key)){seen.add(key);out.push(item)}}
+  return out;
+}
+function buildHeaders(provider, model, authMode = null) {
   const headers = new Headers();
   const defaults = provider?.defaultHeaders && typeof provider.defaultHeaders === 'object' ? provider.defaultHeaders : {};
   for (const [key, value] of Object.entries(defaults)) headers.set(key, String(value));
   if (provider?.apiKey) {
-    const header = String(provider.authHeader || 'Authorization');
-    const scheme = String(provider.authScheme || 'Bearer').trim();
-    const token = scheme ? `${scheme} ${provider.apiKey}` : provider.apiKey;
-    headers.set(header, token);
+    const auth=authMode||{header:String(provider.authHeader||'Authorization'),scheme:String(provider.authScheme??'Bearer').trim()};
+    const token = auth.scheme ? `${auth.scheme} ${provider.apiKey}` : provider.apiKey;
+    headers.set(auth.header, token);
   }
   headers.set('content-type', 'application/json');
   headers.set('accept', 'application/json, text/plain, */*');
@@ -605,6 +611,31 @@ function outputFromResponse(parsed,nodeType,route){
   if(route.outputPath){const explicit=extractOutput(getPath(parsed,route.outputPath),nodeType);if(explicit)return explicit}
   return extractOutput(parsed,nodeType);
 }
+function ratioToVideoSize(ratio){const value=String(ratio||'16:9');if(value==='9:16')return'720x1280';if(value==='1:1')return'1024x1024';return'1280x720'}
+function automaticRequestAttempts(task,model,route,explicitRoute){
+  const body=defaultRequestBody(task,model);
+  if(task.nodeType!=='video'||explicitRoute)return[{route,body}];
+  const ratio=body.ratio||'16:9',duration=Number(body.duration||5);
+  const aspectBody={...body,aspect_ratio:ratio};delete aspectBody.ratio;
+  const minimalBody={model:body.model,prompt:body.prompt,duration};
+  const openaiBody={model:body.model,prompt:body.prompt,seconds:String(duration),size:ratioToVideoSize(ratio)};
+  const candidates=[
+    {route,body},
+    {route:{...route},body:aspectBody},
+    {route:{...route},body:minimalBody},
+    {route:{...route,createPath:'/v1/videos/generations',pollPath:'/v1/videos/generations/{{taskId}}'},body},
+    {route:{...route,createPath:'/v1/videos/generations',pollPath:'/v1/videos/generations/{{taskId}}'},body:aspectBody},
+    {route:{...route,createPath:'/v1/videos',pollPath:'/v1/videos/{{taskId}}'},body:openaiBody}
+  ];
+  const seen=new Set();
+  return candidates.filter(x=>{const key=`${x.route.createPath}|${JSON.stringify(x.body)}`;if(seen.has(key))return false;seen.add(key);return true});
+}
+function upstreamErrorDetail(raw,status,statusText=''){
+  let parsed=raw;try{parsed=raw?JSON.parse(raw):null}catch{}
+  const detail=typeof parsed==='string'?parsed:firstPath(parsed||{},['error.message','error','message','detail','data.error.message','data.error','data.message'])||raw||statusText;
+  return typeof detail==='object'?JSON.stringify(detail):String(detail||`HTTP ${status}`);
+}
+
 async function tryProviderGeneration(task,provider,model){
   if(!provider)throw new Error('API 供应商不存在');
   if(!model?.id)throw new Error('所选模型不存在');
@@ -620,7 +651,7 @@ async function tryProviderGeneration(task,provider,model){
     if(!pollTemplate)throw new Error('视频任务已创建，但无法确定查询任务状态的接口');
     const pollPath=pollTemplate.replace(/\{\{\s*taskId\s*\}\}/g,encodeURIComponent(String(upstream.taskId)));
     const pollUrl=resolveUrl(provider.baseUrl,pollPath);
-    const pollRes=await fetchWithTimeout(pollUrl,{method:'GET',headers:buildHeaders(provider,model)},30000);
+    const pollRes=await fetchWithTimeout(pollUrl,{method:'GET',headers:buildHeaders(provider,model,upstream.auth||null)},30000);
     const latest=await parseProviderResponse(pollRes,task.nodeType);
     const statusRaw=route.statusPath?getPath(latest,route.statusPath):firstPath(latest,['status','data.status','state','data.state','task.status','result.status']);
     const status=String(statusRaw||'').toLowerCase();
@@ -638,20 +669,36 @@ async function tryProviderGeneration(task,provider,model){
   const ctx=buildTaskContext(task,provider,model,route);
   const explicitRoute=Boolean(model?.createPath||model?.operationRoutes?.generate?.createPath);
   const hasTemplate=explicitRoute&&route.requestTemplate&&Object.keys(route.requestTemplate).length>0;
-  const bodyObject=hasTemplate?replacePlaceholders(route.requestTemplate,ctx):defaultRequestBody(task,model);
-  const url=resolveUrl(provider.baseUrl,route.createPath),method=String(route.method||'POST').toUpperCase();
+  const templatedBody=hasTemplate?replacePlaceholders(route.requestTemplate,ctx):null;
+  const attempts=hasTemplate?[{route,body:templatedBody}]:automaticRequestAttempts(task,model,route,explicitRoute);
+  const authModes=authCandidates(provider);
   const defaultCreateTimeout=task.nodeType==='image'?600000:task.nodeType==='video'?180000:120000;
   const createTimeout=Math.max(30000,Math.min(Number(route.timeoutMs||defaultCreateTimeout),defaultCreateTimeout));
-  const res=await fetchWithTimeout(url,{method,headers:buildHeaders(provider,model),body:method==='GET'||method==='HEAD'?undefined:JSON.stringify(bodyObject)},createTimeout);
-  const parsed=await parseProviderResponse(res,task.nodeType);
-  let immediate=outputFromResponse(parsed,task.nodeType,route);
+  let parsed=null,url='',activeRoute=route,activeAuth=authModes[0],lastError=null;
+  outer:for(let ai=0;ai<attempts.length;ai++){
+    const attempt=attempts[ai],method=String(attempt.route.method||'POST').toUpperCase();
+    for(let hi=0;hi<authModes.length;hi++){
+      const auth=authModes[hi];url=resolveUrl(provider.baseUrl,attempt.route.createPath);
+      const res=await fetchWithTimeout(url,{method,headers:buildHeaders(provider,model,auth),body:method==='GET'||method==='HEAD'?undefined:JSON.stringify(attempt.body)},createTimeout);
+      if(res.ok){parsed=await parseProviderResponse(res,task.nodeType);activeRoute=attempt.route;activeAuth=auth;break outer}
+      const raw=await res.text(),detail=upstreamErrorDetail(raw,res.status,res.statusText);
+      lastError=new Error(`上游 API ${res.status}：${detail.slice(0,600)}`);
+      const authRejected=(res.status===401||res.status===403)&&hi<authModes.length-1;
+      const requestRejected=task.nodeType==='video'&&!explicitRoute&&[400,404,405,415,422].includes(res.status)&&ai<attempts.length-1;
+      if(authRejected)continue;
+      if(requestRejected)break;
+      throw lastError;
+    }
+  }
+  if(parsed===null)throw lastError||new Error('没有找到供应商可接受的生成协议');
+  let immediate=outputFromResponse(parsed,task.nodeType,activeRoute);
   if(['image','video','audio'].includes(task.nodeType)&&immediate?.type!=='url')immediate=null;
   if(immediate)return{output:immediate,raw:parsed,sourceUrl:url};
-  if(route.responseMode!=='async')throw new Error('上游请求成功，但响应中没有识别到可用结果');
-  const taskId=route.taskIdPath?getPath(parsed,route.taskIdPath):firstPath(parsed,['id','task_id','taskId','data.id','data.task_id','data.taskId','task.id','result.id']);
-  if(!taskId)throw new Error('视频任务已提交，但响应中没有识别到任务 ID（支持 id、task_id、data.id 等常见字段）');
-  if(!route.pollPath)throw new Error('视频任务已创建，但无法确定查询任务状态的接口');
-  task.payload={...(task.payload||{}),_upstream:{taskId:String(taskId),pollPath:route.pollPath,startedAt:Date.now()}};
+  if(activeRoute.responseMode!=='async')throw new Error('上游请求成功，但响应中没有识别到可用结果');
+  const taskId=activeRoute.taskIdPath?getPath(parsed,activeRoute.taskIdPath):firstPath(parsed,['id','task_id','taskId','request_id','job_id','prediction_id','data.id','data.task_id','data.taskId','data.request_id','data.job_id','task.id','result.id']);
+  if(!taskId)throw new Error('视频任务已提交，但响应中没有识别到任务 ID（支持 id、task_id、request_id、job_id、data.id 等常见字段）');
+  if(!activeRoute.pollPath)throw new Error('视频任务已创建，但无法确定查询任务状态的接口');
+  task.payload={...(task.payload||{}),_upstream:{taskId:String(taskId),pollPath:activeRoute.pollPath,auth:activeAuth,startedAt:Date.now()}};
   return{pending:true,progress:20};
 }
 
@@ -862,16 +909,20 @@ function normalizeDiscoveredModels(data){
 async function discoverProviderModels(body){
   const existing=body?.id?(globalState.providers||[]).find(p=>p.id===body.id):null,provider=normalizeProvider(body,existing||null);
   if(!provider.baseUrl)throw new Error('API Base URL 不能为空');
-  const errors=[];
+  const errors=[],authModes=authCandidates(provider);
   for(const endpoint of modelEndpointCandidates(provider)){
     const target=resolveUrl(provider.baseUrl,endpoint);
-    try{
-      const res=await fetchWithTimeout(target,{method:'GET',headers:buildHeaders(provider,{})},15000),data=await parseProviderResponse(res,'text'),models=normalizeDiscoveredModels(data);
-      if(models.length)return{ok:true,endpoint,models,count:models.length,modelCount:models.length,suggestedProtocol:'openai-compatible'};
-      errors.push(`${endpoint}：已连接，但没有识别到模型列表`);
-    }catch(error){errors.push(`${endpoint}：${String(error?.message||error)}`)}
+    for(const auth of authModes){
+      try{
+        const res=await fetchWithTimeout(target,{method:'GET',headers:buildHeaders(provider,{},auth)},15000);
+        if(!res.ok){const raw=await res.text(),detail=upstreamErrorDetail(raw,res.status,res.statusText);errors.push(`${endpoint} [${auth.header}]：HTTP ${res.status} ${detail.slice(0,240)}`);if((res.status===401||res.status===403)&&auth!==authModes.at(-1))continue;break}
+        const data=await parseProviderResponse(res,'text'),models=normalizeDiscoveredModels(data);
+        if(models.length)return{ok:true,endpoint,models,count:models.length,modelCount:models.length,suggestedProtocol:'openai-compatible',authHeader:auth.header,authScheme:auth.scheme};
+        errors.push(`${endpoint}：已连接，但没有识别到模型列表`);break;
+      }catch(error){errors.push(`${endpoint} [${auth.header}]：${String(error?.message||error)}`);break}
+    }
   }
-  throw new Error(`无法拉取模型。已自动尝试 /v1/models 和 /models。原因：${errors.join('；')}`);
+  throw new Error(`无法拉取模型。已自动尝试 /v1/models、/models 和常见鉴权方式。原因：${errors.join('；')}`);
 }
 async function testProviderConfig(body){const discovered=await discoverProviderModels(body);return{ok:true,endpoint:discovered.endpoint,modelCount:discovered.models.length}}
 async function testProviderAuth(body){const discovered=await discoverProviderModels(body);return{ok:true,endpoint:discovered.endpoint,modelCount:discovered.models.length,mode:'model-list'}}
@@ -1077,6 +1128,7 @@ async function handleRequest(request, env, ctx) {
         const discovered = await discoverProviderModels(next);
         next.models = discovered.models;
         next.protocol = discovered.suggestedProtocol || 'openai-compatible';
+        if(discovered.authHeader){next.authHeader=discovered.authHeader;next.authScheme=discovered.authScheme||'';}
       } catch (error) {
         return json({ error: String(error?.message || error) }, 502);
       }
