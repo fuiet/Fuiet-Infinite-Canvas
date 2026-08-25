@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import worker from '../dist/server/secure-index.js';
+import worker from '../dist/server/secure-entry.js';
 
 const BASE = 'https://canvas.example.test';
 const env = { PROVIDER_SECRET_KEY: 'test-only-secret-key', CANVAS_TASK_CONCURRENCY: '1' };
@@ -30,6 +30,7 @@ async function resetState() {
   state.providers = [];
   state.tasks = [];
   state.__secureQueue = { running: 0, active: new Set() };
+  globalThis.__canvasProviderMigrationPromise = null;
   return state;
 }
 
@@ -52,6 +53,32 @@ test('provider public response never exposes API key or auth headers', { concurr
   assert.equal(text.includes('header-secret'), false);
   assert.equal(text.includes('model-secret'), false);
   assert.equal(listed.data.providers[0].hasApiKey, true);
+  const stored = globalThis.__canvasWorkerState.providers[0];
+  assert.equal(Boolean(stored.apiKey), false);
+  assert.match(stored.apiKeyEncrypted, /^v1\./);
+  assert.equal(stored.defaultHeaders.Authorization, undefined);
+  assert.equal(stored.models[0].extraHeaders['x-api-key'], undefined);
+});
+
+test('legacy plaintext provider secrets migrate to encrypted storage', { concurrency: false }, async () => {
+  const state = await resetState();
+  state.providers.push({
+    id: 'legacy-provider',
+    name: 'Legacy',
+    baseUrl: 'https://legacy.example.com/v1',
+    apiKey: 'legacy-plain-secret',
+    defaultHeaders: { Authorization: 'Bearer legacy-header-secret', 'X-Trace': 'keep' },
+    models: [{ id: 'legacy-model', modality: 'text', extraHeaders: { 'api-key': 'legacy-model-secret', 'X-Model': 'keep' } }]
+  });
+  globalThis.__canvasProviderMigrationPromise = null;
+  const listed = await call('/api/providers');
+  assert.equal(listed.response.status, 200);
+  const stored = state.providers[0];
+  assert.equal(stored.apiKey, undefined);
+  assert.match(stored.apiKeyEncrypted, /^v1\./);
+  assert.deepEqual(stored.defaultHeaders, { 'X-Trace': 'keep' });
+  assert.deepEqual(stored.models[0].extraHeaders, { 'X-Model': 'keep' });
+  assert.equal(JSON.stringify(listed.data).includes('legacy-plain-secret'), false);
 });
 
 test('/api/tasks/poll accepts only { taskId }', { concurrency: false }, async () => {
@@ -96,6 +123,7 @@ test('video creation uses provider videoProtocolConfig and POSTs only once', { c
     },
     models: [{ id: 'video-model', name: 'Video', modality: 'video' }]
   });
+  globalThis.__canvasProviderMigrationPromise = null;
 
   const originalFetch = globalThis.fetch;
   const calls = [];
