@@ -1,4 +1,4 @@
-import productionWorker from './production-entry.js';
+import productionWorker from './provider-compat-entry.js';
 import secureWorker from './secure-entry.js';
 
 export default {
