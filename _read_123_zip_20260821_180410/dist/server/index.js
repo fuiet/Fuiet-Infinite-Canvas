@@ -540,8 +540,9 @@ function buildTaskContext(task, provider, model, route) {
   const payload = task?.payload || {};
   const parameters = payload.parameters || {};
   return {
-    model: model?.name || model?.id || '',
+    model: model?.id || '',
     modelId: model?.id || '',
+    modelName: model?.name || model?.id || '',
     provider: provider?.name || provider?.id || '',
     providerId: provider?.id || '',
     nodeType: task?.nodeType || '',
@@ -607,7 +608,9 @@ async function tryProviderGeneration(task,provider,model){
   if(!provider.baseUrl)throw new Error('API Base URL 不能为空');
   const route=routeForTask(provider,model,task.nodeType);
   if(!route.createPath)throw new Error(`无法自动识别模型「${model.name||model.id}」的生成接口`);
-  const ctx=buildTaskContext(task,provider,model,route),hasTemplate=route.requestTemplate&&Object.keys(route.requestTemplate).length>0;
+  const ctx=buildTaskContext(task,provider,model,route);
+  const explicitRoute=Boolean(model?.createPath||model?.operationRoutes?.generate?.createPath);
+  const hasTemplate=explicitRoute&&route.requestTemplate&&Object.keys(route.requestTemplate).length>0;
   const bodyObject=hasTemplate?replacePlaceholders(route.requestTemplate,ctx):defaultRequestBody(task,model);
   const url=resolveUrl(provider.baseUrl,route.createPath),method=String(route.method||'POST').toUpperCase();
   const res=await fetchWithTimeout(url,{method,headers:buildHeaders(provider,model),body:method==='GET'||method==='HEAD'?undefined:JSON.stringify(bodyObject)},Math.min(Number(route.timeoutMs||120000),120000));
