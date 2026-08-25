@@ -577,9 +577,8 @@ function defaultRequestBody(task, model) {
   const payload = task?.payload || {}, parameters = payload.parameters || {}, prompt = String(payload.prompt || '');
   if (task.nodeType === 'text' || task.nodeType === 'script') return {model:model.id,messages:[{role:'user',content:prompt}]};
   if (task.nodeType === 'image') {
-    const body={model:model.id,prompt,n:Number(parameters.count||1)};
-    if(parameters.size)body.size=parameters.size;
-    if(parameters.aspectRatio)body.aspect_ratio=parameters.aspectRatio;
+    const body={model:model.id,prompt};
+    if(['1024x1024','1536x1024','1024x1536','auto'].includes(String(parameters.size||''))) body.size=parameters.size;
     return body;
   }
   if (task.nodeType === 'audio') return {model:model.id,input:prompt,voice:parameters.voice||'alloy',response_format:parameters.responseFormat||'mp3'};
