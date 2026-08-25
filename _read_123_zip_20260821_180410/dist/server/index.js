@@ -617,7 +617,9 @@ async function tryProviderGeneration(task,provider,model){
   const hasTemplate=explicitRoute&&route.requestTemplate&&Object.keys(route.requestTemplate).length>0;
   const bodyObject=hasTemplate?replacePlaceholders(route.requestTemplate,ctx):defaultRequestBody(task,model);
   const url=resolveUrl(provider.baseUrl,route.createPath),method=String(route.method||'POST').toUpperCase();
-  const res=await fetchWithTimeout(url,{method,headers:buildHeaders(provider,model),body:method==='GET'||method==='HEAD'?undefined:JSON.stringify(bodyObject)},Math.min(Number(route.timeoutMs||120000),120000));
+  const defaultCreateTimeout=task.nodeType==='image'?600000:task.nodeType==='video'?180000:120000;
+  const createTimeout=Math.max(30000,Math.min(Number(route.timeoutMs||defaultCreateTimeout),defaultCreateTimeout));
+  const res=await fetchWithTimeout(url,{method,headers:buildHeaders(provider,model),body:method==='GET'||method==='HEAD'?undefined:JSON.stringify(bodyObject)},createTimeout);
   const parsed=await parseProviderResponse(res,task.nodeType),immediate=outputFromResponse(parsed,task.nodeType,route);
   if(immediate)return{output:immediate,raw:parsed,sourceUrl:url};
   if(route.responseMode!=='async')throw new Error('上游请求成功，但响应中没有识别到可用结果');
@@ -872,7 +874,7 @@ async function handleTaskPost(body,ctx){
   if(!provider)return json({error:'API 供应商不存在'},404);
   if(!(provider.models||[]).some(model=>model.id===task.modelId))return json({error:'所选模型不存在'},404);
   globalState.tasks.unshift(task);await persistTasks();
-  const running=processTask(task);if(ctx?.waitUntil)ctx.waitUntil(running);else await running;
+  await processTask(task);
   return json({task:taskPublic(task)},202);
 }
 
