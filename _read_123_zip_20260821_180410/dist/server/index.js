@@ -245,38 +245,37 @@ async function readJSONStore(name, fallback) {
 async function writeJSONStore(name, value) {
   const cfg = globalState.supabase;
   if (cfg && ['providers', 'projects', 'tasks'].includes(name)) {
-    const rows = Array.isArray(value) ? value : [];
-    const serialized = name === 'providers'
-      ? rows.map(serializeProviderRow)
-      : name === 'projects'
-        ? rows.map(serializeProjectRow)
-        : rows.map(serializeTaskRow);
-    const currentRows = await supabaseRequest({ SUPABASE_URL: cfg.url, SUPABASE_SERVICE_ROLE_KEY: cfg.key }, name, {
-      method: 'GET',
-      query: 'select=id'
-    }).catch(() => []);
-    const currentIds = new Set(Array.isArray(currentRows) ? currentRows.map(row => String(row?.id || '')) : []);
-    const nextIds = new Set(serialized.map(row => String(row.id || '')));
-    const removed = [...currentIds].filter(id => id && !nextIds.has(id));
-    if (removed.length) {
-      for (const id of removed) {
+    try {
+      const rows = Array.isArray(value) ? value : [];
+      const serialized = name === 'providers'
+        ? rows.map(serializeProviderRow)
+        : name === 'projects'
+          ? rows.map(serializeProjectRow)
+          : rows.map(serializeTaskRow);
+      const currentRows = await supabaseRequest({ SUPABASE_URL:cfg.url, SUPABASE_SERVICE_ROLE_KEY:cfg.key }, name, {
+        method:'GET', query:'select=id'
+      }).catch(() => []);
+      const currentIds = new Set(Array.isArray(currentRows) ? currentRows.map(row => String(row?.id || '')) : []);
+      const nextIds = new Set(serialized.map(row => String(row.id || '')));
+      for (const id of [...currentIds].filter(id => id && !nextIds.has(id))) {
         try {
-          await supabaseRequest({ SUPABASE_URL: cfg.url, SUPABASE_SERVICE_ROLE_KEY: cfg.key }, name, {
-            method: 'DELETE',
-            query: `id=eq.${id}`
+          await supabaseRequest({ SUPABASE_URL:cfg.url, SUPABASE_SERVICE_ROLE_KEY:cfg.key }, name, {
+            method:'DELETE', query:`id=eq.${id}`
           });
         } catch (error) {
           console.warn(`[canvas] failed to delete stale ${name} row ${id}`, error);
         }
       }
-    }
-    if (serialized.length) {
-      await supabaseRequest({ SUPABASE_URL: cfg.url, SUPABASE_SERVICE_ROLE_KEY: cfg.key }, name, {
-        method: 'POST',
-        query: 'on_conflict=id',
-        headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
-        body: serialized
-      });
+      if (serialized.length) {
+        await supabaseRequest({ SUPABASE_URL:cfg.url, SUPABASE_SERVICE_ROLE_KEY:cfg.key }, name, {
+          method:'POST',
+          query:'on_conflict=id',
+          headers:{ Prefer:'resolution=merge-duplicates,return=representation' },
+          body:serialized
+        });
+      }
+    } catch (error) {
+      console.warn(`[canvas] Supabase write rejected for ${name}; using server memory fallback`, error);
     }
   }
   globalState[name] = clone(value);
