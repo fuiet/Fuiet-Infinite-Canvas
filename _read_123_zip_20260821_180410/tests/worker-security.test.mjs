@@ -14,14 +14,18 @@ function makeCtx() {
   };
 }
 
-async function call(path, { method = 'GET', body, headers = {} } = {}, ctx = makeCtx()) {
+async function callWithEnv(runtimeEnv, path, { method = 'GET', body, headers = {} } = {}, ctx = makeCtx()) {
   const request = new Request(`${BASE}${path}`, {
     method,
     headers: body === undefined ? headers : { 'content-type': 'application/json', ...headers },
     body: body === undefined ? undefined : JSON.stringify(body)
   });
-  const response = await worker.fetch(request, env, ctx);
-  return { response, data: await response.json().catch(() => null), ctx };
+  const response = await worker.fetch(request, runtimeEnv, ctx);
+  return { response, data: await response.clone().json().catch(() => null), ctx };
+}
+
+async function call(path, options = {}, ctx = makeCtx()) {
+  return callWithEnv(env, path, options, ctx);
 }
 
 async function resetState() {
@@ -31,6 +35,7 @@ async function resetState() {
   state.tasks = [];
   state.__secureQueue = { running: 0, active: new Set() };
   globalThis.__canvasProviderMigrationPromise = null;
+  globalThis.__canvasLoginRateBuckets = new Map();
   return state;
 }
 
@@ -103,6 +108,38 @@ test('Cloudflare media process endpoint cannot return fake success', { concurren
   const result = await call('/api/media/process', { method: 'POST', body: { sourceUrl: '/media/test.mp4', operation: 'media-probe' } });
   assert.equal(result.response.status, 501);
   assert.equal(result.data.ok, false);
+});
+
+test('Blender bridge token is unavailable when admin auth is disabled', { concurrency: false }, async () => {
+  await resetState();
+  const result = await call('/api/blender/bridge/token');
+  assert.equal(result.response.status, 503);
+  assert.match(result.data.error, /CANVAS_ADMIN_PASSWORD/);
+});
+
+test('HTTPS login cookie is Secure and login attempts are rate limited', { concurrency: false }, async () => {
+  await resetState();
+  const securedEnv = { ...env, CANVAS_ADMIN_PASSWORD: 'correct-password', CANVAS_LOGIN_ATTEMPTS_PER_10M: '3' };
+  const success = await callWithEnv(securedEnv, '/api/auth/login', { method: 'POST', body: { password: 'correct-password' }, headers: { 'cf-connecting-ip': '203.0.113.10' } });
+  assert.equal(success.response.status, 200);
+  assert.match(success.response.headers.get('set-cookie') || '', /Secure/i);
+
+  for (let i = 0; i < 3; i++) {
+    const failed = await callWithEnv(securedEnv, '/api/auth/login', { method: 'POST', body: { password: 'wrong' }, headers: { 'cf-connecting-ip': '203.0.113.11' } });
+    assert.equal(failed.response.status, 401);
+  }
+  const limited = await callWithEnv(securedEnv, '/api/auth/login', { method: 'POST', body: { password: 'wrong' }, headers: { 'cf-connecting-ip': '203.0.113.11' } });
+  assert.equal(limited.response.status, 429);
+});
+
+test('upload guard rejects declared oversized uploads before legacy handler', { concurrency: false }, async () => {
+  await resetState();
+  const result = await callWithEnv({ ...env, CANVAS_MAX_UPLOAD_BYTES: String(2 * 1024 * 1024) }, '/api/upload', {
+    method: 'POST',
+    body: { fake: true },
+    headers: { 'content-length': String(3 * 1024 * 1024) }
+  });
+  assert.equal(result.response.status, 413);
 });
 
 test('video creation uses provider videoProtocolConfig and POSTs only once', { concurrency: false }, async () => {
