@@ -6,10 +6,18 @@ pages_build_output_dir = "."
 SUPABASE_STORAGE_BUCKET = "canvas-media"
 CANVAS_TASK_CONCURRENCY = "2"
 CANVAS_ALLOW_PRIVATE_PROVIDER_HOSTS = "0"
+CANVAS_ENFORCE_OWNER = "1"
+CANVAS_CLAIM_UNOWNED = "0"
+CANVAS_ALLOW_UNAUTHENTICATED_OWNER = "0"
 
-# Configure secrets in Cloudflare Pages/Workers settings, not in this file:
+# Configure secrets / environment values in Cloudflare Pages/Workers settings, not in Git:
 # PROVIDER_SECRET_KEY
 # SUPABASE_URL
 # SUPABASE_SERVICE_ROLE_KEY
+# SUPABASE_ANON_KEY              # optional; used to validate Supabase Bearer users
 # CANVAS_ADMIN_PASSWORD
+# CANVAS_OWNER_ID                # UUID of the Supabase auth user mapped to current admin mode
 # CANVAS_PUBLIC_BASE_URL=https://fuiet-infinite-canvas.pages.dev
+#
+# CANVAS_CLAIM_UNOWNED=1 may be used only during an explicit one-time migration of
+# legacy ownerless rows. Return it to 0 immediately after ownership is assigned.
