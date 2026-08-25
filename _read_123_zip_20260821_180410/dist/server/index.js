@@ -150,6 +150,11 @@ function hydrateTaskRow(row) {
   return out;
 }
 
+function uuidOrNull(value) {
+  const text = String(value || '').trim();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(text) ? text : null;
+}
+
 function serializeTaskRow(task) {
   const payload = clone(task?.payload || {});
   payload.attempt = Number(task?.attempt ?? payload.attempt ?? 0);
@@ -169,10 +174,10 @@ function serializeTaskRow(task) {
   payload.updatedAt = task?.updatedAt || payload.updatedAt || new Date().toISOString();
   return {
     id: String(task?.id || uid('task_')),
-    project_id: String(task?.projectId || task?.project_id || ''),
-    provider_id: String(task?.providerId || task?.provider_id || ''),
-    model_id: String(task?.modelId || task?.model_id || ''),
-    node_id: String(task?.nodeId || task?.node_id || ''),
+    project_id: uuidOrNull(task?.projectId || task?.project_id),
+    provider_id: uuidOrNull(task?.providerId || task?.provider_id),
+    model_id: uuidOrNull(task?.modelId || task?.model_id),
+    node_id: uuidOrNull(task?.nodeId || task?.node_id),
     node_type: String(task?.nodeType || task?.node_type || ''),
     status: String(task?.status || 'queued'),
     progress: Number(task?.progress ?? 0),
