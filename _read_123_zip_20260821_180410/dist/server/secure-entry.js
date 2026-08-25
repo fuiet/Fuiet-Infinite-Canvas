@@ -6,6 +6,18 @@ const SENSITIVE = new Set([
   'cf-access-client-secret'
 ]);
 
+function json(body, status = 200, headers = {}) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff',
+      ...headers
+    }
+  });
+}
+
 function sensitiveHeader(name) {
   const key = String(name || '').trim().toLowerCase();
   return SENSITIVE.has(key) || /(^|[-_])(authorization|secret|token)([-_]|$)/i.test(key);
@@ -154,20 +166,100 @@ async function rewriteProviderRequest(request) {
   });
 }
 
+function requestIp(request) {
+  return String(request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || 'unknown').split(',')[0].trim();
+}
+
+function loginRateLimited(request, env) {
+  const limit = Math.max(3, Math.min(50, Number(env?.CANVAS_LOGIN_ATTEMPTS_PER_10M || 10)));
+  const now = Date.now();
+  const key = requestIp(request);
+  const map = globalThis.__canvasLoginRateBuckets || (globalThis.__canvasLoginRateBuckets = new Map());
+  let bucket = map.get(key);
+  if (!bucket || now - bucket.startedAt >= 10 * 60 * 1000) bucket = { startedAt: now, count: 0 };
+  bucket.count += 1;
+  map.set(key, bucket);
+  return bucket.count > limit;
+}
+
+function clearLoginRate(request) {
+  globalThis.__canvasLoginRateBuckets?.delete(requestIp(request));
+}
+
+async function authStatus(request, env, ctx) {
+  const url = new URL(request.url);
+  url.pathname = '/api/auth/status';
+  url.search = '';
+  const res = await secureWorker.fetch(new Request(url.toString(), { method: 'GET', headers: request.headers }), env, ctx);
+  return res.json().catch(() => ({ enabled: false, authenticated: false }));
+}
+
+function hardenSessionCookie(response, request) {
+  if (new URL(request.url).protocol !== 'https:') return response;
+  const headers = new Headers(response.headers);
+  const cookie = headers.get('set-cookie');
+  if (!cookie || /(?:^|;)\s*Secure(?:;|$)/i.test(cookie)) return response;
+  headers.set('set-cookie', `${cookie}; Secure`);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers
+  });
+}
+
+function uploadGuard(request, env) {
+  const maxBytes = Math.max(1024 * 1024, Math.min(100 * 1024 * 1024, Number(env?.CANVAS_MAX_UPLOAD_BYTES || 50 * 1024 * 1024)));
+  const length = Number(request.headers.get('content-length') || 0);
+  if (Number.isFinite(length) && length > maxBytes) {
+    return json({ error: `上传文件过大，最大允许 ${Math.round(maxBytes / 1024 / 1024)}MB` }, 413);
+  }
+  const mime = String(request.headers.get('content-type') || '').split(';')[0].toLowerCase();
+  const allowed = !mime || mime.startsWith('image/') || mime.startsWith('video/') || mime.startsWith('audio/') || mime === 'application/octet-stream' || mime === 'model/gltf-binary' || mime === 'model/gltf+json';
+  if (!allowed) return json({ error: `不支持的上传类型：${mime}` }, 415);
+  return null;
+}
+
+async function routeSecurityGuards(request, env, ctx) {
+  const url = new URL(request.url);
+  const { pathname } = url;
+
+  if (pathname === '/api/auth/login' && request.method === 'POST') {
+    if (loginRateLimited(request, env)) return json({ error: '登录尝试过于频繁，请稍后重试' }, 429);
+    const response = await secureWorker.fetch(request, env, ctx);
+    if (response.ok) clearLoginRate(request);
+    return hardenSessionCookie(response, request);
+  }
+
+  if (pathname === '/api/auth/logout' && request.method === 'POST') {
+    return hardenSessionCookie(await secureWorker.fetch(request, env, ctx), request);
+  }
+
+  if (pathname === '/api/blender/bridge/token' && request.method === 'GET') {
+    const auth = await authStatus(request, env, ctx);
+    if (!auth.enabled) {
+      return json({ error: '为防止 Blender Bridge Token 泄露，请先配置 CANVAS_ADMIN_PASSWORD' }, 503);
+    }
+    if (!auth.authenticated) return json({ error: '需要管理员身份才能获取 Blender Bridge Token' }, 401);
+    return secureWorker.fetch(request, env, ctx);
+  }
+
+  if (pathname === '/api/upload' && request.method === 'POST') {
+    const rejected = uploadGuard(request, env);
+    if (rejected) return rejected;
+  }
+
+  return null;
+}
+
 export default {
   async fetch(request, env, ctx) {
     try {
       await ensureMigrated(request, env, ctx);
+      const guarded = await routeSecurityGuards(request, env, ctx);
+      if (guarded) return guarded;
       return secureWorker.fetch(await rewriteProviderRequest(request), env, ctx);
     } catch (error) {
-      return new Response(JSON.stringify({ error: String(error?.message || error) }), {
-        status: 500,
-        headers: {
-          'content-type': 'application/json; charset=utf-8',
-          'cache-control': 'no-store',
-          'x-content-type-options': 'nosniff'
-        }
-      });
+      return json({ error: String(error?.message || error) }, 500);
     }
   }
 };
