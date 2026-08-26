@@ -5,9 +5,9 @@
 .dock-btn.primary:hover{background:#fff;color:#111}
 .dock-btn .ui-icon{width:18px;height:18px;stroke-width:1.8}
 .dock-separator{width:1px;height:20px;margin:0 1px;background:var(--ui-line)}
-/* UI 2.3: creation stays in the dock; assets move to the bottom-left status area. */
-.bottom-dock [data-dock-action="asset"],.bottom-dock [data-dock-action="shortcuts"],.bottom-dock [data-dock-action="help"]{display:none}
-.bottom-dock .dock-separator{display:none}
+/* Production dock keeps all eight persistent actions visible. */
+.bottom-dock [data-dock-action="asset"],.bottom-dock [data-dock-action="shortcuts"],.bottom-dock [data-dock-action="help"]{display:grid}
+.bottom-dock .dock-separator{display:block}
 .toast{position:absolute;left:50%;top:62px;z-index:220;transform:translateX(-50%);padding:8px 12px;border:1px solid var(--ui-line);border-radius:8px;background:rgba(34,36,35,.98);color:var(--ui-text-1);box-shadow:var(--ui-shadow-float);font-size:12px;line-height:17px}
 .project-menu,.context-menu,.model-picker{border:1px solid var(--ui-line);border-radius:10px;background:rgba(27,29,28,.985);color:var(--ui-text-1);box-shadow:var(--ui-shadow-menu)}
 .menu-item{min-height:32px;border:0;border-radius:7px;background:transparent;color:var(--ui-text-2);font-size:12px;line-height:17px}
