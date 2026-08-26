@@ -1003,8 +1003,12 @@
         body=`<div class="text-node-shell is-empty"><div class="text-node-placeholder" aria-hidden="true"><span class="text-node-lines"><i></i><i></i><i></i><i></i></span></div><div class="text-node-try">尝试：</div><button type="button" data-text-quick="manual"><span>${uiIcon('subtitle')}</span><b>自己编写内容</b></button><button type="button" data-text-quick="video"><span>${uiIcon('video')}</span><b>文生视频</b></button><button type="button" data-text-quick="image"><span>${uiIcon('image')}</span><b>图片反推提示词</b></button><button type="button" data-text-quick="audio"><span>${uiIcon('audio')}</span><b>文字生音乐</b></button></div>`;
       }
     } else if(n.type==='audio'){
-      if(n.outputUrl) body=`<audio class="node-media-audio" src="${escapeAttr(n.outputUrl)}" controls></audio>`;
-      else { const bars = Array.from({length:84},(_,i)=>`<i style="height:${14 + ((i*17)%52)}px"></i>`).join(''); body = `<div class="audio-wave">${bars}</div>`; }
+      const emptyAudio=contentState==='empty';
+      const bars=Array.from({length:72},(_,i)=>`<i style="height:${10+((i*17)%42)}px"></i>`).join('');
+      const quick=emptyAudio?`<div class="audio-node-try"><div class="audio-node-try-label">尝试：</div><button type="button" data-audio-quick="music"><span class="audio-quick-icon">♫</span><b>文字生音乐</b></button><button type="button" data-audio-quick="voice"><span class="audio-quick-icon">◖</span><b>生成旁白 / 配音</b></button></div>`:'';
+      const uploadAction=emptyAudio&&interactionState==='selected'?`<button type="button" class="audio-node-upload" data-audio-node-upload>${uiIcon('plus')}<span>上传</span></button>`:'';
+      const media=n.outputUrl?`<div class="audio-result-stage"><div class="audio-wave audio-wave-result">${bars}</div><audio class="node-media-audio" src="${escapeAttr(n.outputUrl)}" controls preload="metadata"></audio></div>`:`<div class="audio-node-placeholder"><div class="audio-wave">${bars}</div><span>音频</span></div>`;
+      body=`<div class="audio-node-shell ${emptyAudio?'is-empty':'has-output'}">${uploadAction}${media}${quick}</div>`;
     } else if(n.type==='script'){
       const data=ensureScriptData(n); const shots=data.shots||[];
       body = `<div class="script-node-compact"><div class="script-compact-icon"><i></i><i></i><i></i><i></i></div><div class="script-try-label">尝试：</div><button data-script-preset="breakdown">☰ <b>脚本生成分镜脚本</b></button><button data-script-preset="character">♙ <b>角色生成分镜脚本</b></button><button data-script-preset="manual">▤ <b>自己编写分镜脚本</b></button>${shots.length?`<small>${shots.length} 个镜头 · 点击卡片查看/继续编辑</small>`:''}</div>`;
@@ -1074,6 +1078,19 @@
       el.addEventListener('dragover',e=>{const hasVideo=[...(e.dataTransfer?.items||[])].some(it=>it.kind==='file'&&String(it.type||'').startsWith('video/'));if(!hasVideo)return;e.preventDefault();e.stopPropagation();el.classList.add('video-file-drop-target')});
       el.addEventListener('dragleave',()=>el.classList.remove('video-file-drop-target'));
       el.addEventListener('drop',e=>{const file=[...(e.dataTransfer?.files||[])].find(f=>String(f.type||'').startsWith('video/'));if(!file)return;e.preventDefault();e.stopPropagation();el.classList.remove('video-file-drop-target');applyLocalVideoToNode(n,file)});
+    }
+    $$('[data-audio-quick]',el).forEach(b=>b.addEventListener('click',e=>{
+      e.preventDefault();e.stopPropagation();if(contentState!=='empty')return;
+      selectedId=n.id;state.selectedIds=[n.id];state.nodes.forEach(x=>x.selected=x.id===n.id);expandedNodeId=n.id;
+      if(b.dataset.audioQuick==='music')n.prompt=n.prompt||'生成一段完整、有明确情绪和节奏的音乐，描述曲风、速度、乐器、氛围与结构。';
+      if(b.dataset.audioQuick==='voice')n.prompt=n.prompt||'生成自然清晰的旁白 / 配音，语气自然，节奏适中，情绪与文本内容一致。';
+      saveState();render();setTimeout(()=>$('#promptInput')?.focus(),0);
+    }));
+    $('[data-audio-node-upload]',el)?.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();openAudioNodeUpload(n)});
+    if(n.type==='audio'&&contentState==='empty'){
+      el.addEventListener('dragover',e=>{const hasAudio=[...(e.dataTransfer?.items||[])].some(it=>it.kind==='file'&&String(it.type||'').startsWith('audio/'));if(!hasAudio)return;e.preventDefault();e.stopPropagation();el.classList.add('audio-file-drop-target')});
+      el.addEventListener('dragleave',()=>el.classList.remove('audio-file-drop-target'));
+      el.addEventListener('drop',e=>{const file=[...(e.dataTransfer?.files||[])].find(f=>String(f.type||'').startsWith('audio/'));if(!file)return;e.preventDefault();e.stopPropagation();el.classList.remove('audio-file-drop-target');applyLocalAudioToNode(n,file)});
     }
     $('[data-node-retry]',el)?.addEventListener('click',e=>{e.stopPropagation();generateForNode(n).catch(()=>{})});
     $('[data-node-rerun]',el)?.addEventListener('click',e=>{e.stopPropagation();rerunFailedDownstream(n.id)});
@@ -1341,12 +1358,39 @@
     const el=$(`.node[data-id="${CSS.escape(String(n.id))}"] video`);if(!el)return showToast('当前视频还没有结果');if(el.requestFullscreen)el.requestFullscreen().catch(()=>showToast('浏览器未允许全屏'));else showToast('当前浏览器不支持全屏');
   }
 
+  async function applyLocalAudioToNode(n,file){
+    if(!n||n.type!=='audio'||!file||!String(file.type||'').startsWith('audio/'))return;
+    snapshot('上传音频到节点');
+    const localUrl=URL.createObjectURL(file);
+    n.outputUrl=localUrl;n.localFileName=file.name||'audio';n.localMime=file.type||'audio/mpeg';n.content='';
+    n.uploading=Boolean(backendOnline);n.taskStatus='succeeded';n.taskProgress=100;n.w=Math.max(Number(n.w)||0,520);
+    if(file.name)n.title=file.name;
+    const version=recordNodeResultVersion(n,{outputUrl:localUrl,providerId:'',modelId:'',modelName:'本地上传'});
+    selectedId=n.id;state.selectedIds=[n.id];state.nodes.forEach(x=>x.selected=x.id===n.id);expandedNodeId=null;
+    saveState();render();
+    if(!backendOnline)return;
+    try{
+      const up=await uploadBlob(file,file.name||`audio-${Date.now()}.mp3`);
+      n.outputUrl=up.url;n.serverMedia=true;n.uploading=false;if(version){version.outputUrl=up.url;version.modelName='本地上传'}
+      try{URL.revokeObjectURL(localUrl)}catch{}
+      saveState();render();
+    }catch(err){n.uploading=false;saveState();render();showToast('音频已放入节点，但服务器保存失败，当前素材仅本次会话可用')}
+  }
+  function openAudioNodeUpload(n){
+    const input=document.createElement('input');input.type='file';input.accept='audio/*';input.onchange=()=>{const f=input.files?.[0];if(f)applyLocalAudioToNode(n,f)};input.click();
+  }
+  function audioToolbarGlyph(action){return ({'audio-trim':'✂','audio-speed':'⏱','audio-split':'∥','audio-download':'↓'})[action]||'•'}
+  function downloadAudioNode(n){
+    if(!n?.outputUrl)return showToast('当前音频还没有可下载结果');
+    const a=document.createElement('a');a.href=n.outputUrl;a.download=(n.localFileName||n.title||'audio').replace(/[\\/:*?"<>|]+/g,'-');a.rel='noopener';document.body.appendChild(a);a.click();a.remove();
+  }
+
   function selectedToolbarNode(){const ids=currentSelectionIds();if(ids.length!==1)return null;return state.nodes.find(n=>n.id===ids[0])||null}
   function nodeTopBarActions(n){
     if(!n)return[];
     if(n.type==='image')return[{label:'人像后期调节',action:'image-portrait',primary:true},{label:'全景',tool:'全景',action:'image-panorama'},{label:'多角度',tool:'多角度',action:'image-angle'},{label:'打光',tool:'打光',action:'image-light'},{label:'九宫格',tool:'九宫格',action:'image-grid'},{label:'高清',tool:'高清',action:'image-hd'},{label:'元素编辑',action:'image-element'},{label:'图层分离',action:'image-layers'},{label:'宫格切分',tool:'宫格切分',action:'image-split'},{label:'画笔',action:'image-brush',iconOnly:true},{label:'下载',action:'image-download',iconOnly:true},{label:'全屏',action:'image-fullscreen',iconOnly:true}];
     if(n.type==='video')return[{label:'高清',tool:'高清',action:'video-hd',primary:true},{label:'片段重拍',tool:'片段重拍',action:'video-reshoot'},{label:'提帧',tool:'逐帧拉片',action:'video-frames'},{label:'剪辑',tool:'剪辑',action:'video-trim'},{label:'音频分离',tool:'分离音视频',action:'video-audio'},{label:'续写',tool:'智能续写',action:'video-extend'},{label:'下载',action:'video-download',iconOnly:true},{label:'全屏',action:'video-fullscreen',iconOnly:true}];
-    if(n.type==='audio')return[{label:'截取',tool:'截取',primary:true},{label:'变速',tool:'变速'},{label:'切分',tool:'切分'},{label:'改提示词',action:'edit-prompt'},{label:'重新生成',action:'rerun'},{label:'更多',action:'more'}];
+    if(n.type==='audio')return[{label:'截取',tool:'截取',action:'audio-trim',primary:true},{label:'变速',tool:'变速',action:'audio-speed'},{label:'切分',tool:'切分',action:'audio-split'},{label:'下载',action:'audio-download',iconOnly:true}];
     if(n.type==='script')return[{label:'编辑脚本',tool:'打开脚本',primary:true},{label:'看板',tool:'整集看板'},{label:'批量生成',action:'script-batch'},{label:'改生成提示',action:'edit-prompt'},{label:'重新生成',action:'rerun'},{label:'更多',action:'more'}];
     if(n.type==='director')return[{label:'打开导演台',tool:'打开导演台',primary:true},{label:'截图',tool:'截图'},{label:'更多',action:'more'}];
     return[{label:'复制',tool:'复制',primary:true},{label:'改提示词',action:'edit-prompt'},{label:'重新生成',action:'rerun'},{label:'更多',action:'more'}];
@@ -1369,6 +1413,7 @@
     if(a.action==='image-fullscreen'){fullscreenImageNode(n);return}
     if(a.action==='video-download'){downloadVideoNode(n);return}
     if(a.action==='video-fullscreen'){fullscreenVideoNode(n);return}
+    if(a.action==='audio-download'){downloadAudioNode(n);return}
     if(a.action==='edit-prompt'){openNativeResultComposer(n,'edit');return}
     if(a.action==='rerun'){openNativeResultComposer(n,'rerun');return}
     if(a.action==='duplicate'){duplicateSelection(n.id,false);return}
@@ -1390,11 +1435,11 @@
     const nodeEl=$(el);if(!nodeEl){toolbar.classList.add('hidden');return}
     const r=nodeEl.getBoundingClientRect(),actions=nodeTopBarActions(n);
     toolbar.classList.remove('node-toolbar-text','node-toolbar-image','node-toolbar-video','node-toolbar-audio','node-toolbar-script','node-toolbar-director');toolbar.classList.add('node-toolbar-media','node-toolbar-'+n.type);toolbar.dataset.mediaType=n.type;
-    if(n.type==='image'||n.type==='video'){
-      const estimatedWidth=Math.min(window.innerWidth-32,Math.max(n.type==='image'?760:620,actions.length*68));
+    if(n.type==='image'||n.type==='video'||n.type==='audio'){
+      const estimatedWidth=Math.min(window.innerWidth-32,Math.max(n.type==='image'?760:n.type==='video'?620:360,actions.length*68));
       toolbar.style.left=Math.max(16,Math.min(window.innerWidth-estimatedWidth-16,r.left+r.width/2-estimatedWidth/2))+'px';
       toolbar.style.top=Math.max(16,r.top-58)+'px';
-      toolbar.innerHTML=actions.map((a,i)=>`<button class="tool-btn ${a.primary?'primary':''} ${a.iconOnly?'icon-only':''}" data-top-action="${i}" title="${escapeAttr(a.label)}"><span class="tool-glyph">${n.type==='image'?imageToolbarGlyph(a.action||''):videoToolbarGlyph(a.action||'')}</span>${a.iconOnly?'':`<span>${escapeHtml(a.label)}</span>`}${a.action==='image-portrait'?'<span class="tool-arrow">⌄</span>':''}</button>`).join('');
+      toolbar.innerHTML=actions.map((a,i)=>`<button class="tool-btn ${a.primary?'primary':''} ${a.iconOnly?'icon-only':''}" data-top-action="${i}" title="${escapeAttr(a.label)}"><span class="tool-glyph">${n.type==='image'?imageToolbarGlyph(a.action||''):n.type==='video'?videoToolbarGlyph(a.action||''):audioToolbarGlyph(a.action||'')}</span>${a.iconOnly?'':`<span>${escapeHtml(a.label)}</span>`}${a.action==='image-portrait'?'<span class="tool-arrow">⌄</span>':''}</button>`).join('');
       toolbar.classList.remove('hidden');
       $$('[data-top-action]',toolbar).forEach(b=>b.onclick=()=>runTopBarAction(n,actions[Number(b.dataset.topAction)],b));return;
     }
@@ -1501,19 +1546,20 @@
   }
 
   function positionGeneratorBelowNode(n,el,desiredWidth){
-    const gap=12,edge=16,dockReserve=84,r=el.getBoundingClientRect(),isText=n?.type==='text',isImage=n?.type==='image',isVideo=n?.type==='video';
+    const gap=12,edge=16,dockReserve=84,r=el.getBoundingClientRect(),isText=n?.type==='text',isImage=n?.type==='image',isVideo=n?.type==='video',isAudio=n?.type==='audio';
     generator.dataset.nodeType=n?.type||'';
     generator.classList.toggle('text-generator',isText);
     generator.classList.toggle('image-generator',isImage);
     generator.classList.toggle('video-generator',isVideo);
-    if(isText||isImage||isVideo){
-      const width=isImage||isVideo?820:594,height=isImage?246:isVideo?258:142,bottomLimit=window.innerHeight-dockReserve-edge;
+    generator.classList.toggle('audio-generator',isAudio);
+    if(isText||isImage||isVideo||isAudio){
+      const width=isImage||isVideo?820:isAudio?660:594,height=isImage?246:isVideo?258:isAudio?210:142,bottomLimit=window.innerHeight-dockReserve-edge;
       generator.style.width=width+'px';
       generator.style.minWidth=width+'px';
       generator.style.maxWidth=width+'px';
       generator.style.height=height+'px';
       generator.style.minHeight=height+'px';
-      generator.style.maxHeight=isImage||isVideo?height+'px':'none';
+      generator.style.maxHeight=isImage||isVideo||isAudio?height+'px':'none';
       generator.style.overflow='visible';
       const centered=r.left+r.width/2-width/2;
       generator.style.left=Math.max(edge,Math.min(window.innerWidth-width-edge,centered))+'px';
@@ -1641,6 +1687,23 @@
       $('#videoReferenceBtn')?.addEventListener('click',()=>openReferencePicker(n));
       $('#videoFramesBtn')?.addEventListener('click',()=>openVideoGeneratorTool('首尾帧',n));
       $('#videoMotionBtn')?.addEventListener('click',()=>openVideoGeneratorTool('运镜预设',n));
+      $('#generationCostBtn')?.addEventListener('click',()=>openCostDetails([n.id]));
+      $('#generateBtn').onclick=()=>{expandedNodeId=null;generator.classList.add('hidden');renderToolbar();generateForNode(n).catch(()=>{})};
+      return;
+    }
+    if(n.type==='audio'){
+      generator.innerHTML=`<div class="lib-gen-main audio-generator-main">
+        <div class="audio-gen-head"><span>音频生成</span><button type="button" id="audioReferenceBtn">${uiIcon('plus')}<span>参考${refs.length?` ${refs.length}`:''}</span></button><div class="audio-gen-spacer"></div></div>
+        <div class="prompt-box audio-prompt-box"><textarea id="promptInput" placeholder="描述音乐 / 声音 / 旁白内容、情绪、节奏、风格与声音质感，按 / 呼出指令，@引用素材" ${frozen?'disabled':''}>${escapeHtml(n.prompt||'')}</textarea></div>
+        <div class="audio-gen-controls"><button id="modelPickerBtn" class="model-pill ${noModel?'needs-model':''}"><span class="model-dot"></span><b>${escapeHtml(modelLabel)}</b><i>${uiIcon('chevronDown')}</i></button><button type="button" id="audioContextBtn" class="audio-gen-action">${uiIcon('context')}<span>Context</span></button><div class="audio-gen-spacer"></div>${costBadgeHtml(n)}<button type="button" class="audio-generate-btn" id="generateBtn" ${noModel||frozen?'disabled':''} title="生成">${uiIcon('next')}</button></div>
+        ${noModel?`<button class="inline-setup-model" id="inlineSetupModel">还没有音频模型，点击添加</button>`:''}
+      </div>`;
+      generator.classList.remove('hidden');positionGeneratorBelowNode(n,el,desiredWidth);
+      $('#promptInput')?.addEventListener('input',e=>{n.prompt=e.target.value;saveState()});
+      $('#modelPickerBtn')?.addEventListener('click',e=>openModelPickerForNode(n,e.currentTarget));
+      $('#audioReferenceBtn')?.addEventListener('click',()=>openReferencePicker(n));
+      $('#audioContextBtn')?.addEventListener('click',()=>openCreativeContextComposer(n));
+      $('#inlineSetupModel')?.addEventListener('click',()=>{if(providers.some(p=>(p.models||[]).length))window.location.href='./models.html';else openProviderModal()});
       $('#generationCostBtn')?.addEventListener('click',()=>openCostDetails([n.id]));
       $('#generateBtn').onclick=()=>{expandedNodeId=null;generator.classList.add('hidden');renderToolbar();generateForNode(n).catch(()=>{})};
       return;
