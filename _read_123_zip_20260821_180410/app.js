@@ -987,7 +987,6 @@
 
   function beginManualTextEdit(n){
     if(!n||n.type!=='text')return;
-    if(n.textInputMode!=='manual')snapshot('切换手动文本模式');
     const current=String(n.text||n.generatedText||'');
     n.text=current;
     n.generatedText='';
