@@ -1169,7 +1169,7 @@
       toolbar.removeAttribute('data-media-type');toolbar.classList.remove('node-toolbar-media','node-toolbar-text','node-toolbar-image','node-toolbar-video','node-toolbar-audio','node-toolbar-script','node-toolbar-director');
       toolbar.innerHTML=`<span class="selection-toolbar-label">已选 ${ids.length}</span><button class="tool-btn primary" data-multi-top="batch-connect">批量连接</button><button class="tool-btn" data-multi-top="group">打组</button><button class="tool-btn" data-multi-top="workflow">保存工作流</button><button class="tool-btn" data-multi-top="run">整组执行</button><button class="tool-btn" data-multi-top="layout">整理</button><button class="tool-btn danger" data-multi-top="delete">删除</button>`;
       toolbar.classList.remove('hidden');
-      $('[data-multi-top]',toolbar).forEach(b=>b.onclick=()=>{const a=b.dataset.multiTop;if(a==='batch-connect')openBatchConnectDialog();if(a==='group')createGroup(ids,'工作流组','workflow');if(a==='workflow')saveWorkflowFromSelection();if(a==='run')executeWorkflowIds(ids,{title:'选中节点执行'});if(a==='layout')openAutoLayoutMenu();if(a==='delete')deleteSelection();});return;
+      $$('[data-multi-top]',toolbar).forEach(b=>b.onclick=()=>{const a=b.dataset.multiTop;if(a==='batch-connect')openBatchConnectDialog();if(a==='group')createGroup(ids,'工作流组','workflow');if(a==='workflow')saveWorkflowFromSelection();if(a==='run')executeWorkflowIds(ids,{title:'选中节点执行'});if(a==='layout')openAutoLayoutMenu();if(a==='delete')deleteSelection();});return;
     }
     const n=selectedToolbarNode(),contentState=n?uiV23NodeContentState(n):'empty';
     if(!n||contentState!=='result'||expandedNodeId===n.id){toolbar.classList.add('hidden');return}
@@ -1179,7 +1179,7 @@
     toolbar.style.left=Math.max(68,Math.min(window.innerWidth-620,r.left))+'px';toolbar.style.top=Math.max(45,r.top-40)+'px';
     toolbar.classList.remove('node-toolbar-text','node-toolbar-image','node-toolbar-video','node-toolbar-audio','node-toolbar-script','node-toolbar-director');toolbar.classList.add('node-toolbar-media','node-toolbar-'+n.type);toolbar.dataset.mediaType=n.type;
     toolbar.innerHTML=`<span class="selection-toolbar-label">${escapeHtml(labelForType(n.type))}结果</span>`+actions.map((a,i)=>`<button class="tool-btn ${a.primary?'primary':''}" data-top-action="${i}">${escapeHtml(a.label)}</button>`).join('');toolbar.classList.remove('hidden');
-    $('[data-top-action]',toolbar).forEach(b=>b.onclick=()=>runTopBarAction(n,actions[Number(b.dataset.topAction)],b));
+    $$('[data-top-action]',toolbar).forEach(b=>b.onclick=()=>runTopBarAction(n,actions[Number(b.dataset.topAction)],b));
   }
 
   function defaultCapabilities(modality,id='',name=''){

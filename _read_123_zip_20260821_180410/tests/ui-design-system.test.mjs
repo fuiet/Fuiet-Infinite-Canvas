@@ -153,3 +153,10 @@ test('native nodes bypass legacy state decoration and no result decorator runtim
   assert.ok(runtime.includes("const task = node.getAttribute('data-task-state') || 'idle';"));
   assert.doesNotMatch(connect, /ui-result-v23.js/);
 });
+
+
+test('native result toolbar binds every generated action', () => {
+  const app = read('app.js');
+  assert.ok(app.includes("$$('[data-multi-top]',toolbar).forEach"));
+  assert.ok(app.includes("$$('[data-top-action]',toolbar).forEach"));
+});
