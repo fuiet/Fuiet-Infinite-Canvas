@@ -1596,6 +1596,10 @@
       const centered=r.left+r.width/2-width/2;
       generator.style.left=Math.max(edge,Math.min(window.innerWidth-width-edge,centered))+'px';
       let top=r.bottom+gap;
+      if(isText){
+        generator.style.top=top+'px';
+        return;
+      }
       if(top+height>bottomLimit)top=r.top-gap-height;
       top=Math.max(48,Math.min(bottomLimit-height,top));
       generator.style.top=top+'px';
