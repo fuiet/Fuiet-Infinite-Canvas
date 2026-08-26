@@ -241,6 +241,12 @@
   const decorateContextToolbar = (node) => {
     if (!toolbar || !node?.dataset.id) return;
     const type = nodeType(node);
+    if (node.dataset.uiV23Native === 'true') {
+      toolbar.classList.add('node-toolbar-media');
+      NODE_TYPES.forEach((candidate) => toolbar.classList.toggle(`node-toolbar-${candidate}`, candidate === type));
+      toolbar.dataset.mediaType = type;
+      return;
+    }
     const config = RESULT_TOOLBAR_CONFIG[type] || RESULT_TOOLBAR_CONFIG.text;
 
     toolbar.querySelectorAll('[data-ui-v23-context-extra]').forEach((item) => item.remove());

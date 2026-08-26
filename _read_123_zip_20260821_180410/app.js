@@ -898,6 +898,28 @@
     const percent=hasRealProgress?Math.round(value):null;
     return `<div class="ui-v23-result-progress${hasRealProgress?'':' indeterminate'}${taskState==='queued'?' queued':''}" data-ui-v23-result-progress role="status" aria-live="polite" aria-label="${label}${percent==null?'':` ${percent}%`}"><div class="ui-v23-result-progress-copy"><span>${label}</span><strong>${percent==null?'':`${percent}%`}</strong></div><div class="ui-v23-result-progress-track"><i${percent==null?'':` style="width:${percent}%"`}></i></div></div>`;
   }
+  function uiV23FormatMediaDuration(seconds){
+    const value=Number(seconds);if(!Number.isFinite(value)||value<=0)return'';const total=Math.round(value),hours=Math.floor(total/3600),minutes=Math.floor((total%3600)/60),secs=total%60;return hours>0?`${hours}:${String(minutes).padStart(2,'0')}:${String(secs).padStart(2,'0')}`:`${String(minutes).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
+  }
+  function uiV23BindMediaMetadata(n,el){
+    const meta=$('[data-node-result-meta]',el);if(!meta)return;
+    const apply=text=>{const value=String(text||'').trim();meta.textContent=value;meta.hidden=!value;};
+    if(n.type==='image'){
+      const image=$('img',el);if(!image)return apply('');
+      const update=()=>apply(image.naturalWidth&&image.naturalHeight?`${image.naturalWidth} × ${image.naturalHeight}`:'');
+      if(image.complete)update();else image.addEventListener('load',update,{once:true});return;
+    }
+    if(n.type==='video'){
+      const video=$('video',el);if(!video)return apply('');
+      const update=()=>{const resolution=video.videoWidth&&video.videoHeight?`${video.videoWidth} × ${video.videoHeight}`:'';const duration=uiV23FormatMediaDuration(video.duration);apply([resolution,duration].filter(Boolean).join(' · '));};
+      if(video.readyState>=1)update();else video.addEventListener('loadedmetadata',update,{once:true});return;
+    }
+    if(n.type==='audio'){
+      const audio=$('audio',el);if(!audio)return apply('');
+      const update=()=>apply(uiV23FormatMediaDuration(audio.duration));if(audio.readyState>=1)update();else audio.addEventListener('loadedmetadata',update,{once:true});return;
+    }
+    apply('');
+  }
 
   function renderNode(n){
     const el = document.createElement('article');
@@ -945,8 +967,9 @@
     const failureHtml=taskState==='failed'?`<div class="node-failed-actions ui-v23-failure"><span>生成失败</span><button data-node-retry="${n.id}">重新生成</button></div>`:'';
     const footerHtml=contentState==='empty'?`<div class="node-footer"><span>${n.modelName?escapeHtml(n.modelName):(n.type==='director'?'导演台':'')}</span><span style="margin-left:auto">${taskState==='queued'?'排队中':taskState==='running'?'生成中':''}</span></div>`:'';
     const resizeHtml=contentState==='result'?`<div class="node-resize-handle ui-v23-resize-handle" data-node-resize="${n.id}" title="调整大小" aria-label="调整节点大小"></div>`:'';
+    const resultMetaHtml=mediaResult?'<span class="ui-v23-result-meta" data-node-result-meta hidden></span>':'';
     el.innerHTML = `
-      <div class="node-header"><div class="node-header-left"><span class="node-type-icon">${uiIcon(nodeTypeIconName(n.type))}</span><span class="node-title-stack"><b>${escapeHtml(nodeTitleBase(n))}</b><small>${nodeSequenceNumber(n.id)}</small></span></div><div class="node-header-right">${n.toolParams?.shotId?`<button class="node-shot-chip" data-shot-back="${n.id}">Shot ${scriptShotForProductionNode(n)?.no||''}</button>`:''}<div class="node-guard-badges">${n.locked?`<i title="位置已锁定">${uiIcon('lock')}</i>`:''}${n.frozen?`<i title="结果已冻结">${uiIcon('freeze')}</i>`:''}${Number(n.fallbackAttempt||0)>0?`<i title="本次使用备用模型">${uiIcon('fallback')}</i>`:''}</div>${showHeaderStatus?`<span class="node-run-status ${taskState}">${headerStatusLabel}${taskState==='running'&&hasRealProgress?` ${Math.round(rawProgress)}%`:''}</span>`:''}<button class="node-menu-btn" aria-label="更多">${uiIcon('dotMenu')}</button></div></div>
+      <div class="node-header"><div class="node-header-left"><span class="node-type-icon">${uiIcon(nodeTypeIconName(n.type))}</span><span class="node-title-stack"><b>${escapeHtml(nodeTitleBase(n))}</b><small>${nodeSequenceNumber(n.id)}</small></span></div><div class="node-header-right">${n.toolParams?.shotId?`<button class="node-shot-chip" data-shot-back="${n.id}">Shot ${scriptShotForProductionNode(n)?.no||''}</button>`:''}<div class="node-guard-badges">${n.locked?`<i title="位置已锁定">${uiIcon('lock')}</i>`:''}${n.frozen?`<i title="结果已冻结">${uiIcon('freeze')}</i>`:''}${Number(n.fallbackAttempt||0)>0?`<i title="本次使用备用模型">${uiIcon('fallback')}</i>`:''}</div>${showHeaderStatus?`<span class="node-run-status ${taskState}">${headerStatusLabel}${taskState==='running'&&hasRealProgress?` ${Math.round(rawProgress)}%`:''}</span>`:''}${resultMetaHtml}<button class="node-menu-btn" aria-label="更多">${uiIcon('dotMenu')}</button></div></div>
       <div class="node-body">${body}</div>
       ${nodeInlineCandidateHtml(n)}
       ${versionNav}
@@ -955,6 +978,7 @@
       ${footerHtml}
       <div class="node-port in" title="输入"></div><div class="node-port out" title="输出"></div>
       ${resizeHtml}`;
+    uiV23BindMediaMetadata(n,el);
     el.addEventListener('pointerdown', e => onNodePointerDown(e,n,el));
     el.addEventListener('contextmenu', e => {e.preventDefault();if(!(state.selectedIds||[]).includes(n.id))selectNode(n.id,e.shiftKey);showContextMenu(e.clientX,e.clientY,n.id)});
     $('.node-menu-btn',el).addEventListener('click', e=>{e.stopPropagation(); selectNode(n.id); const r=e.currentTarget.getBoundingClientRect(); showContextMenu(r.left,r.bottom+4,n.id);});
@@ -1114,36 +1138,48 @@
   function selectedToolbarNode(){const ids=currentSelectionIds();if(ids.length!==1)return null;return state.nodes.find(n=>n.id===ids[0])||null}
   function nodeTopBarActions(n){
     if(!n)return[];
-    if(n.type==='image')return[{label:'编辑',tool:'图像工作台',primary:true},{label:'分镜',tool:'分镜工作台'},{label:'转视频',action:'image-video'},{label:'高清',tool:'高清'},{label:'更多',action:'more'}];
-    if(n.type==='video')return[{label:'视频工作台',tool:'视频工作台',primary:true},{label:'片段重拍',tool:'片段重拍'},{label:'续写',tool:'智能续写'},{label:'合成',tool:'视频合成'},{label:'更多',action:'more'}];
-    if(n.type==='audio')return[{label:'截取',tool:'截取',primary:true},{label:'变速',tool:'变速'},{label:'切分',tool:'切分'},{label:'更多',action:'more'}];
-    if(n.type==='script')return[{label:'脚本',tool:'打开脚本',primary:true},{label:'看板',tool:'整集看板'},{label:'资产',tool:'资产管理'},{label:'批量生成',action:'script-batch'},{label:'更多',action:'more'}];
-    if(n.type==='director')return[{label:'导演台',tool:'打开导演台',primary:true},{label:'截图',tool:'截图'},{label:'更多',action:'more'}];
-    return[{label:'生成',action:'generate',primary:true},{label:'资产',tool:'创建资产'},{label:'复制',action:'duplicate'},{label:'更多',action:'more'}];
+    if(n.type==='image')return[{label:'编辑图片',tool:'图像工作台',primary:true},{label:'转视频',action:'image-video'},{label:'高清',tool:'高清'},{label:'改提示词',action:'edit-prompt'},{label:'重新生成',action:'rerun'},{label:'更多',action:'more'}];
+    if(n.type==='video')return[{label:'编辑视频',tool:'视频工作台',primary:true},{label:'续写',tool:'智能续写'},{label:'合成',tool:'视频合成'},{label:'改提示词',action:'edit-prompt'},{label:'重新生成',action:'rerun'},{label:'更多',action:'more'}];
+    if(n.type==='audio')return[{label:'截取',tool:'截取',primary:true},{label:'变速',tool:'变速'},{label:'切分',tool:'切分'},{label:'改提示词',action:'edit-prompt'},{label:'重新生成',action:'rerun'},{label:'更多',action:'more'}];
+    if(n.type==='script')return[{label:'编辑脚本',tool:'打开脚本',primary:true},{label:'看板',tool:'整集看板'},{label:'批量生成',action:'script-batch'},{label:'改生成提示',action:'edit-prompt'},{label:'重新生成',action:'rerun'},{label:'更多',action:'more'}];
+    if(n.type==='director')return[{label:'打开导演台',tool:'打开导演台',primary:true},{label:'截图',tool:'截图'},{label:'更多',action:'more'}];
+    return[{label:'复制',tool:'复制',primary:true},{label:'改提示词',action:'edit-prompt'},{label:'重新生成',action:'rerun'},{label:'更多',action:'more'}];
   }
   function openTopBarMore(n,anchor){const r=anchor.getBoundingClientRect();showContextMenu(Math.min(window.innerWidth-280,r.left),r.bottom+5,n.id)}
+  function openNativeResultComposer(n,mode='edit'){
+    if(!n||!['image','video','audio','text','script'].includes(n.type))return;
+    expandedNodeId=n.id;selectedId=n.id;state.selectedIds=[n.id];state.nodes.forEach(x=>x.selected=x.id===n.id);renderToolbar();renderGenerator();
+    setTimeout(()=>$('#promptInput,#scriptDetailPrompt,textarea',generator)?.focus(),0);
+    if(mode==='rerun')showToast('确认参数后重新生成');
+  }
   function runTopBarAction(n,a,anchor){
     if(a.tool)return toolAction(a.tool,n);
     if(a.action==='image-video'){runTransaction('创建图转视频',()=>{createDerivedNode(n,'video','图转视频',n.prompt||'保持主体与构图连续，自然运动',{operation:'image_to_video'},430)});return}
     if(a.action==='script-batch'){openScriptEditor(n,'batch-image');return}
-    if(a.action==='generate'){generateForNode(n).catch(()=>{});return}
+    if(a.action==='edit-prompt'){openNativeResultComposer(n,'edit');return}
+    if(a.action==='rerun'){openNativeResultComposer(n,'rerun');return}
     if(a.action==='duplicate'){duplicateSelection(n.id,false);return}
     if(a.action==='more')openTopBarMore(n,anchor);
   }
   function renderToolbar(){
     const ids=currentSelectionIds();
     if(ids.length>1){
-      const ns=ids.map(id=>state.nodes.find(n=>n.id===id)).filter(Boolean),r=viewport.getBoundingClientRect();
+      const r=viewport.getBoundingClientRect();
       toolbar.style.left=Math.max(76,Math.min(window.innerWidth-620,r.left+r.width/2-280))+'px';toolbar.style.top='54px';
+      toolbar.removeAttribute('data-media-type');toolbar.classList.remove('node-toolbar-media','node-toolbar-text','node-toolbar-image','node-toolbar-video','node-toolbar-audio','node-toolbar-script','node-toolbar-director');
       toolbar.innerHTML=`<span class="selection-toolbar-label">已选 ${ids.length}</span><button class="tool-btn primary" data-multi-top="batch-connect">批量连接</button><button class="tool-btn" data-multi-top="group">打组</button><button class="tool-btn" data-multi-top="workflow">保存工作流</button><button class="tool-btn" data-multi-top="run">整组执行</button><button class="tool-btn" data-multi-top="layout">整理</button><button class="tool-btn danger" data-multi-top="delete">删除</button>`;
       toolbar.classList.remove('hidden');
-      $$('[data-multi-top]',toolbar).forEach(b=>b.onclick=()=>{const a=b.dataset.multiTop;if(a==='batch-connect')openBatchConnectDialog();if(a==='group')createGroup(ids,'工作流组','workflow');if(a==='workflow')saveWorkflowFromSelection();if(a==='run')executeWorkflowIds(ids,{title:'选中节点执行'});if(a==='layout')openAutoLayoutMenu();if(a==='delete')deleteSelection();});return;
+      $('[data-multi-top]',toolbar).forEach(b=>b.onclick=()=>{const a=b.dataset.multiTop;if(a==='batch-connect')openBatchConnectDialog();if(a==='group')createGroup(ids,'工作流组','workflow');if(a==='workflow')saveWorkflowFromSelection();if(a==='run')executeWorkflowIds(ids,{title:'选中节点执行'});if(a==='layout')openAutoLayoutMenu();if(a==='delete')deleteSelection();});return;
     }
-    const n=selectedToolbarNode();if(!n||expandedNodeId===n.id){toolbar.classList.add('hidden');return}
-    const el=$(`.node[data-id="${CSS.escape(String(n.id))}"]`);if(!el){toolbar.classList.add('hidden');return}
-    const r=el.getBoundingClientRect(),actions=nodeTopBarActions(n);toolbar.style.left=Math.max(68,Math.min(window.innerWidth-620,r.left))+'px';toolbar.style.top=Math.max(45,r.top-40)+'px';
-    toolbar.innerHTML=`<span class="selection-toolbar-label">${escapeHtml(labelForType(n.type))}</span>`+actions.map((a,i)=>`<button class="tool-btn ${a.primary?'primary':''}" data-top-action="${i}">${escapeHtml(a.label)}</button>`).join('');toolbar.classList.remove('hidden');
-    $$('[data-top-action]',toolbar).forEach(b=>b.onclick=()=>runTopBarAction(n,actions[Number(b.dataset.topAction)],b));
+    const n=selectedToolbarNode(),contentState=n?uiV23NodeContentState(n):'empty';
+    if(!n||contentState!=='result'||expandedNodeId===n.id){toolbar.classList.add('hidden');return}
+    const el=`.node[data-id="${CSS.escape(String(n.id))}"]`;
+    const nodeEl=$(el);if(!nodeEl){toolbar.classList.add('hidden');return}
+    const r=nodeEl.getBoundingClientRect(),actions=nodeTopBarActions(n);
+    toolbar.style.left=Math.max(68,Math.min(window.innerWidth-620,r.left))+'px';toolbar.style.top=Math.max(45,r.top-40)+'px';
+    toolbar.classList.remove('node-toolbar-text','node-toolbar-image','node-toolbar-video','node-toolbar-audio','node-toolbar-script','node-toolbar-director');toolbar.classList.add('node-toolbar-media','node-toolbar-'+n.type);toolbar.dataset.mediaType=n.type;
+    toolbar.innerHTML=`<span class="selection-toolbar-label">${escapeHtml(labelForType(n.type))}结果</span>`+actions.map((a,i)=>`<button class="tool-btn ${a.primary?'primary':''}" data-top-action="${i}">${escapeHtml(a.label)}</button>`).join('');toolbar.classList.remove('hidden');
+    $('[data-top-action]',toolbar).forEach(b=>b.onclick=()=>runTopBarAction(n,actions[Number(b.dataset.topAction)],b));
   }
 
   function defaultCapabilities(modality,id='',name=''){

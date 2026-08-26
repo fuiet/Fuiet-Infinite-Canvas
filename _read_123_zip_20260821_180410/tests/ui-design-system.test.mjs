@@ -60,17 +60,20 @@ test('result nodes use context toolbar by default and composer only by explicit 
   assert.match(runtime, /toolbar\.classList\.remove\('hidden'\)/);
 });
 
-test('result context toolbar is pruned by media type instead of exposing one generic action set', () => {
+test('result context toolbar is generated natively by media type', () => {
+  const app = read('app.js');
   const runtime = read('ui-v23.js');
   const css = read('styles/context-toolbar.css');
-  assert.match(runtime, /RESULT_TOOLBAR_CONFIG/);
-  assert.match(runtime, /keep: \['编辑', '转视频', '高清', '更多'\]/);
-  assert.match(runtime, /keep: \['视频工作台', '续写', '合成', '更多'\]/);
-  assert.match(runtime, /keep: \['截取', '变速', '切分', '更多'\]/);
-  assert.match(runtime, /keep: \['脚本', '看板', '批量生成', '更多'\]/);
-  assert.match(runtime, /keep: \['导演台', '截图', '更多'\]/);
-  assert.match(runtime, /button\.remove\(\)/);
-  assert.match(runtime, /node-toolbar-\$\{candidate\}/);
+  assert.match(app, /function nodeTopBarActions/);
+  assert.match(app, /label:'编辑图片'/);
+  assert.match(app, /label:'编辑视频'/);
+  assert.match(app, /label:'截取'/);
+  assert.match(app, /label:'编辑脚本'/);
+  assert.match(app, /label:'打开导演台'/);
+  assert.match(app, /action:'edit-prompt'/);
+  assert.match(app, /action:'rerun'/);
+  assert.match(app, /contentState!=='result'/);
+  assert.match(runtime, /node.dataset.uiV23Native === 'true'/);
   assert.match(css, /node-toolbar-image/);
   assert.match(css, /node-toolbar-video/);
   assert.match(css, /node-toolbar-audio/);
@@ -123,31 +126,30 @@ test('generation progress is native, visible, and never fabricates a minimum per
   assert.match(desktop, /display:none/);
 });
 
-test('result-first shell is emitted by app.js while metadata stays progressively enhanced', () => {
+test('result-first shell and media metadata are emitted by app.js', () => {
   const app = read('app.js');
-  const bootstrap = read('ui-connect-v23.js');
-  const runtime = read('ui-result-v23.js');
+  const html = read('index.html');
+  const connect = read('ui-connect-v23.js');
   const css = read('styles/result-shell.css');
-  assert.match(bootstrap, /result-shell\.css/);
-  assert.match(bootstrap, /ui-result-v23\.js/);
+  assert.ok(html.includes('styles/result-shell.css'));
+  assert.doesNotMatch(connect, /ui-result-v23.js/);
   assert.match(app, /ui-v23-media-result/);
   assert.match(app, /ui-v23-version-nav/);
   assert.match(app, /data-version-count/);
-  assert.match(app, /node-failed-actions ui-v23-failure/);
-  assert.match(app, />生成失败</);
-  assert.match(app, />重新生成</);
-  assert.match(runtime, /data-ui-v23-result-meta/);
+  assert.match(app, /function uiV23BindMediaMetadata/);
+  assert.match(app, /data-node-result-meta/);
+  assert.match(app, /videoWidth/);
+  assert.match(app, /naturalWidth/);
+  assert.match(app, /loadedmetadata/);
   assert.match(css, /ui-v23-version-nav/);
   assert.match(css, /ui-v23-resize-handle/);
-  assert.match(css, /node\.ui-v23-media-result/);
+  assert.match(css, /node.ui-v23-media-result/);
 });
 
-test('native nodes bypass legacy state and result decorators', () => {
+test('native nodes bypass legacy state decoration and no result decorator runtime remains', () => {
   const runtime = read('ui-v23.js');
-  const resultRuntime = read('ui-result-v23.js');
-  assert.match(runtime, /node\.dataset\.uiV23Native === 'true'/);
-  assert.match(runtime, /const task = node\.getAttribute\('data-task-state'\)/);
-  assert.match(resultRuntime, /const native = node\.dataset\.uiV23Native === 'true'/);
-  assert.match(resultRuntime, /if \(native\)/);
-  assert.match(resultRuntime, /syncMediaMeta\(node, type\)/);
+  const connect = read('ui-connect-v23.js');
+  assert.match(runtime, /node.dataset.uiV23Native === 'true'/);
+  assert.ok(runtime.includes("const task = node.getAttribute('data-task-state') || 'idle';"));
+  assert.doesNotMatch(connect, /ui-result-v23.js/);
 });

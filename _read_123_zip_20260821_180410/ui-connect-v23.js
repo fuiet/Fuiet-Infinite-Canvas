@@ -1,13 +1,4 @@
 (() => {
-  if (!document.querySelector('link[data-ui-v23-result-shell]')) {
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = './styles/result-shell.css';
-    link.dataset.uiV23ResultShell = '';
-    document.head.appendChild(link);
-  }
-  import('./ui-result-v23.js').catch((error) => console.error('UI 2.3 result shell failed to load', error));
-
   const app = document.getElementById('app');
   const viewport = document.getElementById('canvasViewport');
   const bottomDock = document.getElementById('bottomDock');
