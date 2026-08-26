@@ -13,6 +13,11 @@
 .menu-item{min-height:32px;border:0;border-radius:7px;background:transparent;color:var(--ui-text-2);font-size:12px;line-height:17px}
 .menu-item:hover{background:var(--ui-surface-2);color:var(--ui-text-1)}
 
+/* The mode popup has exactly two rows; never make it a scroll container. */
+.context-menu.dock-mode-menu{height:auto!important;min-height:0!important;max-height:none!important;overflow:hidden!important;overflow-y:hidden!important;overscroll-behavior:none!important;scrollbar-width:none!important}
+.context-menu.dock-mode-menu::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}
+.dock-mode-menu .dock-mode-row:last-child{margin-bottom:0!important}
+
 /* User-facing workflow status: show progress, hide infrastructure/task-center detail. */
 .ui-v23-workflow-hud{min-width:220px!important;max-width:300px!important;padding:10px 12px!important;border:1px solid var(--ui-line)!important;border-radius:10px!important;background:rgba(27,29,28,.96)!important;box-shadow:var(--ui-shadow-float)!important}
 .ui-v23-workflow-hud .wf-hud-meta,.ui-v23-workflow-hud .wf-hud-active,.ui-v23-workflow-hud .wf-hud-actions{display:none!important}
