@@ -7,3 +7,7 @@
 .tool-btn.danger:hover{background:rgba(211,111,106,.12);color:#E58A85}
 .selection-toolbar-label{height:30px;display:inline-flex;align-items:center;padding:0 9px;border-right:1px solid var(--ui-line);color:var(--ui-text-3);font:500 11px/15px var(--ui-font-sans)}
 .node-toolbar .ui-icon{width:16px;height:16px;stroke-width:1.8}
+.ui-v23-context-separator{width:1px;height:20px;flex:0 0 1px;margin:0 2px;background:var(--ui-line)}
+.ui-v23-context-action{color:var(--ui-text-3)}
+.ui-v23-context-action:hover{color:var(--ui-text-1)}
+.ui-v23-context-action[data-ui-v23-rerun]{background:var(--ui-surface-2);color:var(--ui-text-1)}
