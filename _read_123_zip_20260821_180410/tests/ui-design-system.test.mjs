@@ -8,8 +8,13 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..');
 const read = (path) => readFileSync(join(root, path), 'utf8');
 
-test('canvas loads only the UI 2.3 visual stack after the legacy scaffold', () => {
+test('canvas loads the UI 2.3 visual stack after a quarantined legacy scaffold', () => {
   const html = read('index.html');
+  const legacyLayer = read('styles/legacy-layer.css');
+  assert.match(html, /styles\/legacy-layer\.css/);
+  assert.doesNotMatch(html, /href="\.\/styles\.css"/);
+  assert.match(legacyLayer, /styles\.css/);
+  assert.match(legacyLayer, /layer\(legacy-scaffold\)/);
   assert.match(html, /styles\/tokens\.css/);
   assert.match(html, /styles\/nodes\.css/);
   assert.match(html, /styles\/asset-manager\.css/);
@@ -50,6 +55,24 @@ test('result nodes use context toolbar by default and composer only by explicit 
   assert.match(runtime, /重新生成/);
   assert.match(runtime, /generator\?\.classList\.add\('hidden'\)/);
   assert.match(runtime, /toolbar\.classList\.remove\('hidden'\)/);
+});
+
+test('result context toolbar is pruned by media type instead of exposing one generic action set', () => {
+  const runtime = read('ui-v23.js');
+  const css = read('styles/context-toolbar.css');
+  assert.match(runtime, /RESULT_TOOLBAR_CONFIG/);
+  assert.match(runtime, /keep: \['编辑', '转视频', '高清', '更多'\]/);
+  assert.match(runtime, /keep: \['视频工作台', '续写', '合成', '更多'\]/);
+  assert.match(runtime, /keep: \['截取', '变速', '切分', '更多'\]/);
+  assert.match(runtime, /keep: \['脚本', '看板', '批量生成', '更多'\]/);
+  assert.match(runtime, /keep: \['导演台', '截图', '更多'\]/);
+  assert.match(runtime, /button\.remove\(\)/);
+  assert.match(runtime, /node-toolbar-\$\{candidate\}/);
+  assert.match(css, /node-toolbar-image/);
+  assert.match(css, /node-toolbar-video/);
+  assert.match(css, /node-toolbar-audio/);
+  assert.match(css, /node-toolbar-script/);
+  assert.match(css, /node-toolbar-director/);
 });
 
 test('result selection does not use forced CSS resizing', () => {
