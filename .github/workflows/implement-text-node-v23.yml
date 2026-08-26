@@ -1,0 +1,249 @@
+name: Implement UI 2.3 Text Node
+
+on:
+  push:
+    branches:
+      - security/video-worker-hardening-20260825
+    paths:
+      - '.github/workflows/implement-text-node-v23.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Patch text node runtime
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          root = Path('_read_123_zip_20260821_180410')
+          app_path = root / 'app.js'
+          index_path = root / 'index.html'
+          app = app_path.read_text(encoding='utf-8')
+          index = index_path.read_text(encoding='utf-8')
+
+          def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected 1 match, got {count}')
+              return text.replace(old, new, 1)
+
+          def replace_section(text, start, end, replacement, label):
+              s = text.find(start)
+              if s < 0:
+                  raise SystemExit(f'{label}: start not found')
+              if text.find(start, s + len(start)) >= 0:
+                  raise SystemExit(f'{label}: start is not unique')
+              e = text.find(end, s + len(start))
+              if e < 0:
+                  raise SystemExit(f'{label}: end not found')
+              return text[:s] + replacement + text[e:]
+
+          app = replace_once(app, r'''    if(nodeResultVersions(n).length)return'result';
+              if(n.type==='image'||n.type==='video')return(n.outputUrl||n.content)?'result':'empty';
+              if(n.type==='audio')return n.outputUrl?'result':'empty';
+              if(n.type==='text')return String(n.text||n.generatedText||'').trim()?'result':'empty';''', r'''    if(n.type==='text')return String(n.text||n.generatedText||'').trim()?'result':'empty';
+              if(nodeResultVersions(n).length)return'result';
+              if(n.type==='image'||n.type==='video')return(n.outputUrl||n.content)?'result':'empty';
+              if(n.type==='audio')return n.outputUrl?'result':'empty';''', 'text content state')
+
+          helpers = r'''
+            function beginManualTextEdit(n){
+              if(!n||n.type!=='text')return;
+              snapshot('手动编辑文本');
+              const current=String(n.text||n.generatedText||'');
+              n.textEditBackup=current;
+              n.text=current;
+              n.generatedText='';
+              n.textEditing=true;
+              n.textInputMode='manual';
+              selectedId=n.id;
+              state.selectedIds=[n.id];
+              state.nodes.forEach(x=>x.selected=x.id===n.id);
+              expandedNodeId=n.id;
+              saveState();
+              render();
+              setTimeout(()=>{
+                const field=$(`.node[data-id="${CSS.escape(String(n.id))}"] [data-text-manual]`);
+                field?.focus();
+                if(field&&field.value)field.setSelectionRange(field.value.length,field.value.length);
+              },0);
+            }
+            function finishManualTextEdit(n,{cancel=false}={}){
+              if(!n||n.type!=='text')return;
+              const before=String(n.textEditBackup??'');
+              const after=cancel?before:String(n.text||'');
+              n.text=after;
+              n.generatedText='';
+              n.textEditing=false;
+              n.textInputMode='manual';
+              delete n.textEditBackup;
+              expandedNodeId=null;
+              if(!cancel&&after.trim()&&nodeResultVersions(n).at(-1)?.text!==after){
+                recordNodeResultVersion(n,{text:after,providerId:'',modelId:'',modelName:'手动输入'});
+              }
+              saveState();
+              render();
+              if(cancel)showToast('已取消文本编辑');
+            }
+          '''
+          app = replace_once(app, "    apply('');\n  }\n\n  function renderNode(n){", "    apply('');\n  }\n" + helpers + "\n  function renderNode(n){", 'manual text helpers')
+
+          text_render = r'''    } else if(n.type==='text'){
+              const textValue=String(n.text||n.generatedText||'');
+              const isManualEditing=Boolean(n.textEditing);
+              if(isManualEditing){
+                body = `<div class="text-node-shell is-manual-editing"><textarea class="text-node-editor" data-text-manual spellcheck="true" placeholder="输入或粘贴文本内容…">${escapeHtml(textValue)}</textarea><div class="text-node-edit-hint"><span>直接输入或粘贴文本</span><span>⌘/Ctrl + Enter 完成 · Esc 取消</span></div></div>`;
+              }else if(textValue.trim()){
+                body = `<div class="text-node-shell has-text"><div class="text-node-preview" data-text-result tabindex="0">${escapeHtml(textValue)}</div></div>`;
+              }else{
+                body = `<div class="text-node-shell is-empty"><div class="text-node-placeholder" aria-hidden="true"><span class="text-node-lines"><i></i><i></i><i></i></span></div><div class="text-node-try">尝试：</div><button type="button" data-text-quick="manual"><span>${uiIcon('subtitle')}</span><b>自己编写内容</b></button><button type="button" data-text-quick="video"><span>${uiIcon('video')}</span><b>文生视频</b></button><button type="button" data-text-quick="image"><span>${uiIcon('image')}</span><b>图片反推提示词</b></button><button type="button" data-text-quick="audio"><span>${uiIcon('audio')}</span><b>文字生音乐</b></button></div>`;
+              }
+          '''
+          app = replace_section(app, "    } else if(n.type==='text'){", "    } else if(n.type==='audio'){", text_render, 'text node render')
+
+          app = replace_once(app, '    const versionNav=versions.length?`<div class="node-result-nav ui-v23-version-nav ', '    const versionNav=contentState===\'result\'&&versions.length?`<div class="node-result-nav ui-v23-version-nav ', 'text version visibility')
+
+          old_bindings = r'''    const ta = $('textarea',el); if(ta) ta.addEventListener('input', e=>{ n.text=e.target.value; saveState(); renderEdges(); });
+              $('[data-open-script]',el)?.addEventListener('click',e=>{e.stopPropagation();openScriptEditor(n)});
+              $('[data-open-director]',el)?.addEventListener('click',e=>{e.stopPropagation();openDirectorConsole(n)});
+              $$('[data-script-preset]',el).forEach(b=>b.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();selectNode(n.id);expandedNodeId=n.id;n.scriptMode=b.dataset.scriptPreset;if(n.scriptMode==='manual'){render();setTimeout(()=>openScriptEditor(n,'shots'),0);return;}render();setTimeout(()=>$('#scriptDetailPrompt')?.focus(),0);}));
+              if(ta) ta.addEventListener('focus',()=>{expandedNodeId=n.id;selectedId=n.id;renderToolbar();renderGenerator();});'''
+          new_bindings = r'''    const ta=$('[data-text-manual]',el);
+              if(ta){
+                ta.addEventListener('pointerdown',e=>e.stopPropagation());
+                ta.addEventListener('click',e=>e.stopPropagation());
+                ta.addEventListener('input',e=>{n.text=e.target.value;n.generatedText='';n.textInputMode='manual';saveState();renderEdges();});
+                ta.addEventListener('keydown',e=>{
+                  if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();finishManualTextEdit(n);return}
+                  if(e.key==='Escape'){e.preventDefault();e.stopPropagation();finishManualTextEdit(n,{cancel:true})}
+                });
+                ta.addEventListener('blur',()=>setTimeout(()=>{if(n.textEditing&&document.activeElement!==ta)finishManualTextEdit(n)},0));
+                ta.addEventListener('focus',()=>{expandedNodeId=n.id;selectedId=n.id;toolbar.classList.add('hidden');generator.classList.add('hidden')});
+              }
+              if(n.type==='text'&&contentState==='result'){
+                $('.node-body',el)?.addEventListener('dblclick',e=>{if(e.target.closest('button,textarea'))return;e.preventDefault();e.stopPropagation();beginManualTextEdit(n)});
+              }
+              $('[data-open-script]',el)?.addEventListener('click',e=>{e.stopPropagation();openScriptEditor(n)});
+              $('[data-open-director]',el)?.addEventListener('click',e=>{e.stopPropagation();openDirectorConsole(n)});
+              $$('[data-script-preset]',el).forEach(b=>b.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();selectNode(n.id);expandedNodeId=n.id;n.scriptMode=b.dataset.scriptPreset;if(n.scriptMode==='manual'){render();setTimeout(()=>openScriptEditor(n,'shots'),0);return;}render();setTimeout(()=>$('#scriptDetailPrompt')?.focus(),0);}));'''
+          app = replace_once(app, old_bindings, new_bindings, 'manual text bindings')
+
+          text_helpers = r'''
+            function textNodeValue(n){return String(n?.text||n?.generatedText||'').trim()}
+            async function runTextTransform(n,mode,targetLanguage=''){
+              const source=textNodeValue(n);if(!source)return showToast('当前文本节点还没有内容');
+              const instructions={
+                rewrite:'在不改变核心含义与关键信息的前提下，重新组织表达，使语言更自然、有节奏，避免机械重复。只输出改写后的正文。',
+                expand:'基于原文继续扩写，补足细节、逻辑和画面感，但不要偏离原意。只输出扩写后的正文。',
+                shorten:'精简原文，删除重复和低信息密度表达，保留关键事实、逻辑与语气。只输出精简后的正文。'
+              };
+              const instruction=mode==='translate'?`将下面文本准确翻译成${targetLanguage||'英文'}，保留原有段落、语气、专有名词和信息，不要解释。只输出译文。`:instructions[mode];
+              if(!instruction)return;
+              ensureDefaultModel(n);
+              n.textEditing=false;n.textInputMode='ai';n.prompt=`${instruction}\n\n原文：\n${source}`;
+              if(!n.providerId||!n.modelId){saveState();openNativeResultComposer(n,'edit');showToast('请选择文本模型后生成');return}
+              saveState();render();
+              try{await generateForNode(n)}catch{}
+            }
+            function openTextTranslate(n){
+              modalShell('翻译文本',`<div class="feature-grid">${field('目标语言',`<select id="textTranslateTarget"><option>英文</option><option>中文</option><option>日文</option><option>韩文</option><option>法文</option><option>德文</option><option>西班牙文</option></select>`,true)}</div><div class="feature-actions"><button class="primary" id="runTextTranslate">翻译</button></div>`);
+              $('#runTextTranslate').onclick=()=>{const target=$('#textTranslateTarget').value;closeFeatureModal();runTextTransform(n,'translate',target)};
+            }
+            function createFromTextResult(n,type){
+              const source=textNodeValue(n);if(!source)return showToast('当前文本节点还没有内容');
+              const title=type==='image'?'文生图':'文生视频';
+              const next=createDerivedNode(n,type,title,source,{operation:type==='image'?'text_to_image':'text_to_video'},430);
+              if(type==='video')next.videoMode='text2video';
+              expandedNodeId=next.id;saveState();render();
+              setTimeout(()=>type==='video'?openVideoStudio(next):openImageStudio(next),0);
+            }
+          '''
+          app = replace_once(app, '  function selectedToolbarNode(){const ids=currentSelectionIds();if(ids.length!==1)return null;return state.nodes.find(n=>n.id===ids[0])||null}\n  function nodeTopBarActions(n){', '  function selectedToolbarNode(){const ids=currentSelectionIds();if(ids.length!==1)return null;return state.nodes.find(n=>n.id===ids[0])||null}\n' + text_helpers + '\n  function nodeTopBarActions(n){', 'text toolbar helpers')
+
+          app = replace_once(app, "    if(n.type==='audio')return[{label:'截取',tool:'截取',primary:true},{label:'变速',tool:'变速'},{label:'切分',tool:'切分'},{label:'改提示词',action:'edit-prompt'},{label:'重新生成',action:'rerun'},{label:'更多',action:'more'}];\n    if(n.type==='script')", "    if(n.type==='audio')return[{label:'截取',tool:'截取',primary:true},{label:'变速',tool:'变速'},{label:'切分',tool:'切分'},{label:'改提示词',action:'edit-prompt'},{label:'重新生成',action:'rerun'},{label:'更多',action:'more'}];\n    if(n.type==='text')return[{label:'改写',action:'text-rewrite',primary:true},{label:'扩写',action:'text-expand'},{label:'精简',action:'text-shorten'},{label:'翻译',action:'text-translate'},{label:'文生图',action:'text-image'},{label:'文生视频',action:'text-video'},{label:'更多',action:'more'}];\n    if(n.type==='script')", 'text toolbar actions')
+
+          app = replace_once(app, "  function openNativeResultComposer(n,mode='edit'){\n    if(!n||!['image','video','audio','text','script'].includes(n.type))return;\n    expandedNodeId=n.id;", "  function openNativeResultComposer(n,mode='edit'){\n    if(!n||!['image','video','audio','text','script'].includes(n.type))return;\n    if(n.type==='text'){n.textEditing=false;n.textInputMode='ai';}\n    expandedNodeId=n.id;", 'text result composer')
+
+          app = replace_once(app, "    if(a.action==='script-batch'){openScriptEditor(n,'batch-image');return}\n    if(a.action==='edit-prompt')", "    if(a.action==='script-batch'){openScriptEditor(n,'batch-image');return}\n    if(a.action==='text-rewrite'){runTextTransform(n,'rewrite');return}\n    if(a.action==='text-expand'){runTextTransform(n,'expand');return}\n    if(a.action==='text-shorten'){runTextTransform(n,'shorten');return}\n    if(a.action==='text-translate'){openTextTranslate(n);return}\n    if(a.action==='text-image'){createFromTextResult(n,'image');return}\n    if(a.action==='text-video'){createFromTextResult(n,'video');return}\n    if(a.action==='edit-prompt')", 'text toolbar handlers')
+
+          app = replace_once(app, "    const n=state.nodes.find(x=>x.id===expandedNodeId);if(!n||!['image','video','audio','text','script'].includes(n.type)){generator.classList.add('hidden');return}\n    const el=", "    const n=state.nodes.find(x=>x.id===expandedNodeId);if(!n||!['image','video','audio','text','script'].includes(n.type)){generator.classList.add('hidden');return}\n    if(n.type==='text'&&n.textEditing){generator.classList.add('hidden');return}\n    const el=", 'manual composer guard')
+
+          app = replace_once(app, r'''    const noModel=!m;
+              const frozen=Boolean(n.frozen);
+              generator.innerHTML=`
+                <div class="lib-gen-main">
+                  <div class="prompt-box libtv-prompt"><textarea id="promptInput" placeholder="描述你想生成的内容，输入 @ 引用画布素材…"''', r'''    const noModel=!m;
+              const frozen=Boolean(n.frozen);
+              const composerPlaceholder=n.type==='text'?'写下你想讲的故事、场景或角色设定。例如：一个来自未来的机器人，在城市屋顶看星星。':'描述你想生成的内容，输入 @ 引用画布素材…';
+              generator.innerHTML=`
+                <div class="lib-gen-main ${n.type==='text'?'text-generator-main':''}">
+                  <div class="prompt-box libtv-prompt"><textarea id="promptInput" placeholder="${escapeAttr(composerPlaceholder)}"''', 'text composer visual mode')
+
+          app = replace_once(app, "    input.addEventListener('input',e=>{n.prompt=e.target.value;saveState();if(creativeContextSettings().autoSuggest!==false)", "    input.addEventListener('input',e=>{n.prompt=e.target.value;if(n.type==='text')n.textInputMode='ai';saveState();if(creativeContextSettings().autoSuggest!==false)", 'text composer input mode')
+
+          app = replace_once(app, "    $('#generateBtn').onclick=()=>{expandedNodeId=null;generator.classList.add('hidden');renderToolbar();generateForNode(n).catch(()=>{})};", "    $('#generateBtn').onclick=()=>{if(n.type==='text'){n.textEditing=false;n.textInputMode='ai';}expandedNodeId=null;generator.classList.add('hidden');renderToolbar();saveState();generateForNode(n).catch(()=>{})};", 'text generate mode')
+
+          quick = r'''    $$('[data-text-quick]',el).forEach(b=>b.addEventListener('click',e=>{
+              e.preventDefault();e.stopPropagation();
+              const action=b.dataset.textQuick;
+              if(action==='manual'){beginManualTextEdit(n);return}
+              if(action==='video'){
+                const next=addNode('video',{x:n.x+380,y:n.y},true);
+                next.title='文生视频';next.prompt=String(n.text||n.prompt||'').trim()||'根据文本内容生成视频';next.videoMode='text2video';expandedNodeId=next.id;
+                saveState();render();setTimeout(()=>openVideoStudio(next),0);return;
+              }
+              if(action==='image'){
+                snapshot('图片反推提示词');n.textInputMode='ai';n.textEditing=false;
+                n.prompt='请分析我提供的参考图片，准确描述主体、场景、构图、镜头、光线、色彩、材质与风格，并反推一份可以复现该画面的详细生成提示词。';
+                selectedId=n.id;state.selectedIds=[n.id];state.nodes.forEach(x=>x.selected=x.id===n.id);expandedNodeId=n.id;
+                saveState();render();setTimeout(()=>openReferencePicker(n),0);return;
+              }
+              if(action==='audio'){
+                const next=addNode('audio',{x:n.x+380,y:n.y},true);next.title='文字生音乐';next.prompt=String(n.text||n.prompt||'').trim()||'根据文字内容生成音乐';
+                selectNode(next.id);expandedNodeId=next.id;saveState();render();setTimeout(()=>$('#promptInput')?.focus(),0);
+              }
+            }));'''
+          app = replace_section(app, "    $$('[data-text-quick]',el).forEach(", "\n  }\n\n  // v3.3 · Creative Context Engine:", quick, 'text quick actions')
+
+          if './styles/text-node.css' not in index:
+              anchor = '  <link rel="stylesheet" href="./styles/nodes.css" />\n'
+              if anchor not in index:
+                  raise SystemExit('text-node stylesheet anchor not found')
+              index = index.replace(anchor, anchor + '  <link rel="stylesheet" href="./styles/text-node.css" />\n', 1)
+
+          required = ['data-text-manual', "action:'text-rewrite'", "action:'text-image'", "n.textInputMode='manual'", "n.textInputMode='ai'", 'text-generator-main', '图片反推提示词']
+          missing = [item for item in required if item not in app]
+          if missing:
+              raise SystemExit('missing text-node features: ' + ', '.join(missing))
+
+          app_path.write_text(app, encoding='utf-8')
+          index_path.write_text(index, encoding='utf-8')
+          print('UI 2.3 text node implementation applied')
+          PY
+      - name: Validate app
+        working-directory: _read_123_zip_20260821_180410
+        run: |
+          npm run check
+          npm test
+      - name: Commit implementation
+        run: |
+          if git diff --quiet -- _read_123_zip_20260821_180410/app.js _read_123_zip_20260821_180410/index.html; then
+            echo 'No implementation changes produced'
+            exit 1
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add _read_123_zip_20260821_180410/app.js _read_123_zip_20260821_180410/index.html
+          git commit -m 'Implement UI 2.3 text node behavior'
+          git push origin HEAD:security/video-worker-hardening-20260825
