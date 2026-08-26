@@ -987,17 +987,14 @@
 
   function beginManualTextEdit(n){
     if(!n||n.type!=='text')return;
-    snapshot('手动编辑文本');
+    if(n.textInputMode!=='manual')snapshot('切换手动文本模式');
     const current=String(n.text||n.generatedText||'');
-    n.textEditBackup=current;
-    n.textEditBackupHtml=String(n.textHtml||'');
-    n.textEditBackupMode=n.textInputMode||'';
-    n.textEditSizeBackup={w:n.w||320,h:n.h||null};
     n.text=current;
     n.generatedText='';
     n.textHtml=n.textHtml||plainTextToManualHtml(current);
-    n.textEditing=true;
     n.textInputMode='manual';
+    // Legacy compatibility flag mirrors the persistent mode; it is never used to exit the mode.
+    n.textEditing=true;
     n.w=700;
     n.h=400;
     selectedId=n.id;
@@ -1014,24 +1011,15 @@
       if(field){const range=document.createRange();range.selectNodeContents(field);range.collapse(false);const selection=window.getSelection();selection?.removeAllRanges();selection?.addRange(range)}
     },0);
   }
-  function finishManualTextEdit(n,{cancel=false}={}){
+  function finishManualTextEdit(n){
     if(!n||n.type!=='text')return;
-    const before=String(n.textEditBackup??'');
-    const beforeHtml=String(n.textEditBackupHtml??'');
-    const after=cancel?before:String(n.text||'');
-    n.text=after;
-    n.textHtml=cancel?beforeHtml:sanitizeManualTextHtml(String(n.textHtml||''));
-    n.generatedText='';
-    n.textEditing=false;
-    n.textInputMode=cancel?(n.textEditBackupMode||'manual'):'manual';
-    if(cancel&&n.textEditSizeBackup){n.w=Number(n.textEditSizeBackup.w||320);if(n.textEditSizeBackup.h==null)delete n.h;else n.h=Number(n.textEditSizeBackup.h)}
-    n.textEditorExpanded=false;delete n.textEditorExpandedBackup;
-    delete n.textEditBackup;delete n.textEditBackupHtml;delete n.textEditBackupMode;delete n.textEditSizeBackup;
-    if(!cancel&&after.trim()&&after!==before){
-      recordNodeResultVersion(n,{text:after,providerId:'',modelId:'',modelName:'手动输入'});
-    }
+    const editor=$(`.node[data-id="${CSS.escape(String(n.id))}"] [data-text-manual]`);
+    if(editor)syncManualTextEditor(n,editor);
+    n.textInputMode='manual';
+    n.textEditing=true;
+    n.textHtml=sanitizeManualTextHtml(String(n.textHtml||plainTextToManualHtml(n.text||'')));
     saveState();
-    render();
+    renderToolbar();
   }
 
   function renderNode(n){
@@ -1041,6 +1029,7 @@
     const versions=nodeResultVersions(n),activeVersionIndex=activeNodeResultIndex(n);
     const contentState=uiV23NodeContentState(n),interactionState=(n.id===selectedId||multiSelected)?'selected':'idle',taskState=uiV23TaskState(visualStatus);
     const mediaResult=contentState==='result'&&['image','video','audio'].includes(n.type);
+    if(n.type==='text'&&n.textInputMode==='manual')n.textEditing=true;
     el.className = 'node node-'+n.type + (n.id===selectedId ? ' selected':'') + (multiSelected?' multi-selected':'') + (wfStatus?' wf-'+wfStatus:'') + (n.h?' resized-node':'') + (visualStatus?' task-'+visualStatus:'') + (n.locked?' node-locked':'') + (n.frozen?' node-frozen':'') + (contentState==='result'?' ui-v23-result-shell':'') + (mediaResult?` ui-v23-media-result ui-v23-media-${n.type}`:'');
     el.dataset.id = n.id;
     el.dataset.nodeType=n.type;
@@ -1170,6 +1159,22 @@
     }
     $('[data-node-retry]',el)?.addEventListener('click',e=>{e.stopPropagation();generateForNode(n).catch(()=>{})});
     $('[data-node-rerun]',el)?.addEventListener('click',e=>{e.stopPropagation();rerunFailedDownstream(n.id)});
+    $$('[data-text-quick]',el).forEach(b=>b.addEventListener('click',e=>{
+      e.preventDefault();e.stopPropagation();
+      const action=b.dataset.textQuick;
+      if(action==='manual'){beginManualTextEdit(n);return}
+      if(action==='video'){
+        const next=addNode('video',{x:n.x+380,y:n.y},true);next.title='文生视频';next.prompt=String(n.text||n.prompt||'').trim()||'根据文本内容生成视频';next.videoMode='text2video';
+        saveState();render();setTimeout(()=>openVideoStudio(next),0);return;
+      }
+      if(action==='image'){
+        snapshot('图片反推提示词');
+        n.textEditing=false;n.textInputMode='ai';
+        n.prompt='请分析我提供的参考图片，准确描述主体、场景、构图、镜头、光线、色彩、材质与风格，并反推一份可以复现该画面的详细生成提示词。';
+        selectedId=n.id;state.selectedIds=[n.id];state.nodes.forEach(x=>x.selected=x.id===n.id);expandedNodeId=n.id;
+        saveState();render();setTimeout(()=>openReferencePicker(n),0);return;
+      }
+    }));
     const ta=$('[data-text-manual]',el);
     if(ta){
       ta.addEventListener('pointerdown',e=>e.stopPropagation());
@@ -1177,10 +1182,10 @@
       ta.addEventListener('input',e=>syncManualTextEditor(n,e.currentTarget));
       ta.addEventListener('paste',e=>{e.preventDefault();const text=String(e.clipboardData?.getData('text/plain')||'');document.execCommand('insertText',false,text)});
       ta.addEventListener('keydown',e=>{
-        if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();syncManualTextEditor(n,e.currentTarget);finishManualTextEdit(n);return}
-        if(e.key==='Escape'){e.preventDefault();e.stopPropagation();finishManualTextEdit(n,{cancel:true})}
+        if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();syncManualTextEditor(n,e.currentTarget);return}
+        if(e.key==='Escape'){e.preventDefault();e.stopPropagation();syncManualTextEditor(n,e.currentTarget)}
       });
-      ta.addEventListener('blur',()=>setTimeout(()=>{if(n.textEditing&&!toolbar.matches(':hover'))finishManualTextEdit(n)},0));
+      ta.addEventListener('blur',e=>syncManualTextEditor(n,e.currentTarget));
     }
     $('[data-open-script]',el)?.addEventListener('click',e=>{e.stopPropagation();openScriptEditor(n)});
     $('[data-open-director]',el)?.addEventListener('click',e=>{e.stopPropagation();openDirectorConsole(n)});
@@ -1857,22 +1862,6 @@
     $('#generateBtn').onclick=()=>{expandedNodeId=null;generator.classList.add('hidden');renderToolbar();generateForNode(n).catch(()=>{})};$('#generationCostBtn')?.addEventListener('click',()=>openCostDetails([n.id]));
     $('#referenceBtn')?.addEventListener('click',()=>openReferencePicker(n));$('#creativeContextBtn')?.addEventListener('click',()=>openCreativeContextComposer(n));
     $$('[data-gen-tool]',generator).forEach(b=>b.onclick=()=>openFeatureTool(b.dataset.genTool,n));
-    $$('[data-text-quick]',el).forEach(b=>b.addEventListener('click',e=>{
-      e.preventDefault();e.stopPropagation();
-      const action=b.dataset.textQuick;
-      if(action==='manual'){beginManualTextEdit(n);return}
-      if(action==='video'){
-        const next=addNode('video',{x:n.x+380,y:n.y},true);next.title='文生视频';next.prompt=String(n.text||n.prompt||'').trim()||'根据文本内容生成视频';next.videoMode='text2video';
-        saveState();render();setTimeout(()=>openVideoStudio(next),0);return;
-      }
-      if(action==='image'){
-        snapshot('图片反推提示词');
-        n.textEditing=false;n.textInputMode='ai';
-        n.prompt='请分析我提供的参考图片，准确描述主体、场景、构图、镜头、光线、色彩、材质与风格，并反推一份可以复现该画面的详细生成提示词。';
-        selectedId=n.id;state.selectedIds=[n.id];state.nodes.forEach(x=>x.selected=x.id===n.id);expandedNodeId=n.id;
-        saveState();render();setTimeout(()=>openReferencePicker(n),0);return;
-      }
-    }));
     if(n.type==='text'&&contentState==='result'&&!n.textEditing){
       $('.node-body',el)?.addEventListener('dblclick',e=>{if(e.target.closest('button,textarea'))return;e.preventDefault();e.stopPropagation();beginManualTextEdit(n)});
     }
