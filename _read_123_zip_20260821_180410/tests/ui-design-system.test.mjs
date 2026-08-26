@@ -45,19 +45,20 @@ test('app renderNode natively owns the universal four-state node model', () => {
   assert.match(app, /el\.dataset\.uiV23Native='true'/);
   assert.match(app, /ui-v23-result-shell/);
   assert.match(app, /ui-v23-media-result/);
-  assert.match(runtime, /node\.dataset\.uiV23Native === 'true'/);
+  assert.doesNotMatch(runtime, /syncNodeState|nodeHasResult|data-task-state/);
 });
 
 test('result nodes use context toolbar by default and composer only by explicit user action', () => {
+  const app = read('app.js');
   const runtime = read('ui-v23.js');
-  assert.match(runtime, /composerOverride/);
-  assert.match(runtime, /openResultComposer/);
-  assert.match(runtime, /uiV23EditPrompt/);
-  assert.match(runtime, /uiV23Rerun/);
-  assert.match(runtime, /改提示词/);
-  assert.match(runtime, /重新生成/);
-  assert.match(runtime, /generator\?\.classList\.add\('hidden'\)/);
-  assert.match(runtime, /toolbar\.classList\.remove\('hidden'\)/);
+  assert.match(app, /uiV23NodeContentState\(clicked\)==='empty'\?finished\.id:null/);
+  assert.match(app, /function openNativeResultComposer/);
+  assert.match(app, /action:'edit-prompt'/);
+  assert.match(app, /action:'rerun'/);
+  assert.match(app, /contentState!=='result'\|\|expandedNodeId===n\.id/);
+  assert.match(app, /expandedNodeId=null;generator\.classList\.add\('hidden'\);renderToolbar\(\);generateForNode/);
+  assert.match(app, /e\.key==='Escape'&&expandedNodeId/);
+  assert.doesNotMatch(runtime, /composerOverride|openResultComposer|RESULT_TOOLBAR_CONFIG|syncInteractionSurfaces/);
 });
 
 test('result context toolbar is generated natively by media type', () => {
@@ -70,10 +71,8 @@ test('result context toolbar is generated natively by media type', () => {
   assert.match(app, /label:'截取'/);
   assert.match(app, /label:'编辑脚本'/);
   assert.match(app, /label:'打开导演台'/);
-  assert.match(app, /action:'edit-prompt'/);
-  assert.match(app, /action:'rerun'/);
-  assert.match(app, /contentState!=='result'/);
-  assert.match(runtime, /node.dataset.uiV23Native === 'true'/);
+  assert.ok(app.includes("$$('[data-top-action]',toolbar).forEach"));
+  assert.doesNotMatch(runtime, /decorateContextToolbar|createContextAction/);
   assert.match(css, /node-toolbar-image/);
   assert.match(css, /node-toolbar-video/);
   assert.match(css, /node-toolbar-audio/);
@@ -146,14 +145,15 @@ test('result-first shell and media metadata are emitted by app.js', () => {
   assert.match(css, /node.ui-v23-media-result/);
 });
 
-test('native nodes bypass legacy state decoration and no result decorator runtime remains', () => {
+test('ui-v23 is limited to asset manager enhancement', () => {
   const runtime = read('ui-v23.js');
   const connect = read('ui-connect-v23.js');
-  assert.match(runtime, /node.dataset.uiV23Native === 'true'/);
-  assert.ok(runtime.includes("const task = node.getAttribute('data-task-state') || 'idle';"));
+  assert.match(runtime, /assetManagerBtn/);
+  assert.match(runtime, /buildCanvasPanel/);
+  assert.match(runtime, /decorateAssetDrawer/);
+  assert.doesNotMatch(runtime, /composerOverride|syncNodeState|syncInteractionSurfaces|RESULT_TOOLBAR_CONFIG|openResultComposer/);
   assert.doesNotMatch(connect, /ui-result-v23.js/);
 });
-
 
 test('native result toolbar binds every generated action', () => {
   const app = read('app.js');

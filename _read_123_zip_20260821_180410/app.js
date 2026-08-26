@@ -1316,7 +1316,7 @@
       $('#scriptModelPickerBtn')?.addEventListener('click',e=>openModelPickerForNode(n,e.currentTarget,'text'));
       $('#inlineSetupScriptModel')?.addEventListener('click',()=>{if(providers.some(p=>(p.models||[]).length))window.location.href='./models.html';else openProviderModal()});
       $('#openFullScriptDetail')?.addEventListener('click',()=>openScriptEditor(n,'shots'));
-      $('#scriptGenerateBtn')?.addEventListener('click',()=>{n.sourceText=$('#scriptDetailPrompt')?.value||n.sourceText||'';if(!String(n.sourceText||'').trim())return showToast('先描述剧情或粘贴剧本');saveState();aiBreakdownScript(n)});
+      $('#scriptGenerateBtn')?.addEventListener('click',()=>{n.sourceText=$('#scriptDetailPrompt')?.value||n.sourceText||'';if(!String(n.sourceText||'').trim())return showToast('先描述剧情或粘贴剧本');saveState();expandedNodeId=null;generator.classList.add('hidden');renderToolbar();aiBreakdownScript(n)});
       return;
     }
 
@@ -1361,7 +1361,7 @@
     $('#countSelect')?.addEventListener('change',e=>{n.count=Number(e.target.value);saveState()});
     $('#durationSelect')?.addEventListener('change',e=>{n.duration=Number(e.target.value);saveState()});
     $('#resolutionSelect')?.addEventListener('change',e=>{n.resolution=e.target.value;saveState()});
-    $('#generateBtn').onclick=()=>generateForNode(n);$('#generationCostBtn')?.addEventListener('click',()=>openCostDetails([n.id]));
+    $('#generateBtn').onclick=()=>{expandedNodeId=null;generator.classList.add('hidden');renderToolbar();generateForNode(n).catch(()=>{})};$('#generationCostBtn')?.addEventListener('click',()=>openCostDetails([n.id]));
     $('#referenceBtn')?.addEventListener('click',()=>openReferencePicker(n));$('#creativeContextBtn')?.addEventListener('click',()=>openCreativeContextComposer(n));
     $$('[data-gen-tool]',generator).forEach(b=>b.onclick=()=>openFeatureTool(b.dataset.genTool,n));
     $$('[data-text-quick]',el).forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();if(b.dataset.textQuick==='manual'){selectNode(n.id);expandedNodeId=n.id;render();setTimeout(()=>$('#promptInput')?.focus(),0);return}if(b.dataset.textQuick==='video'){const next=addNode('video',{x:n.x+380,y:n.y},true);next.title='文生视频';next.prompt=String(n.text||n.prompt||'').trim()||'根据文本内容生成视频';next.videoMode='text2video';saveState();render();setTimeout(()=>openVideoStudio(next),0);return}if(b.dataset.textQuick==='image'){const next=addNode('image',{x:n.x+380,y:n.y},true);next.title='图片反推提示词';next.prompt=String(n.text||n.prompt||'').trim()||'根据图片生成提示词';saveState();render();setTimeout(()=>openImageStudio(next),0);return}if(b.dataset.textQuick==='audio'){const next=addNode('audio',{x:n.x+380,y:n.y},true);next.title='文字生音乐';next.prompt=String(n.text||n.prompt||'').trim()||'根据文字生成音乐';selectNode(next.id);expandedNodeId=next.id;saveState();render();setTimeout(()=>$('#promptInput')?.focus(),0);return}}));
@@ -2222,7 +2222,7 @@
       // Shift-click is a true multi-select action. Do not collapse the selection on pointerup.
       expandedNodeId=null;
       state.nodes.forEach(n=>n.selected=n.id===selectedId);
-    }else{expandedNodeId=finished.id;selectedId=finished.id;state.selectedIds=[finished.id];state.nodes.forEach(n=>n.selected=n.id===finished.id);}
+    }else{const clicked=state.nodes.find(n=>n.id===finished.id);expandedNodeId=clicked&&uiV23NodeContentState(clicked)==='empty'?finished.id:null;selectedId=finished.id;state.selectedIds=[finished.id];state.nodes.forEach(n=>n.selected=n.id===finished.id);}
     render();
   }
 
@@ -3614,6 +3614,7 @@
     if(e.key==='Escape'&&edgeReconnect){e.preventDefault();cleanupEdgeReconnect();return}
     if(e.key==='Escape'&&connectingFrom){e.preventDefault();cleanupConnectionDrag();return}
     if(e.key==='Escape'&&marquee){e.preventDefault();cancelMarquee();return}
+    if(e.key==='Escape'&&expandedNodeId){e.preventDefault();expandedNodeId=null;generator.classList.add('hidden');renderToolbar();return}
     if(!isTypingTarget()&&!e.metaKey&&!e.ctrlKey&&!e.altKey){
       if(e.key.toLowerCase()==='v'){e.preventDefault();setInteractionMode('move');hideMenus();return}
       if(e.key.toLowerCase()==='h'){e.preventDefault();setInteractionMode('grab');hideMenus();return}
