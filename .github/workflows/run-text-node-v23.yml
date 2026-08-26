@@ -52,6 +52,8 @@ jobs:
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add _read_123_zip_20260821_180410/app.js
+          git add _read_123_zip_20260821_180410/app.js \
+                  _read_123_zip_20260821_180410/styles/text-node.css \
+                  _read_123_zip_20260821_180410/tests/text-node-v23.test.mjs
           git commit -m 'Apply UI 2.3 text node behavior'
           git push origin HEAD:security/video-worker-hardening-20260825
