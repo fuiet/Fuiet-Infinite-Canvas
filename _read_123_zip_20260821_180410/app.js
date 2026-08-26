@@ -988,7 +988,11 @@
       const media=n.outputUrl?`<div class="media-clip image-node-stage" style="${ratioStyle}"><img class="node-media-img" loading="lazy" decoding="async" style="${mediaTransformStyle(n)}" src="${escapeAttr(n.outputUrl)}" alt="${escapeAttr(n.title||'图片')}"/></div>`:n.content?`<div class="node-content-img image-node-stage" style="background:${themeBg(n.content)};${mediaTransformStyle(n)}"><div class="job-badge">image</div></div>`:`<div class="image-node-placeholder image-node-stage"><div class="big-icon">▧</div></div>`;
       body=`<div class="image-node-shell ${emptyImage?'is-empty':'has-output'}">${uploadAction}${media}${quick}</div>`;
     } else if(n.type==='video'){
-      body = n.outputUrl ? `<video class="node-media-video" src="${escapeAttr(n.outputUrl)}" controls preload="${n.id===selectedId||n.id===expandedNodeId?'metadata':'none'}" ${n.muted?'muted':''}></video>` : n.content ? `<div class="node-content-video" style="background:${themeBg(n.content)}"><div class="play-icon">▶</div><div class="job-badge">video</div></div>` : `<div class="node-empty"><div class="big-icon">▷</div><div>拖入视频或点击生成</div></div>`;
+      const emptyVideo=contentState==='empty';
+      const quick=emptyVideo?`<div class="video-node-try"><div class="video-node-try-label">尝试：</div><button type="button" data-video-quick="text"><span class="video-quick-icon">T</span><b>文生视频</b></button><button type="button" data-video-quick="image"><span class="video-quick-icon">▧</span><b>图生视频</b></button><button type="button" data-video-quick="frame"><span class="video-quick-icon">↔</span><b>首尾帧生视频</b></button></div>`:'';
+      const uploadAction=emptyVideo&&interactionState==='selected'?`<button type="button" class="video-node-upload" data-video-node-upload>${uiIcon('plus')}<span>上传</span></button>`:'';
+      const media=n.outputUrl?`<div class="media-clip video-node-stage"><video class="node-media-video" src="${escapeAttr(n.outputUrl)}" controls playsinline preload="${n.id===selectedId||n.id===expandedNodeId?'metadata':'none'}" ${n.muted?'muted':''}></video></div>`:n.content?`<div class="node-content-video video-node-stage" style="background:${themeBg(n.content)}"><div class="play-icon">▶</div><div class="job-badge">video</div></div>`:`<div class="video-node-placeholder video-node-stage"><div class="big-icon">▷</div></div>`;
+      body=`<div class="video-node-shell ${emptyVideo?'is-empty':'has-output'}">${uploadAction}${media}${quick}</div>`;
     } else if(n.type==='text'){
       const textValue=String(n.text||n.generatedText||'');
       if(n.textEditing){
@@ -1056,6 +1060,20 @@
       el.addEventListener('dragover',e=>{const hasImage=[...(e.dataTransfer?.items||[])].some(it=>it.kind==='file'&&String(it.type||'').startsWith('image/'));if(!hasImage)return;e.preventDefault();e.stopPropagation();el.classList.add('image-file-drop-target')});
       el.addEventListener('dragleave',()=>el.classList.remove('image-file-drop-target'));
       el.addEventListener('drop',e=>{const file=[...(e.dataTransfer?.files||[])].find(f=>String(f.type||'').startsWith('image/'));if(!file)return;e.preventDefault();e.stopPropagation();el.classList.remove('image-file-drop-target');applyLocalImageToNode(n,file)});
+    }
+    $$('[data-video-quick]',el).forEach(b=>b.addEventListener('click',e=>{
+      e.preventDefault();e.stopPropagation();if(contentState!=='empty')return;
+      selectedId=n.id;state.selectedIds=[n.id];state.nodes.forEach(x=>x.selected=x.id===n.id);expandedNodeId=n.id;
+      const mode=b.dataset.videoQuick;
+      if(mode==='text'){n.videoMode='text2video';n.prompt=n.prompt||'描述主体动作、镜头运动、节奏、环境和声音。';saveState();render();setTimeout(()=>$('#promptInput')?.focus(),0);return}
+      if(mode==='image'){n.videoMode='image2video';n.prompt=n.prompt||'基于参考图片生成连续自然的视频，保持主体身份、服装、场景和构图连续。';saveState();render();setTimeout(()=>openReferencePicker(n),0);return}
+      if(mode==='frame'){n.videoMode='frame2video';n.prompt=n.prompt||'根据首帧与尾帧生成连贯自然的镜头运动和主体动作。';saveState();render();setTimeout(()=>openVideoGeneratorTool('首尾帧',n),0)}
+    }));
+    $('[data-video-node-upload]',el)?.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();openVideoNodeUpload(n)});
+    if(n.type==='video'&&contentState==='empty'){
+      el.addEventListener('dragover',e=>{const hasVideo=[...(e.dataTransfer?.items||[])].some(it=>it.kind==='file'&&String(it.type||'').startsWith('video/'));if(!hasVideo)return;e.preventDefault();e.stopPropagation();el.classList.add('video-file-drop-target')});
+      el.addEventListener('dragleave',()=>el.classList.remove('video-file-drop-target'));
+      el.addEventListener('drop',e=>{const file=[...(e.dataTransfer?.files||[])].find(f=>String(f.type||'').startsWith('video/'));if(!file)return;e.preventDefault();e.stopPropagation();el.classList.remove('video-file-drop-target');applyLocalVideoToNode(n,file)});
     }
     $('[data-node-retry]',el)?.addEventListener('click',e=>{e.stopPropagation();generateForNode(n).catch(()=>{})});
     $('[data-node-rerun]',el)?.addEventListener('click',e=>{e.stopPropagation();rerunFailedDownstream(n.id)});
@@ -1284,11 +1302,50 @@
     const el=$(`.node[data-id="${CSS.escape(String(n.id))}"] .media-clip,.node[data-id="${CSS.escape(String(n.id))}"] .node-content-img`);if(!el)return showToast('当前图片还没有结果');if(el.requestFullscreen)el.requestFullscreen().catch(()=>showToast('浏览器未允许全屏'));else showToast('当前浏览器不支持全屏');
   }
 
+  async function applyLocalVideoToNode(n,file){
+    if(!n||n.type!=='video'||!file||!String(file.type||'').startsWith('video/'))return;
+    snapshot('上传视频到节点');
+    const localUrl=URL.createObjectURL(file);
+    n.outputUrl=localUrl;
+    n.localFileName=file.name||'video';
+    n.localMime=file.type||'video/mp4';
+    n.content='';
+    n.uploading=Boolean(backendOnline);
+    n.taskStatus='succeeded';
+    n.taskProgress=100;
+    n.w=Math.max(Number(n.w)||0,620);
+    if(file.name)n.title=file.name;
+    const version=recordNodeResultVersion(n,{outputUrl:localUrl,providerId:'',modelId:'',modelName:'本地上传'});
+    selectedId=n.id;state.selectedIds=[n.id];state.nodes.forEach(x=>x.selected=x.id===n.id);expandedNodeId=null;
+    saveState();render();
+    if(!backendOnline)return;
+    try{
+      const up=await uploadBlob(file,file.name||`video-${Date.now()}.mp4`);
+      n.outputUrl=up.url;n.serverMedia=true;n.uploading=false;
+      if(version){version.outputUrl=up.url;version.modelName='本地上传'}
+      try{URL.revokeObjectURL(localUrl)}catch{}
+      saveState();render();
+    }catch(err){n.uploading=false;saveState();render();showToast('视频已放入节点，但服务器保存失败，当前素材仅本次会话可用')}
+  }
+  function openVideoNodeUpload(n){
+    const input=document.createElement('input');input.type='file';input.accept='video/*';input.onchange=()=>{const f=input.files?.[0];if(f)applyLocalVideoToNode(n,f)};input.click();
+  }
+  function videoToolbarGlyph(action){
+    return ({'video-hd':'HD','video-reshoot':'↺','video-frames':'▦','video-trim':'✂','video-audio':'♫','video-extend':'→','video-download':'↓','video-fullscreen':'↗'})[action]||'•';
+  }
+  function downloadVideoNode(n){
+    if(!n?.outputUrl)return showToast('当前视频还没有可下载结果');
+    const a=document.createElement('a');a.href=n.outputUrl;a.download=(n.localFileName||n.title||'video').replace(/[\\/:*?"<>|]+/g,'-');a.rel='noopener';document.body.appendChild(a);a.click();a.remove();
+  }
+  function fullscreenVideoNode(n){
+    const el=$(`.node[data-id="${CSS.escape(String(n.id))}"] video`);if(!el)return showToast('当前视频还没有结果');if(el.requestFullscreen)el.requestFullscreen().catch(()=>showToast('浏览器未允许全屏'));else showToast('当前浏览器不支持全屏');
+  }
+
   function selectedToolbarNode(){const ids=currentSelectionIds();if(ids.length!==1)return null;return state.nodes.find(n=>n.id===ids[0])||null}
   function nodeTopBarActions(n){
     if(!n)return[];
     if(n.type==='image')return[{label:'人像后期调节',action:'image-portrait',primary:true},{label:'全景',tool:'全景',action:'image-panorama'},{label:'多角度',tool:'多角度',action:'image-angle'},{label:'打光',tool:'打光',action:'image-light'},{label:'九宫格',tool:'九宫格',action:'image-grid'},{label:'高清',tool:'高清',action:'image-hd'},{label:'元素编辑',action:'image-element'},{label:'图层分离',action:'image-layers'},{label:'宫格切分',tool:'宫格切分',action:'image-split'},{label:'画笔',action:'image-brush',iconOnly:true},{label:'下载',action:'image-download',iconOnly:true},{label:'全屏',action:'image-fullscreen',iconOnly:true}];
-    if(n.type==='video')return[{label:'编辑视频',tool:'视频工作台',primary:true},{label:'续写',tool:'智能续写'},{label:'合成',tool:'视频合成'},{label:'改提示词',action:'edit-prompt'},{label:'重新生成',action:'rerun'},{label:'更多',action:'more'}];
+    if(n.type==='video')return[{label:'高清',tool:'高清',action:'video-hd',primary:true},{label:'片段重拍',tool:'片段重拍',action:'video-reshoot'},{label:'提帧',tool:'逐帧拉片',action:'video-frames'},{label:'剪辑',tool:'剪辑',action:'video-trim'},{label:'音频分离',tool:'分离音视频',action:'video-audio'},{label:'续写',tool:'智能续写',action:'video-extend'},{label:'下载',action:'video-download',iconOnly:true},{label:'全屏',action:'video-fullscreen',iconOnly:true}];
     if(n.type==='audio')return[{label:'截取',tool:'截取',primary:true},{label:'变速',tool:'变速'},{label:'切分',tool:'切分'},{label:'改提示词',action:'edit-prompt'},{label:'重新生成',action:'rerun'},{label:'更多',action:'more'}];
     if(n.type==='script')return[{label:'编辑脚本',tool:'打开脚本',primary:true},{label:'看板',tool:'整集看板'},{label:'批量生成',action:'script-batch'},{label:'改生成提示',action:'edit-prompt'},{label:'重新生成',action:'rerun'},{label:'更多',action:'more'}];
     if(n.type==='director')return[{label:'打开导演台',tool:'打开导演台',primary:true},{label:'截图',tool:'截图'},{label:'更多',action:'more'}];
@@ -1310,6 +1367,8 @@
     if(a.action==='image-layers'){sendImageLayerSeparation(n);return}
     if(a.action==='image-download'){downloadImageNode(n);return}
     if(a.action==='image-fullscreen'){fullscreenImageNode(n);return}
+    if(a.action==='video-download'){downloadVideoNode(n);return}
+    if(a.action==='video-fullscreen'){fullscreenVideoNode(n);return}
     if(a.action==='edit-prompt'){openNativeResultComposer(n,'edit');return}
     if(a.action==='rerun'){openNativeResultComposer(n,'rerun');return}
     if(a.action==='duplicate'){duplicateSelection(n.id,false);return}
@@ -1331,11 +1390,11 @@
     const nodeEl=$(el);if(!nodeEl){toolbar.classList.add('hidden');return}
     const r=nodeEl.getBoundingClientRect(),actions=nodeTopBarActions(n);
     toolbar.classList.remove('node-toolbar-text','node-toolbar-image','node-toolbar-video','node-toolbar-audio','node-toolbar-script','node-toolbar-director');toolbar.classList.add('node-toolbar-media','node-toolbar-'+n.type);toolbar.dataset.mediaType=n.type;
-    if(n.type==='image'){
-      const estimatedWidth=Math.min(window.innerWidth-32,Math.max(760,actions.length*68));
+    if(n.type==='image'||n.type==='video'){
+      const estimatedWidth=Math.min(window.innerWidth-32,Math.max(n.type==='image'?760:620,actions.length*68));
       toolbar.style.left=Math.max(16,Math.min(window.innerWidth-estimatedWidth-16,r.left+r.width/2-estimatedWidth/2))+'px';
       toolbar.style.top=Math.max(16,r.top-58)+'px';
-      toolbar.innerHTML=actions.map((a,i)=>`<button class="tool-btn ${a.primary?'primary':''} ${a.iconOnly?'icon-only':''}" data-top-action="${i}" title="${escapeAttr(a.label)}"><span class="tool-glyph">${imageToolbarGlyph(a.action||'')}</span>${a.iconOnly?'':`<span>${escapeHtml(a.label)}</span>`}${a.action==='image-portrait'?'<span class="tool-arrow">⌄</span>':''}</button>`).join('');
+      toolbar.innerHTML=actions.map((a,i)=>`<button class="tool-btn ${a.primary?'primary':''} ${a.iconOnly?'icon-only':''}" data-top-action="${i}" title="${escapeAttr(a.label)}"><span class="tool-glyph">${n.type==='image'?imageToolbarGlyph(a.action||''):videoToolbarGlyph(a.action||'')}</span>${a.iconOnly?'':`<span>${escapeHtml(a.label)}</span>`}${a.action==='image-portrait'?'<span class="tool-arrow">⌄</span>':''}</button>`).join('');
       toolbar.classList.remove('hidden');
       $$('[data-top-action]',toolbar).forEach(b=>b.onclick=()=>runTopBarAction(n,actions[Number(b.dataset.topAction)],b));return;
     }
@@ -1442,18 +1501,19 @@
   }
 
   function positionGeneratorBelowNode(n,el,desiredWidth){
-    const gap=12,edge=16,dockReserve=84,r=el.getBoundingClientRect(),isText=n?.type==='text',isImage=n?.type==='image';
+    const gap=12,edge=16,dockReserve=84,r=el.getBoundingClientRect(),isText=n?.type==='text',isImage=n?.type==='image',isVideo=n?.type==='video';
     generator.dataset.nodeType=n?.type||'';
     generator.classList.toggle('text-generator',isText);
     generator.classList.toggle('image-generator',isImage);
-    if(isText||isImage){
-      const width=isImage?820:594,height=isImage?246:142,bottomLimit=window.innerHeight-dockReserve-edge;
+    generator.classList.toggle('video-generator',isVideo);
+    if(isText||isImage||isVideo){
+      const width=isImage||isVideo?820:594,height=isImage?246:isVideo?258:142,bottomLimit=window.innerHeight-dockReserve-edge;
       generator.style.width=width+'px';
       generator.style.minWidth=width+'px';
       generator.style.maxWidth=width+'px';
       generator.style.height=height+'px';
       generator.style.minHeight=height+'px';
-      generator.style.maxHeight=isImage?height+'px':'none';
+      generator.style.maxHeight=isImage||isVideo?height+'px':'none';
       generator.style.overflow='visible';
       const centered=r.left+r.width/2-width/2;
       generator.style.left=Math.max(edge,Math.min(window.innerWidth-width-edge,centered))+'px';
@@ -1542,6 +1602,45 @@
       $$('[data-image-ref-slot]',generator).forEach(b=>b.onclick=()=>openImageReferenceSlotPicker(n,b.dataset.imageRefSlot,b.dataset.imageRefSlot==='style_reference'?'选择风格参考':b.dataset.imageRefSlot==='character_reference'?'选择人物 / 主体参考':'选择图像参考'));
       $('#imageCameraBtn')?.addEventListener('click',()=>openImageTool('多角度',n));
       $('#imageGenExpand')?.addEventListener('click',()=>openImageStudio(n));
+      $('#generationCostBtn')?.addEventListener('click',()=>openCostDetails([n.id]));
+      $('#generateBtn').onclick=()=>{expandedNodeId=null;generator.classList.add('hidden');renderToolbar();generateForNode(n).catch(()=>{})};
+      return;
+    }
+    if(n.type==='video'){
+      const modes=videoModes;
+      generator.innerHTML=`<div class="lib-gen-main video-generator-main">
+        <div class="video-gen-top">
+          <button type="button" class="video-ref-slot" id="videoReferenceBtn"><span class="slot-icon">＋</span><span>参考${refs.length?` ${refs.length}`:''}</span></button>
+          <button type="button" class="video-ref-slot" id="videoFramesBtn"><span class="slot-icon">↔</span><span>首尾帧</span></button>
+          <button type="button" class="video-gen-action" id="videoMotionBtn">${uiIcon('reframe')}<span>运镜</span></button>
+          <div class="video-gen-spacer"></div>
+          <span class="video-mode-label">${escapeHtml(videoModeLabel(n.videoMode||modes[0]?.key))}</span>
+        </div>
+        <div class="prompt-box video-prompt-box"><textarea id="promptInput" placeholder="描述动作、机位、运镜、节奏、环境和声音，按 / 呼出指令，@引用素材" ${frozen?'disabled':''}>${escapeHtml(n.prompt||'')}</textarea></div>
+        <div class="video-gen-controls">
+          <button id="modelPickerBtn" class="model-pill ${noModel?'needs-model':''}"><span class="model-dot"></span><b>${escapeHtml(modelLabel)}</b><i>${uiIcon('chevronDown')}</i></button>
+          <select id="videoModeSelect" class="video-gen-select" title="生成方式">${modes.map(v=>`<option value="${escapeAttr(v.key)}" ${normalizeVideoModeKey(n.videoMode||modes[0]?.key)===v.key?'selected':''}>${escapeHtml(v.label)}</option>`).join('')}</select>
+          <select id="ratioSelect" class="video-gen-select" title="画幅比">${optionList(ratios,n.aspectRatio||ratios[0])}</select>
+          <select id="durationSelect" class="video-gen-select" title="时长">${durations.map(x=>`<option value="${x}" ${Number(n.duration||durations[0])===Number(x)?'selected':''}>${x}s</option>`).join('')}</select>
+          <select id="resolutionSelect" class="video-gen-select" title="分辨率">${optionList(resolutions,n.resolution||resolutions[0])}</select>
+          <div class="video-gen-spacer"></div>${costBadgeHtml(n)}
+          <button type="button" class="video-generate-btn" id="generateBtn" ${noModel||frozen?'disabled':''} title="生成">${uiIcon('next')}</button>
+        </div>
+        ${noModel?`<button class="inline-setup-model" id="inlineSetupModel">还没有视频模型，点击添加</button>`:''}
+      </div>`;
+      generator.classList.remove('hidden');
+      positionGeneratorBelowNode(n,el,desiredWidth);
+      const input=$('#promptInput');
+      input?.addEventListener('input',e=>{n.prompt=e.target.value;saveState()});
+      $('#modelPickerBtn')?.addEventListener('click',e=>openModelPickerForNode(n,e.currentTarget));
+      $('#inlineSetupModel')?.addEventListener('click',()=>{if(providers.some(p=>(p.models||[]).length))window.location.href='./models.html';else openProviderModal()});
+      $('#videoModeSelect')?.addEventListener('change',e=>{n.videoMode=normalizeVideoModeKey(e.target.value);saveState();renderGenerator()});
+      $('#ratioSelect')?.addEventListener('change',e=>{n.aspectRatio=e.target.value;saveState()});
+      $('#durationSelect')?.addEventListener('change',e=>{n.duration=Number(e.target.value);saveState()});
+      $('#resolutionSelect')?.addEventListener('change',e=>{n.resolution=e.target.value;saveState()});
+      $('#videoReferenceBtn')?.addEventListener('click',()=>openReferencePicker(n));
+      $('#videoFramesBtn')?.addEventListener('click',()=>openVideoGeneratorTool('首尾帧',n));
+      $('#videoMotionBtn')?.addEventListener('click',()=>openVideoGeneratorTool('运镜预设',n));
       $('#generationCostBtn')?.addEventListener('click',()=>openCostDetails([n.id]));
       $('#generateBtn').onclick=()=>{expandedNodeId=null;generator.classList.add('hidden');renderToolbar();generateForNode(n).catch(()=>{})};
       return;

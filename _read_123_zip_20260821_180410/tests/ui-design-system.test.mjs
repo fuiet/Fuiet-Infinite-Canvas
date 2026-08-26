@@ -72,7 +72,9 @@ test('result context toolbar is generated natively by media type', () => {
   assert.match(app, /label:'打光'/);
   assert.match(app, /label:'九宫格'/);
   assert.match(app, /label:'高清'/);
-  assert.match(app, /label:'编辑视频'/);
+  assert.match(app, /label:'片段重拍'/);
+  assert.match(app, /label:'提帧'/);
+  assert.match(app, /label:'音频分离'/);
   assert.match(app, /label:'截取'/);
   assert.match(app, /label:'编辑脚本'/);
   assert.match(app, /label:'打开导演台'/);
