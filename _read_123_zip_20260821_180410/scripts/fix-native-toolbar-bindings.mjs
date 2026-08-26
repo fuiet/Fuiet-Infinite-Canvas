@@ -12,7 +12,7 @@ const fixes = [
 for (const [from, to] of fixes) {
   const count = app.split(from).length - 1;
   if (count !== 1) throw new Error(`Expected one toolbar binding match for ${from}, got ${count}`);
-  app = app.replace(from, to);
+  app = app.split(from).join(to);
 }
 
 const marker = "\ntest('native result toolbar binds every generated action'";
