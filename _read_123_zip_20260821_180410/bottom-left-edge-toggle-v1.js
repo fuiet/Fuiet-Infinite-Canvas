@@ -16,6 +16,8 @@ minimapBtn.insertAdjacentElement('afterend',btn);
 const style=document.createElement('style');
 style.id='edgeVisibilityToolV1Styles';
 style.textContent=`
+.bottom-left,.bottom-left.asset-ready{background:transparent!important;border:0!important;box-shadow:none!important;border-radius:0!important;padding:0!important;backdrop-filter:none!important;outline:none!important}
+.bottom-left::before,.bottom-left::after{display:none!important;content:none!important}
 #edgeVisibilityBtn{position:relative;width:30px!important;height:30px!important;display:grid!important;place-items:center!important;padding:0!important;border:0!important;border-radius:7px!important;background:transparent!important;color:#d7d7d7!important;font-size:0!important}
 #edgeVisibilityBtn:hover,#edgeVisibilityBtn.active,#edgeVisibilityBtn:focus-visible{background:#343534!important;color:#fff!important;outline:none!important}
 #edgeVisibilityBtn svg{width:18px!important;height:18px!important;fill:none!important;stroke:currentColor!important;stroke-width:1.8!important;stroke-linecap:round!important;stroke-linejoin:round!important}
