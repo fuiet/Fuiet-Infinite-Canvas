@@ -30,15 +30,16 @@ jobs:
           node --check app.js
           node --check ui-v23.js
           node --check ui-connect-v23.js
+          test ! -f ui-result-v23.js
           npm test
       - name: Commit native toolbar and metadata
         run: |
-          if git diff --quiet -- _read_123_zip_20260821_180410/app.js _read_123_zip_20260821_180410/ui-v23.js _read_123_zip_20260821_180410/ui-connect-v23.js _read_123_zip_20260821_180410/index.html; then
+          if git diff --quiet -- _read_123_zip_20260821_180410/app.js _read_123_zip_20260821_180410/ui-v23.js _read_123_zip_20260821_180410/ui-connect-v23.js _read_123_zip_20260821_180410/index.html _read_123_zip_20260821_180410/tests/ui-design-system.test.mjs _read_123_zip_20260821_180410/ui-result-v23.js; then
             echo 'No UI changes produced'
             exit 1
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add _read_123_zip_20260821_180410/app.js _read_123_zip_20260821_180410/ui-v23.js _read_123_zip_20260821_180410/ui-connect-v23.js _read_123_zip_20260821_180410/index.html
+          git add -A _read_123_zip_20260821_180410/app.js _read_123_zip_20260821_180410/ui-v23.js _read_123_zip_20260821_180410/ui-connect-v23.js _read_123_zip_20260821_180410/index.html _read_123_zip_20260821_180410/tests/ui-design-system.test.mjs _read_123_zip_20260821_180410/ui-result-v23.js
           git commit -m 'Native UI 2.3 context toolbar and media metadata'
           git push origin HEAD:security/video-worker-hardening-20260825
