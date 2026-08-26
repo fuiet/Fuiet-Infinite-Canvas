@@ -61,16 +61,11 @@ if "a.action==='text-rewrite'" not in app:
 '''
     app = replace_once(app, marker, marker + handlers, 'text toolbar handlers')
 
-# 4) Text generator always stays below its text node. It never flips above when
-# viewport space is insufficient; its fixed 594 x 142 screen-space size remains unchanged.
-text_below_marker = "      if(isText){\n        generator.style.top=top+'px';\n        return;\n      }"
-if text_below_marker not in app:
-    old_positioning = """      let top=r.bottom+gap;
-      if(top+height>bottomLimit)top=r.top-gap-height;
-      top=Math.max(48,Math.min(bottomLimit-height,top));
-      generator.style.top=top+'px';
-      return;"""
-    new_positioning = """      let top=r.bottom+gap;
+# 4) Every node generator always stays below its node. No generator may flip
+# above the node or be moved upward because viewport space is insufficient.
+all_fixed_below = "      generator.style.top=(r.bottom+gap)+'px';\n      return;"
+if all_fixed_below not in app:
+    old_fixed_positioning = """      let top=r.bottom+gap;
       if(isText){
         generator.style.top=top+'px';
         return;
@@ -79,7 +74,18 @@ if text_below_marker not in app:
       top=Math.max(48,Math.min(bottomLimit-height,top));
       generator.style.top=top+'px';
       return;"""
-    app = replace_once(app, old_positioning, new_positioning, 'text generator fixed-below positioning')
+    new_fixed_positioning = """      generator.style.top=(r.bottom+gap)+'px';
+      return;"""
+    app = replace_once(app, old_fixed_positioning, new_fixed_positioning, 'all fixed generator below-node positioning')
+
+old_generic_positioning = """    const available=Math.max(96,window.innerHeight-r.bottom-gap-edge),safeTop=Math.max(54,window.innerHeight-dockReserve-available);
+    generator.style.top=Math.min(r.bottom+gap,safeTop)+'px';
+    generator.style.maxHeight=available+'px';"""
+new_generic_positioning = """    const available=Math.max(96,window.innerHeight-r.bottom-gap-edge);
+    generator.style.top=(r.bottom+gap)+'px';
+    generator.style.maxHeight=available+'px';"""
+if old_generic_positioning in app:
+    app = replace_once(app, old_generic_positioning, new_generic_positioning, 'generic generator below-node positioning')
 
 app_path.write_text(app, encoding='utf-8')
 print('Applied UI 2.3 text node migration.')
