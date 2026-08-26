@@ -48,7 +48,7 @@ test('result nodes use context toolbar by default and composer only by explicit 
   assert.match(runtime, /uiV23Rerun/);
   assert.match(runtime, /改提示词/);
   assert.match(runtime, /重新生成/);
-  assert.match(runtime, /generator\.classList\.add\('hidden'\)/);
+  assert.match(runtime, /generator\?\.classList\.add\('hidden'\)/);
   assert.match(runtime, /toolbar\.classList\.remove\('hidden'\)/);
 });
 
