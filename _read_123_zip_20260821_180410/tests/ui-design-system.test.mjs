@@ -68,6 +68,19 @@ test('asset manager implements canvas and asset tabs', () => {
   assert.match(runtime, /decorateAssetDrawer/);
 });
 
+test('bottom dock exposes a dedicated connect mode and reuses port drag mechanics', () => {
+  const html = read('index.html');
+  const runtime = read('ui-connect-v23.js');
+  const css = read('styles/connections.css');
+  assert.match(html, /data-dock-action="connect"/);
+  assert.match(html, /ui-connect-v23\.js/);
+  assert.doesNotMatch(html, /data-dock-action="workflow"/);
+  assert.match(runtime, /setConnectMode/);
+  assert.match(runtime, /node-port\.out/);
+  assert.match(runtime, /拖动节点右侧/);
+  assert.match(css, /ui-connect-mode/);
+});
+
 test('generated progress remains visible on the node while task infrastructure is hidden', () => {
   const nodes = read('styles/nodes.css');
   const desktop = read('styles/desktop.css');
