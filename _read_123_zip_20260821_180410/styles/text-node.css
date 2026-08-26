@@ -299,3 +299,126 @@
   background:rgba(129,152,217,.14);
   color:var(--ui-text-1);
 }
+
+
+/* Text node manual editor v2.4 */
+.node.node-text.text-node-editing{
+  min-height:400px;
+  border:1px solid #8f928f;
+  border-radius:20px;
+  background:#151616;
+  box-shadow:none;
+}
+.node.node-text.text-node-editing:hover,
+.node.node-text.text-node-editing.selected,
+.node.node-text.text-node-editing[data-interaction-state="selected"]{
+  border-color:#a4a7a4;
+  box-shadow:none;
+}
+.node.node-text.text-node-editing>.node-body{
+  min-height:398px;
+  height:100%;
+  border-radius:inherit;
+  background:#151616;
+  overflow:hidden;
+}
+.node.node-text.text-node-editing .text-node-shell.is-manual-editing{
+  min-height:398px;
+  height:100%;
+  padding:24px 30px 26px;
+  background:#151616;
+}
+.node.node-text.text-node-editing .text-node-editor{
+  width:100%;
+  min-height:344px;
+  height:100%;
+  padding:0;
+  border:0;
+  outline:0;
+  background:transparent;
+  color:#e6e6e3;
+  caret-color:#e6e6e3;
+  font:400 18px/1.65 var(--ui-font-sans);
+  white-space:normal;
+  overflow:auto;
+  overflow-wrap:anywhere;
+  user-select:text;
+  scrollbar-width:thin;
+  scrollbar-color:#454846 transparent;
+}
+.node.node-text.text-node-editing .text-node-editor:empty::before{
+  content:attr(data-placeholder);
+  color:#46505a;
+  pointer-events:none;
+}
+.node.node-text.text-node-editing .text-node-editor h1,
+.text-node-preview.is-rich-text h1{margin:0 0 14px;font:700 30px/1.3 var(--ui-font-sans)}
+.node.node-text.text-node-editing .text-node-editor h2,
+.text-node-preview.is-rich-text h2{margin:0 0 12px;font:700 24px/1.35 var(--ui-font-sans)}
+.node.node-text.text-node-editing .text-node-editor h3,
+.text-node-preview.is-rich-text h3{margin:0 0 10px;font:650 20px/1.4 var(--ui-font-sans)}
+.node.node-text.text-node-editing .text-node-editor p,
+.text-node-preview.is-rich-text p{margin:0 0 10px}
+.node.node-text.text-node-editing .text-node-editor ul,
+.node.node-text.text-node-editing .text-node-editor ol,
+.text-node-preview.is-rich-text ul,
+.text-node-preview.is-rich-text ol{margin:8px 0 10px;padding-left:24px}
+.node.node-text.text-node-editing .text-node-editor blockquote,
+.text-node-preview.is-rich-text blockquote{margin:10px 0;padding-left:14px;border-left:2px solid #4d514f;color:var(--ui-text-2)}
+.node.node-text.text-node-editing .text-node-editor hr,
+.text-node-preview.is-rich-text hr{margin:14px 0;border:0;border-top:1px solid #464946}
+.text-node-preview.is-rich-text{white-space:normal}
+
+.node-toolbar.node-toolbar-text-editor{
+  width:536px;
+  min-width:536px;
+  height:50px;
+  min-height:50px;
+  display:flex;
+  align-items:center;
+  gap:2px;
+  padding:7px 10px;
+  border:1px solid #343735;
+  border-radius:12px;
+  background:#262827;
+  box-shadow:0 12px 34px rgba(0,0,0,.3);
+}
+.node-toolbar.node-toolbar-text-editor .text-format-btn{
+  width:34px;
+  min-width:34px;
+  height:34px;
+  min-height:34px;
+  display:grid;
+  place-items:center;
+  padding:0;
+  border:0;
+  border-radius:7px;
+  background:transparent;
+  color:#a8aaa7;
+  font:600 13px/1 var(--ui-font-sans);
+  cursor:pointer;
+}
+.node-toolbar.node-toolbar-text-editor .text-format-btn:hover,
+.node-toolbar.node-toolbar-text-editor .text-format-btn:focus-visible{
+  background:#323533;
+  color:#e3e5e2;
+  outline:none;
+}
+.node-toolbar.node-toolbar-text-editor .text-format-clear{color:#646865}
+.node-toolbar.node-toolbar-text-editor .text-format-clear>span{
+  width:14px;height:14px;display:grid;place-items:center;border:1px solid #626663;border-radius:50%;font-size:9px;transform:rotate(-22deg)
+}
+.node-toolbar.node-toolbar-text-editor .text-format-paragraph{font-size:17px}
+.node-toolbar.node-toolbar-text-editor .text-format-bold{font-size:18px;font-weight:800}
+.node-toolbar.node-toolbar-text-editor .text-format-italic{font-size:18px;font-style:italic;font-family:Georgia,serif}
+.node-toolbar.node-toolbar-text-editor .text-format-list{display:flex;align-items:center;justify-content:center;gap:2px;font-size:11px}
+.node-toolbar.node-toolbar-text-editor .text-format-list i{font:400 15px/1 var(--ui-font-sans);font-style:normal;transform:scaleX(.72)}
+.node-toolbar.node-toolbar-text-editor .text-format-rule{font-size:19px;font-weight:400}
+.node-toolbar.node-toolbar-text-editor .text-format-expand{font-size:17px}
+.node-toolbar.node-toolbar-text-editor .text-format-separator{
+  width:1px;
+  height:22px;
+  flex:0 0 1px;
+  margin:0 3px;
+  background:#3a3d3b;
+}

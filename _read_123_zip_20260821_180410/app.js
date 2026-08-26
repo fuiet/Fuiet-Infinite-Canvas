@@ -922,15 +922,84 @@
   }
 
 
+  function sanitizeManualTextHtml(html){
+    const template=document.createElement('template');template.innerHTML=String(html||'');
+    const allowed=new Set(['P','DIV','BR','H1','H2','H3','B','STRONG','I','EM','UL','OL','LI','BLOCKQUOTE','HR']);
+    const clean=node=>{
+      if(node.nodeType===3)return document.createTextNode(node.nodeValue||'');
+      if(node.nodeType!==1)return document.createDocumentFragment();
+      const tag=String(node.tagName||'').toUpperCase();
+      if(!allowed.has(tag)){
+        const frag=document.createDocumentFragment();[...node.childNodes].forEach(child=>frag.append(clean(child)));return frag;
+      }
+      const out=document.createElement(tag==='DIV'?'p':tag.toLowerCase());
+      [...node.childNodes].forEach(child=>out.append(clean(child)));return out;
+    };
+    const holder=document.createElement('div');[...template.content.childNodes].forEach(child=>holder.append(clean(child)));
+    return holder.innerHTML;
+  }
+  function plainTextToManualHtml(text){return escapeHtml(String(text||'')).replace(/\n/g,'<br>')}
+  function manualTextPlainValue(editor){return String(editor?.innerText||'').replace(/\u00a0/g,' ')}
+  function syncManualTextEditor(n,editor){
+    if(!n||!editor)return;
+    n.text=manualTextPlainValue(editor);n.generatedText='';n.textInputMode='manual';n.textHtml=sanitizeManualTextHtml(editor.innerHTML);
+    saveState();renderEdges();
+  }
+  function runManualTextFormat(n,action){
+    const editor=$(`.node[data-id="${CSS.escape(String(n.id))}"] [data-text-manual]`);if(!editor)return;
+    if(action==='expand'){
+      if(!n.textEditorExpanded){
+        n.textEditorExpanded=true;n.textEditorExpandedBackup={w:n.w||700,h:n.h||400};n.w=Math.max(Number(n.w||700),980);n.h=Math.max(Number(n.h||400),620);
+      }else{
+        const backup=n.textEditorExpandedBackup||{};n.w=Number(backup.w||700);n.h=Number(backup.h||400);n.textEditorExpanded=false;delete n.textEditorExpandedBackup;
+      }
+      saveState();render();setTimeout(()=>$(`.node[data-id="${CSS.escape(String(n.id))}"] [data-text-manual]`)?.focus(),0);return;
+    }
+    if(action==='copy'){
+      const selected=String(window.getSelection?.()?.toString?.()||'').trim(),value=selected||manualTextPlainValue(editor);
+      if(navigator.clipboard?.writeText)navigator.clipboard.writeText(value).then(()=>showToast('已复制文本')).catch(()=>showToast('复制失败'));
+      else showToast('当前浏览器不支持剪贴板复制');
+      return;
+    }
+    editor.focus();
+    if(action==='clear'){document.execCommand('removeFormat',false,null);document.execCommand('formatBlock',false,'P')}
+    if(action==='h1')document.execCommand('formatBlock',false,'H1');
+    if(action==='h2')document.execCommand('formatBlock',false,'H2');
+    if(action==='h3')document.execCommand('formatBlock',false,'H3');
+    if(action==='p')document.execCommand('formatBlock',false,'P');
+    if(action==='bold')document.execCommand('bold',false,null);
+    if(action==='italic')document.execCommand('italic',false,null);
+    if(action==='bullet')document.execCommand('insertUnorderedList',false,null);
+    if(action==='number')document.execCommand('insertOrderedList',false,null);
+    if(action==='rule')document.execCommand('insertHorizontalRule',false,null);
+    syncManualTextEditor(n,editor);
+  }
+  function renderManualTextToolbar(n,nodeEl){
+    const r=nodeEl.getBoundingClientRect(),width=536;
+    toolbar.classList.remove('node-toolbar-media','node-toolbar-image','node-toolbar-video','node-toolbar-audio','node-toolbar-script','node-toolbar-director');
+    toolbar.classList.add('node-toolbar-text','node-toolbar-text-editor');toolbar.dataset.mediaType='text';
+    toolbar.style.left=Math.max(16,Math.min(window.innerWidth-width-16,r.left+r.width/2-width/2))+'px';
+    toolbar.style.top=Math.max(16,r.top-60)+'px';
+    toolbar.innerHTML=`<button class="text-format-btn text-format-clear" data-text-format="clear" title="清除格式"><span>∅</span></button><span class="text-format-separator"></span><button class="text-format-btn" data-text-format="h1" title="一级标题">H1</button><button class="text-format-btn" data-text-format="h2" title="二级标题">H2</button><button class="text-format-btn" data-text-format="h3" title="三级标题">H3</button><button class="text-format-btn text-format-paragraph" data-text-format="p" title="正文">¶</button><span class="text-format-separator"></span><button class="text-format-btn text-format-bold" data-text-format="bold" title="加粗">B</button><button class="text-format-btn text-format-italic" data-text-format="italic" title="斜体">I</button><span class="text-format-separator"></span><button class="text-format-btn text-format-list" data-text-format="bullet" title="无序列表"><span>•</span><i>≡</i></button><button class="text-format-btn text-format-list" data-text-format="number" title="有序列表"><span>1</span><i>≡</i></button><span class="text-format-separator"></span><button class="text-format-btn text-format-rule" data-text-format="rule" title="分割线">—</button><span class="text-format-separator"></span><button class="text-format-btn" data-text-format="copy" title="复制">▣</button><button class="text-format-btn text-format-expand" data-text-format="expand" title="展开 / 收起">↗</button>`;
+    toolbar.classList.remove('hidden');
+    $$('[data-text-format]',toolbar).forEach(btn=>{btn.onpointerdown=e=>e.preventDefault();btn.onclick=e=>{e.preventDefault();e.stopPropagation();runManualTextFormat(n,btn.dataset.textFormat)}});
+  }
+
   function beginManualTextEdit(n){
     if(!n||n.type!=='text')return;
     snapshot('手动编辑文本');
     const current=String(n.text||n.generatedText||'');
     n.textEditBackup=current;
+    n.textEditBackupHtml=String(n.textHtml||'');
+    n.textEditBackupMode=n.textInputMode||'';
+    n.textEditSizeBackup={w:n.w||320,h:n.h||null};
     n.text=current;
     n.generatedText='';
+    n.textHtml=n.textHtml||plainTextToManualHtml(current);
     n.textEditing=true;
     n.textInputMode='manual';
+    n.w=700;
+    n.h=400;
     selectedId=n.id;
     state.selectedIds=[n.id];
     state.nodes.forEach(x=>x.selected=x.id===n.id);
@@ -942,18 +1011,22 @@
     setTimeout(()=>{
       const field=$(`.node[data-id="${CSS.escape(String(n.id))}"] [data-text-manual]`);
       field?.focus();
-      if(field&&field.value)field.setSelectionRange(field.value.length,field.value.length);
+      if(field){const range=document.createRange();range.selectNodeContents(field);range.collapse(false);const selection=window.getSelection();selection?.removeAllRanges();selection?.addRange(range)}
     },0);
   }
   function finishManualTextEdit(n,{cancel=false}={}){
     if(!n||n.type!=='text')return;
     const before=String(n.textEditBackup??'');
+    const beforeHtml=String(n.textEditBackupHtml??'');
     const after=cancel?before:String(n.text||'');
     n.text=after;
+    n.textHtml=cancel?beforeHtml:sanitizeManualTextHtml(String(n.textHtml||''));
     n.generatedText='';
     n.textEditing=false;
-    n.textInputMode='manual';
-    delete n.textEditBackup;
+    n.textInputMode=cancel?(n.textEditBackupMode||'manual'):'manual';
+    if(cancel&&n.textEditSizeBackup){n.w=Number(n.textEditSizeBackup.w||320);if(n.textEditSizeBackup.h==null)delete n.h;else n.h=Number(n.textEditSizeBackup.h)}
+    n.textEditorExpanded=false;delete n.textEditorExpandedBackup;
+    delete n.textEditBackup;delete n.textEditBackupHtml;delete n.textEditBackupMode;delete n.textEditSizeBackup;
     if(!cancel&&after.trim()&&after!==before){
       recordNodeResultVersion(n,{text:after,providerId:'',modelId:'',modelName:'手动输入'});
     }
@@ -975,6 +1048,7 @@
     el.dataset.interactionState=interactionState;
     el.dataset.taskState=taskState;
     el.dataset.uiV23Native='true';
+    if(n.type==='text'){el.classList.toggle('text-node-editing',Boolean(n.textEditing));el.classList.toggle('text-node-editor-expanded',Boolean(n.textEditorExpanded))}
     const bigImage=n.type==='image'&&contentState==='empty'&&(interactionState==='selected'||n.id===expandedNodeId);
     el.style.left = n.x+'px'; el.style.top=n.y+'px'; el.style.width=(n.w||320)+'px';if(n.h)el.style.height=nodeHeight(n)+'px';
     let body = '';
@@ -995,12 +1069,14 @@
       body=`<div class="video-node-shell ${emptyVideo?'is-empty':'has-output'}">${uploadAction}${media}${quick}</div>`;
     } else if(n.type==='text'){
       const textValue=String(n.text||n.generatedText||'');
+      const richTextHtml=n.textInputMode==='manual'&&n.textHtml?sanitizeManualTextHtml(n.textHtml):'';
       if(n.textEditing){
-        body=`<div class="text-node-shell is-manual-editing"><textarea class="text-node-editor" data-text-manual spellcheck="true" placeholder="输入或粘贴文本内容…">${escapeHtml(textValue)}</textarea><div class="text-node-edit-hint"><span>直接输入或粘贴文本</span><span>⌘/Ctrl + Enter 完成 · Esc 取消</span></div></div>`;
+        const editorHtml=richTextHtml||plainTextToManualHtml(textValue);
+        body=`<div class="text-node-shell is-manual-editing"><div class="text-node-editor" data-text-manual contenteditable="true" role="textbox" aria-multiline="true" spellcheck="true" data-placeholder="输入内容...">${editorHtml}</div></div>`;
       }else if(textValue.trim()){
-        body=`<div class="text-node-shell has-text"><div class="text-node-preview" data-text-result tabindex="0">${escapeHtml(textValue)}</div></div>`;
+        body=`<div class="text-node-shell has-text"><div class="text-node-preview ${richTextHtml?'is-rich-text':''}" data-text-result tabindex="0">${richTextHtml||escapeHtml(textValue)}</div></div>`;
       }else{
-        body=`<div class="text-node-shell is-empty"><div class="text-node-placeholder" aria-hidden="true"><span class="text-node-lines"><i></i><i></i><i></i><i></i></span></div><div class="text-node-try">尝试：</div><button type="button" data-text-quick="manual"><span>${uiIcon('subtitle')}</span><b>自己编写内容</b></button><button type="button" data-text-quick="video"><span>${uiIcon('video')}</span><b>文生视频</b></button><button type="button" data-text-quick="image"><span>${uiIcon('image')}</span><b>图片反推提示词</b></button><button type="button" data-text-quick="audio"><span>${uiIcon('audio')}</span><b>文字生音乐</b></button></div>`;
+        body=`<div class="text-node-shell is-empty"><div class="text-node-placeholder" aria-hidden="true"><span class="text-node-lines"><i></i><i></i><i></i><i></i></span></div><div class="text-node-try">尝试：</div><button type="button" data-text-quick="manual"><span>${uiIcon('subtitle')}</span><b>自己编写内容</b></button><button type="button" data-text-quick="video"><span>${uiIcon('video')}</span><b>文生视频</b></button><button type="button" data-text-quick="image"><span>${uiIcon('image')}</span><b>图片反推提示词</b></button></div>`;
       }
     } else if(n.type==='audio'){
       const emptyAudio=contentState==='empty';
@@ -1098,12 +1174,13 @@
     if(ta){
       ta.addEventListener('pointerdown',e=>e.stopPropagation());
       ta.addEventListener('click',e=>e.stopPropagation());
-      ta.addEventListener('input',e=>{n.text=e.target.value;n.generatedText='';n.textInputMode='manual';saveState();renderEdges()});
+      ta.addEventListener('input',e=>syncManualTextEditor(n,e.currentTarget));
+      ta.addEventListener('paste',e=>{e.preventDefault();const text=String(e.clipboardData?.getData('text/plain')||'');document.execCommand('insertText',false,text)});
       ta.addEventListener('keydown',e=>{
-        if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();finishManualTextEdit(n);return}
+        if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();syncManualTextEditor(n,e.currentTarget);finishManualTextEdit(n);return}
         if(e.key==='Escape'){e.preventDefault();e.stopPropagation();finishManualTextEdit(n,{cancel:true})}
       });
-      ta.addEventListener('blur',()=>setTimeout(()=>{if(n.textEditing)finishManualTextEdit(n)},0));
+      ta.addEventListener('blur',()=>setTimeout(()=>{if(n.textEditing&&!toolbar.matches(':hover'))finishManualTextEdit(n)},0));
     }
     $('[data-open-script]',el)?.addEventListener('click',e=>{e.stopPropagation();openScriptEditor(n)});
     $('[data-open-director]',el)?.addEventListener('click',e=>{e.stopPropagation();openDirectorConsole(n)});
@@ -1461,7 +1538,12 @@
       toolbar.classList.remove('hidden');
       $$('[data-multi-top]',toolbar).forEach(b=>b.onclick=()=>{const a=b.dataset.multiTop;if(a==='batch-connect')openBatchConnectDialog();if(a==='group')createGroup(ids,'工作流组','workflow');if(a==='workflow')saveWorkflowFromSelection();if(a==='run')executeWorkflowIds(ids,{title:'选中节点执行'});if(a==='layout')openAutoLayoutMenu();if(a==='delete')deleteSelection();});return;
     }
-    const n=selectedToolbarNode(),contentState=n?uiV23NodeContentState(n):'empty';
+    const n=selectedToolbarNode();
+    if(n?.type==='text'&&n.textEditing){
+      const editNode=$(`.node[data-id="${CSS.escape(String(n.id))}"]`);if(!editNode){toolbar.classList.add('hidden');return}
+      renderManualTextToolbar(n,editNode);return;
+    }
+    const contentState=n?uiV23NodeContentState(n):'empty';
     if(!n||contentState!=='result'||expandedNodeId===n.id){toolbar.classList.add('hidden');return}
     const el=`.node[data-id="${CSS.escape(String(n.id))}"]`;
     const nodeEl=$(el);if(!nodeEl){toolbar.classList.add('hidden');return}
@@ -1789,10 +1871,6 @@
         n.prompt='请分析我提供的参考图片，准确描述主体、场景、构图、镜头、光线、色彩、材质与风格，并反推一份可以复现该画面的详细生成提示词。';
         selectedId=n.id;state.selectedIds=[n.id];state.nodes.forEach(x=>x.selected=x.id===n.id);expandedNodeId=n.id;
         saveState();render();setTimeout(()=>openReferencePicker(n),0);return;
-      }
-      if(action==='audio'){
-        const next=addNode('audio',{x:n.x+380,y:n.y},true);next.title='文字生音乐';next.prompt=String(n.text||n.prompt||'').trim()||'根据文字内容生成音乐';
-        selectNode(next.id);expandedNodeId=next.id;saveState();render();setTimeout(()=>$('#promptInput')?.focus(),0);return;
       }
     }));
     if(n.type==='text'&&contentState==='result'&&!n.textEditing){

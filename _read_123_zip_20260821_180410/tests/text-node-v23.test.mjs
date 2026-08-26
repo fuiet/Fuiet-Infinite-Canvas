@@ -13,7 +13,7 @@ test('text node stylesheet remains a dedicated UI 2.3 component layer', () => {
   assert.match(html, /styles\/text-node\.css/);
 });
 
-test('text node follows the universal four-state content contract', () => {
+test('text node empty state exposes exactly three quick actions', () => {
   const app = read('app.js');
   assert.match(app, /n\.textEditing/);
   assert.match(app, /text-node-shell has-text/);
@@ -21,7 +21,21 @@ test('text node follows the universal four-state content contract', () => {
   assert.match(app, /data-text-quick="manual"/);
   assert.match(app, /data-text-quick="video"/);
   assert.match(app, /data-text-quick="image"/);
-  assert.match(app, /data-text-quick="audio"/);
+  assert.doesNotMatch(app, /data-text-quick="audio"/);
+});
+
+test('manual writing switches to a rich text editor with the reference toolbar', () => {
+  const app = read('app.js');
+  const css = read('styles/text-node.css');
+  assert.match(app, /contenteditable=\"true\"/);
+  assert.match(app, /function renderManualTextToolbar/);
+  assert.match(app, /data-text-format=\"h1\"/);
+  assert.match(app, /data-text-format=\"bold\"/);
+  assert.match(app, /data-text-format=\"bullet\"/);
+  assert.match(app, /data-text-format=\"copy\"/);
+  assert.match(app, /n\?\.type==='text'&&n\.textEditing/);
+  assert.match(css, /node-toolbar-text-editor/);
+  assert.match(css, /text-node-editing/);
 });
 
 test('selected text results expose text-specific creator transforms', () => {
