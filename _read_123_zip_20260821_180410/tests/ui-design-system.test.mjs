@@ -113,3 +113,23 @@ test('generated progress remains visible on the node while task infrastructure i
   assert.match(desktop, /wf-hud-actions/);
   assert.match(desktop, /display:none/);
 });
+
+test('result-first shell makes media the node and keeps task internals out of the visible result state', () => {
+  const bootstrap = read('ui-connect-v23.js');
+  const runtime = read('ui-result-v23.js');
+  const css = read('styles/result-shell.css');
+  assert.match(bootstrap, /result-shell\.css/);
+  assert.match(bootstrap, /ui-result-v23\.js/);
+  assert.match(runtime, /ui-v23-media-result/);
+  assert.match(runtime, /node-content-video/);
+  assert.match(runtime, /actualProgress/);
+  assert.match(runtime, /percent == null/);
+  assert.match(runtime, /生成失败/);
+  assert.match(runtime, /重新生成/);
+  assert.match(runtime, /data-ui-v23-result-meta/);
+  assert.match(runtime, /data-version-count/);
+  assert.match(css, /ui-v23-result-progress\.indeterminate/);
+  assert.match(css, /ui-v23-version-nav/);
+  assert.match(css, /ui-v23-resize-handle/);
+  assert.match(css, /node\.ui-v23-media-result/);
+});
