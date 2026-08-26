@@ -18,5 +18,7 @@
 .top-icon:hover{background:var(--ui-surface-2);color:var(--ui-text-1)}
 #productionBtn{color:var(--ui-text-2)}
 #productionBtn:hover{color:var(--ui-text-1)}
-#contextBtn,#taskBtn,#agentBtn,#settingsBtn{display:none}
+/* Creator configuration stays reachable. Task internals and auxiliary panels remain hidden from the normal workspace. */
+#contextBtn,#taskBtn,#agentBtn{display:none}
+#settingsBtn{display:grid}
 .agent-panel{display:none!important}
