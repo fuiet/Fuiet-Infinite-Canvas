@@ -1,6 +1,7 @@
 # Fuiet Infinite Canvas · Final UI Design System
 
 Status: **Final design direction / implementation source of truth**
+Scope: **Desktop-only web application. Target viewport width: 1024px and above. Mobile UI is explicitly out of scope.**
 
 This document replaces the visual direction of the older `canvas-ui-v1.css`, `canvas-ui-v2.css`, `workspace-canvas-v3.css`, and ad-hoc page-specific styling. New UI work must follow this system instead of adding another override layer.
 
@@ -17,23 +18,13 @@ Design priorities, in order:
 3. Generation state must be visible without opening a task panel.
 4. Controls appear near the object they affect; global chrome stays quiet.
 5. Advanced capability is progressively disclosed rather than permanently visible.
-6. Desktop is the primary creation environment; mobile is a focused review/control surface, not a shrunken desktop canvas.
+6. Desktop efficiency and information density take priority over touch/mobile adaptation.
 
 ## 2. Chosen visual direction
 
 ### Direction exploration
 
 **A. Floating cockpit**
-
-```text
-┌ workspace ───────────────────────────── tools ┐
-│                                              │
-│       [ node ] ─── [ node ]                  │
-│                 floating panels              │
-│                                              │
-│             floating bottom dock             │
-└──────────────────────────────────────────────┘
-```
 
 Pros: visually light.  
 Cons: too many floating islands; weak spatial hierarchy; starts to resemble generic AI tools.
@@ -60,13 +51,6 @@ Cons: requires disciplined component hierarchy and better state design.
 
 **C. Permanent three-column studio**
 
-```text
-┌ Library ┬──────── Canvas ────────┬ Inspector ┐
-│         │                        │           │
-│         │                        │           │
-└─────────┴────────────────────────┴───────────┘
-```
-
 Pros: predictable.  
 Cons: permanently sacrifices canvas space and feels like a standard editor clone.
 
@@ -80,23 +64,23 @@ The interface stays mostly neutral. Color is not decoration; it is a live signal
 
 The memorable Fuiet interaction is the **Signal Path**.
 
-When a node is selected, the system subtly reveals its upstream and downstream workflow as a luminous routing trace:
+When a node is selected, reveal its upstream and downstream workflow as a restrained routing trace:
 
 - selected node: stronger border + local halo;
 - directly connected edges: brighter signal trace;
 - first-degree connected nodes: slightly lifted surface;
-- unrelated nodes: remain neutral, never dim so much that the canvas becomes unreadable;
+- unrelated nodes: remain neutral and readable;
 - running generation: a restrained moving pulse travels on the relevant edge;
 - success: pulse resolves into the output node once, then returns to static;
-- error: no flashing; use a short red/orange segment at the failed node/edge.
+- error: no flashing; use a short danger-colored segment at the failed node/edge.
 
-This is the one place where motion may be visually distinctive. Other motion should remain restrained.
+This is the one place where motion may be visually distinctive. Other motion stays restrained.
 
-`prefers-reduced-motion` must replace travelling pulses with static state styling.
+`prefers-reduced-motion` replaces travelling pulses with static state styling.
 
 ## 4. Color system
 
-Use six core tokens. Avoid additional arbitrary grays in components.
+Use six core tokens. Avoid arbitrary component-specific grays.
 
 | Token | Hex | Purpose |
 | --- | --- | --- |
@@ -107,7 +91,7 @@ Use six core tokens. Avoid additional arbitrary grays in components.
 | `ash-400` | `#8D8D86` | secondary text / inactive chrome |
 | `signal-cyan` | `#58CFE0` | selection, links, active signal |
 
-Semantic extensions may exist only for states/media roles and must be centralized:
+Semantic extensions are centralized:
 
 - success: `#72C69A`
 - warning: `#D6A85F`
@@ -120,44 +104,29 @@ Semantic extensions may exist only for states/media roles and must be centralize
 Rules:
 
 - `signal-cyan` is not used for decorative headings or random hover effects.
-- media colors appear in tiny identity cues: node type mark, badge, waveform/playhead, not as full-card backgrounds.
+- media colors appear only in small identity cues, not full-card backgrounds.
 - large panels stay neutral.
-- white should be warm (`paper-100`), not pure `#fff`, except for tiny high-contrast optical corrections.
+- use warm `paper-100` rather than pure white for primary text.
 
 ## 5. Typography
 
-Typography must communicate three roles.
-
-### Display / workspace identity
+### Workspace identity / major titles
 
 `Sora`, fallback `Inter`, system sans.
 
-Use only for:
-
-- workspace name;
-- major modal titles;
-- major empty-state headline;
-- rare product-level headings.
-
-Weights: 600–650 only.
+Use only for workspace identity, major page/modal titles and important empty-state headings.
 
 ### UI / body
 
 `Inter`, `PingFang SC`, `Microsoft YaHei`, system sans.
 
-Use for all controls, labels, body text and menus.
+Use for controls, labels, menus and body text.
 
-### Data / model / task identifiers
+### Technical identifiers
 
 `IBM Plex Mono`, `SFMono-Regular`, `Consolas`, monospace.
 
-Use for:
-
-- model IDs;
-- task IDs;
-- API route snippets;
-- technical status values;
-- timestamps only where alignment matters.
+Use for model IDs, task IDs, routes, technical status values and aligned timestamps.
 
 ### Type scale
 
@@ -181,7 +150,7 @@ Allowed spacing steps:
 
 `4 / 8 / 12 / 16 / 20 / 24 / 32 / 40 / 48`
 
-Do not introduce one-off 7px, 9px, 13px spacing unless required for optical alignment.
+Avoid one-off spacing values except for optical correction.
 
 ### Radius
 
@@ -189,13 +158,11 @@ Do not introduce one-off 7px, 9px, 13px spacing unless required for optical alig
 - button / field: 8px
 - node: 10px
 - menu / popover: 12px
-- modal / large inspector: 14px
+- modal / inspector: 14px
 
-Avoid blanket 16–20px rounding. This is a professional tool, not a card-based consumer app.
+Avoid blanket 16–20px rounding. This is a professional tool, not a consumer card UI.
 
 ### Borders
-
-Use hierarchy rather than many visible outlines:
 
 - default divider: `rgba(241,239,233,.08)`
 - interactive border: `rgba(241,239,233,.12)`
@@ -204,19 +171,19 @@ Use hierarchy rather than many visible outlines:
 
 Only one visible border per component layer.
 
-## 7. Global layout
+## 7. Desktop layout
 
-### Desktop ≥ 1180px
+### Primary target: 1280–1920px
 
-Top bar: 48px.
+Top bar: **48px**.
 
-Left side contains only context identity:
+Left side contains context identity only:
 
 - workspace name;
 - canvas switcher;
 - workflow/storyboard view switch.
 
-Right side contains only global actions:
+Right side contains global actions only:
 
 - undo/redo grouped;
 - run/production;
@@ -224,7 +191,7 @@ Right side contains only global actions:
 - share;
 - overflow menu.
 
-`Agent`, settings, context management and secondary tools move into the overflow / contextual inspector unless actively needed.
+`Agent`, settings, context management and secondary tools move into overflow/contextual surfaces unless actively needed.
 
 Bottom center dock contains only creation/navigation primitives:
 
@@ -234,63 +201,45 @@ Bottom center dock contains only creation/navigation primitives:
 - Assets;
 - History.
 
-Shortcut help and tutorial do not deserve permanent dock slots; place them under Help/overflow.
+Shortcut help and tutorial belong under Help/overflow.
 
-### Medium 820–1179px
+### Compact desktop: 1024–1279px
 
-- compress workspace label;
-- hide secondary text labels;
-- inspector becomes overlay instead of pushing canvas;
-- global actions collapse into overflow as space runs out.
+- compress workspace/canvas labels;
+- hide secondary text labels before hiding icons;
+- Inspector stays an overlay instead of permanently shrinking the canvas;
+- lower-priority global actions collapse into overflow;
+- preserve the full canvas workflow model rather than changing interaction patterns.
 
-### Mobile < 820px
+### Unsupported design range: below 1024px
 
-Mobile is a **review + prompt + task control mode**.
+No dedicated phone/tablet experience will be designed. The project may remain technically loadable, but visual correctness and workflow usability below 1024px are not acceptance requirements.
 
-Do not preserve full desktop chrome.
-
-Default mobile shell:
-
-```text
-┌ Canvas name                ··· ┐
-├────────────────────────────────┤
-│                                │
-│     focused node / preview     │
-│                                │
-├────────────────────────────────┤
-│ Prompt / params / Run          │
-├────────────────────────────────┤
-│ Nodes    Storyboard    Tasks    │
-└────────────────────────────────┘
-```
-
-Mobile can pan/zoom the canvas when explicitly entering “Canvas mode”, but it should not force 900px-wide desktop tables into horizontal scrolling as the default experience.
+Do not spend implementation time creating mobile navigation, touch-first controls, stacked mobile cards or mobile-specific canvas behavior.
 
 ## 8. Canvas
 
 Canvas background:
 
 - base `ink-950`;
-- very subtle dot field, 20–24px spacing;
+- subtle dot field, 20–24px spacing;
 - no decorative radial gradients;
 - grid contrast under 6% opacity;
-- no permanent center hint once the canvas contains content.
+- no permanent center hint once content exists.
 
 Empty state:
 
 - one headline;
 - one action sentence;
 - three primary quick-start actions maximum: Text / Image / Video;
-- secondary types inside Add menu.
+- secondary node types inside Add menu.
 
 Preferred copy:
 
-**Start a workflow**  
-Add a prompt, drop in media, or connect an existing asset.
+**开始一个工作流**  
+添加提示词、拖入素材，或连接已有资产。
 
 ## 9. Nodes
-
-Node visual structure:
 
 ```text
  type · title                         ···
@@ -308,37 +257,34 @@ Rules:
 
 - default width: 320px;
 - media nodes may be 360px;
-- no giant empty node unless media ratio requires it;
-- title sits in the card header, not floating 29px above the node;
-- node header height: 36px;
+- title stays inside the node header, never floating above the card;
+- node header: 36px;
 - footer/status row: 32px;
-- selected state uses `signal-cyan` only;
-- node ports are 14px visual / at least 24px interactive hit area;
-- connection labels are shown only on hover/selection or when semantically necessary.
+- selected state uses `signal-cyan`;
+- ports: 14px visual, at least 24px pointer hit area;
+- connection labels appear only when useful.
 
 ### Node status
 
-Use one compact status location in the footer:
+One compact status location in the footer:
 
-- Ready
-- Queued
-- Running · 42%
-- Waiting for provider
-- Completed
-- Failed · Retry
-- Cancelled
+- 就绪
+- 排队中
+- 生成中 · 42%
+- 等待供应商
+- 已完成
+- 失败 · 重试
+- 已取消
 
-Do not use separate floating job badges unless the node itself cannot display status.
+Avoid separate floating job badges when the node can carry its own state.
 
 ## 10. Generator / Inspector
 
-Do not use a floating generic modal for every edit.
+Replace the generic floating generation modal with a **contextual Inspector** anchored to selection.
 
-Use a **contextual inspector** anchored to the selected node:
+Desktop rules:
 
-Desktop:
-
-- width 380–420px;
+- width: 380–420px;
 - right overlay panel;
 - may pin open;
 - does not permanently shrink canvas unless pinned.
@@ -348,31 +294,29 @@ Information order:
 1. Node title + media type + close/pin.
 2. Prompt / main content.
 3. Model selection.
-4. Essential parameters (max 3–5 visible).
+4. Essential parameters (3–5 visible maximum).
 5. Advanced parameters collapsed.
 6. Reference media.
-7. Run button + estimated cost if known.
-8. Latest result / task status.
+7. Generate action + estimated cost when available.
+8. Latest result / task state.
 
-Do not hide section titles after adding them. Information hierarchy is part of the product, not decoration.
+Information hierarchy must remain visible; do not hide section labels after adding them.
 
-Primary action text should say **Generate**, **Regenerate**, **Retry**, or **Cancel** — never generic `Submit`.
+Primary actions use specific verbs: `生成`, `重新生成`, `重试`, `取消生成`.
 
 ## 11. Top bar hierarchy
 
-Permanent top-bar actions should fit within approximately 60% of a 1366px viewport without collisions.
-
-Priority:
+Permanent top-bar actions must fit without collision at **1024px**.
 
 **Tier 1 — always visible**
 
 - Workspace / canvas identity
 - Undo / redo
 - Run / production
-- Tasks (with running count)
+- Tasks with running count
 - Share
 
-**Tier 2 — contextual**
+**Tier 2 — contextual / overflow when needed**
 
 - Storyboard switch
 - Agent
@@ -386,11 +330,11 @@ Priority:
 - diagnostics
 - developer tools
 
-Do not give every feature the same 38px square button and visual weight.
+Do not give every feature identical square-button visual weight.
 
 ## 12. Bottom dock
 
-Dock purpose: creation and canvas manipulation only.
+Purpose: creation and canvas manipulation only.
 
 Order:
 
@@ -400,7 +344,7 @@ Dimensions:
 
 - height: 48px
 - control: 36px
-- primary Add control: 36px, paper surface / dark icon
+- Add: 36px, paper surface / dark icon
 - gap: 4px
 - radius: 12px
 
@@ -408,33 +352,33 @@ No Help, Tutorial, Agent, Tasks or Settings in the dock.
 
 ## 13. Provider and model management
 
-Provider setup and model management must share the same system as the canvas.
+Provider setup and model management share the same tokens, typography and control geometry as the canvas.
 
 ### Provider setup
 
-The main user path must visually emphasize only:
+Primary path emphasizes only:
 
-1. Provider name
+1. 接口供应商名称
 2. Base URL
-3. API key
-4. Test connection
-5. Discover models
+3. API Key
+4. 测试连接
+5. 拉取模型
 
-Advanced adapter/protocol fields stay inside **Advanced**.
+Advanced adapter/protocol fields stay inside **高级设置**.
 
-Connection results use a structured state block rather than arbitrary toast text:
+Connection states are structured blocks:
 
-- Connected
-- Authentication failed
-- Endpoint not compatible
-- Models found: N
-- Video protocol needs configuration
+- 连接成功
+- API Key 验证失败
+- 接口不兼容
+- 已发现 N 个模型
+- 视频协议需要配置
 
 ### Models page
 
-Keep the provider filter sidebar on desktop, but unify colors, typography, button geometry and empty states with the canvas.
+Keep the provider filter sidebar on desktop.
 
-Avoid dense six-column rows when the information is not required to scan.
+Avoid dense six-column rows unless scanning genuinely requires them.
 
 Recommended default row:
 
@@ -445,52 +389,49 @@ Recommended default row:
 Type      Adapter status      Enabled       ···
 ```
 
-Advanced route/config fields belong in the expanded detail view.
+Advanced routes/config live in expanded details.
 
 ## 14. Storyboard view
 
 Storyboard is not a spreadsheet.
 
-Use shot cards/rows with dominant media preview and concise metadata.
+Use rows/cards with dominant media preview and concise metadata.
 
-Desktop row order:
+Desktop order:
 
 `Shot | Visual | Prompt/Notes | Audio | Status/Actions`
 
-At widths below 820px, switch to stacked shot cards. Do not keep a 900px minimum-width board as the primary mobile solution.
+At compact desktop widths, allow controlled horizontal workspace overflow or reduce secondary columns, but do not create a separate mobile stacked-card system.
 
 ## 15. Interaction states
 
-Every interactive control must implement:
+Every interactive control implements:
 
 - default
-- hover (pointer devices)
+- hover
 - active
 - focus-visible
 - disabled
-- loading if relevant
+- loading when relevant
 
 Focus ring:
 
 `0 0 0 2px ink-950, 0 0 0 4px rgba(88,207,224,.65)`
 
-Never remove focus outlines without replacing them.
+Never remove focus outlines without replacement.
 
-Touch target:
-
-- desktop minimum interactive hit area: 32×32px
-- mobile minimum: 44×44px
+Desktop minimum pointer target: **32×32px**.
 
 ## 16. Motion
 
 Use motion only for:
 
-- opening/closing contextual panels: 140–180ms;
+- contextual panel open/close: 140–180ms;
 - menu/popover: 100–140ms;
-- node selection response: 120–150ms;
+- node selection: 120–150ms;
 - Signal Path generation pulse.
 
-Avoid decorative hover translation on every card/button.
+Avoid decorative translation on every hover.
 
 Standard easing:
 
@@ -502,11 +443,11 @@ Respect `prefers-reduced-motion: reduce`.
 
 Use one SVG icon family/style across the product.
 
-- 1.7–1.8px stroke at 18–20px size;
+- 1.7–1.8px stroke at 18–20px;
 - rounded line caps;
 - no emoji as production controls;
-- no mixed text glyphs such as `▦`, `⌕`, `⚙`, `＋` when an SVG icon exists;
-- icon-only controls require `aria-label` and tooltip on desktop.
+- no mixed glyph controls such as `▦`, `⌕`, `⚙`, `＋` when an SVG exists;
+- icon-only controls require `aria-label` and desktop tooltip.
 
 ## 18. Writing / UI copy
 
@@ -514,13 +455,13 @@ Use user-language, not implementation-language.
 
 Prefer:
 
-- `Provider` → Chinese UI: `接口供应商`
-- `Discover models` → `拉取模型`
-- `Save changes` → `保存更改`
-- `Retry` → `重试`
-- `Cancel generation` → `取消生成`
+- `接口供应商`
+- `拉取模型`
+- `保存更改`
+- `重试`
+- `取消生成`
 
-Errors must tell the user what happened and what action can fix it.
+Errors explain both cause and next action.
 
 Bad:
 
@@ -534,14 +475,14 @@ Good:
 
 Required baseline:
 
-- WCAG AA text contrast for normal content;
-- keyboard access to all menus, dialogs and canvas controls;
+- WCAG AA text contrast;
+- keyboard access to menus, dialogs and canvas controls;
 - visible `:focus-visible` states;
 - correct dialog semantics and focus trap;
 - Escape closes popovers/dialogs when safe;
 - icon-only buttons have accessible names;
-- status changes use an appropriate `aria-live` region without excessive announcements;
-- color is never the only way to distinguish success/error/type.
+- status changes use appropriate `aria-live` behavior;
+- color is never the only state/type distinction.
 
 ## 20. CSS architecture — mandatory implementation rule
 
@@ -561,17 +502,17 @@ styles/
   providers.css
   models.css
   storyboard.css
-  responsive.css
+  desktop-responsive.css
 ```
 
 Rules:
 
 - one canonical token namespace: `--ui-*`;
 - no parallel `--cui-*`, `--v2-*`, `--lib-*` systems;
-- use `!important` only for third-party/legacy containment during migration, then remove it;
-- component selectors should remain shallow;
-- visual state is class/data-attribute driven, not selector-specificity warfare;
-- media queries live in component files or the single responsive layer, not repeated contradictory overrides.
+- `!important` only for temporary legacy containment, then remove it;
+- shallow component selectors;
+- visual state driven by classes/data attributes, not specificity warfare;
+- responsive rules cover supported desktop widths only.
 
 ## 21. Migration order
 
@@ -581,10 +522,9 @@ Rules:
 4. Replace floating Generator styling with contextual Inspector styling.
 5. Consolidate menus/drawers/modals.
 6. Bring Provider and Models pages onto the same tokens/components.
-7. Rebuild Storyboard responsive behavior.
-8. Implement mobile review/control shell.
-9. Remove old v1/v2/v3 visual override files from `index.html`.
-10. Delete dead selectors and remaining `!important` overrides after screenshot regression testing.
+7. Rebuild Storyboard desktop behavior.
+8. Remove old v1/v2/v3 visual override files from `index.html`.
+9. Delete dead selectors and remaining `!important` overrides after screenshot regression testing.
 
 ## 22. Acceptance criteria
 
@@ -592,14 +532,14 @@ The redesign is complete only when:
 
 - a user can tell what is selected, running, failed and connected without opening another panel;
 - global chrome no longer visually competes with the canvas;
-- top bar does not overflow at 1024px width;
+- the complete primary workflow remains usable at 1024px viewport width;
 - no production text is below 11px;
-- mobile has a deliberate layout rather than horizontal desktop overflow;
 - Canvas, Provider, Models and Storyboard look like one product;
 - no new UI override stylesheet is layered on top of v1/v2/v3;
-- the old `--cui-*`, `--v2-*`, `--lib-*` token families are eliminated from final production styles;
+- old `--cui-*`, `--v2-*`, `--lib-*` token families are eliminated from final production styles;
 - focus-visible and reduced-motion behavior are present;
-- visual regression screenshots exist for desktop, tablet and mobile.
+- visual regression screenshots exist at 1024px, 1366px, 1440px and 1920px desktop widths;
+- **there is no mobile-specific UI implementation requirement.**
 
 ---
 
