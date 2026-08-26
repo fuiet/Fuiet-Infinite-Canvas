@@ -33,7 +33,7 @@ test('manual writing switches to a rich text editor with the reference toolbar',
   assert.match(app, /data-text-format=\"bold\"/);
   assert.match(app, /data-text-format=\"bullet\"/);
   assert.match(app, /data-text-format=\"copy\"/);
-  assert.match(app, /n\?\.type==='text'&&n\.textInputMode==='manual'/);
+  assert.match(app, /n\?\.type==='text'&&n\.textInputMode==='manual'&&n\.textEditing/);
   assert.match(css, /node-toolbar-text-editor/);
   assert.match(css, /text-node-editing/);
 });
@@ -96,12 +96,26 @@ test('text nodes remain stable across creation, selection, manual mode and delet
   assert.match(app, /n\.textInputMode='ai';n\.textEditing=false;n\.textEditorExpanded=false/);
   assert.match(app, /\['image','video','audio','script'\]\.includes\(created\.type\)/);
   assert.match(app, /else if\(created\?\.type==='text'\)expandedNodeId=null/);
-  assert.match(app, /if\(n\.type==='text'\)n\.textEditing=n\.textInputMode==='manual'/);
+  assert.match(app, /if\(n\.type==='text'&&n\.textInputMode!=='manual'\)n\.textEditing=false/);
   assert.match(app, /function selectManualTextNode/);
   assert.match(app, /pointerdown',e=>\{e\.stopPropagation\(\);selectManualTextNode\(n,el\)\}/);
-  assert.match(app, /e\.currentTarget\.blur\(\);renderToolbar\(\)/);
+  assert.match(app, /e\.currentTarget\.blur\(\)/);
   assert.match(app, /active\?\.matches\?\.\('\[data-text-manual\]'\)\)active\.blur\(\)/);
   assert.match(app, /n\.w=560/);
   assert.match(app, /n\.h=320/);
   assert.match(css, /\.node\.node-text\.text-node-editing\{\s*min-height:320px/);
+});
+
+
+test('manual text mode shows an empty prompt and enters editing only on double click', () => {
+  const app = read('app.js');
+  const css = read('styles/text-node.css');
+  assert.match(app, /请编写内容，开始你的创作。/);
+  assert.match(app, /text-manual-empty-lines/);
+  assert.match(app, /n\.textInputMode==='manual'&&!n\.textEditing/);
+  assert.match(app, /addEventListener\('dblclick'/);
+  assert.match(app, /startManualTextEditing\(n\)/);
+  assert.match(app, /n\.textEditing=false/);
+  assert.match(css, /\.node\.node-text\.text-node-manual/);
+  assert.match(css, /\.text-node-shell\.is-manual-empty/);
 });

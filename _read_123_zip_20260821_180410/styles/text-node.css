@@ -422,3 +422,56 @@
   margin:0 3px;
   background:#3a3d3b;
 }
+
+
+/* Manual text mode v2.6: single-click select, double-click edit. */
+.node.node-text.text-node-manual{
+  min-height:320px;
+  border:1px solid #555957;
+  border-radius:18px;
+  background:#151616;
+  box-shadow:none;
+}
+.node.node-text.text-node-manual:hover{border-color:#6b6f6c}
+.node.node-text.text-node-manual.selected,
+.node.node-text.text-node-manual[data-interaction-state="selected"]{
+  border-color:#858986;
+  box-shadow:none;
+}
+.node.node-text.text-node-manual>.node-body{
+  min-height:318px;
+  height:100%;
+  border-radius:inherit;
+  background:#151616;
+  overflow:hidden;
+}
+.text-node-shell.is-manual-empty{
+  min-height:318px;
+  height:100%;
+  padding:62px 24px 24px;
+  align-items:center;
+  background:#151616;
+  cursor:default;
+}
+.text-manual-empty-message{
+  color:#a9aaa7;
+  font:400 18px/1.5 var(--ui-font-sans);
+  text-align:center;
+  user-select:none;
+}
+.text-manual-empty-lines{
+  width:86px;
+  display:flex;
+  flex-direction:column;
+  gap:7px;
+  margin-top:43px;
+  color:#626562;
+}
+.text-manual-empty-lines>i{
+  display:block;
+  width:86px;
+  height:8px;
+  border-radius:1px;
+  background:currentColor;
+}
+.text-manual-empty-lines>i:last-child{width:52px}
