@@ -1,0 +1,55 @@
+name: Fix Manual Text View Mode
+
+on:
+  push:
+    branches:
+      - security/video-worker-hardening-20260825
+    paths:
+      - '.github/workflows/fix-text-manual-view-v26.yml'
+      - '_read_123_zip_20260821_180410/scripts/fix-text-manual-view-v26.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: security/video-worker-hardening-20260825
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply manual text view behavior
+        working-directory: _read_123_zip_20260821_180410
+        run: python scripts/fix-text-manual-view-v26.py
+      - name: Validate JavaScript syntax
+        working-directory: _read_123_zip_20260821_180410
+        run: node --check app.js
+      - name: Validate app checks
+        working-directory: _read_123_zip_20260821_180410
+        run: npm run check
+      - name: Validate existing tests
+        working-directory: _read_123_zip_20260821_180410
+        run: npm test
+      - name: Validate text node contract
+        working-directory: _read_123_zip_20260821_180410
+        run: node tests/text-node-v23.test.mjs
+      - name: Verify diff
+        run: |
+          git status --short
+          git diff --check
+      - name: Commit manual text view behavior
+        run: |
+          if git diff --quiet; then
+            echo 'No changes to commit.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add _read_123_zip_20260821_180410/app.js _read_123_zip_20260821_180410/styles/text-node.css _read_123_zip_20260821_180410/tests/text-node-v23.test.mjs
+          git commit -m 'Update manual text view interaction'
+          git push origin HEAD:security/video-worker-hardening-20260825

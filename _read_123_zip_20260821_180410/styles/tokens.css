@@ -1,0 +1,75 @@
+:root{
+  color-scheme: dark;
+
+  /* Fuiet UI Design System 2.3 · Studio Slate */
+  --ui-bg-canvas:#121313;
+  --ui-bg-base:#161817;
+  --ui-surface-1:#1B1D1C;
+  --ui-surface-2:#222423;
+  --ui-surface-3:#292C2A;
+  --ui-line:#303330;
+  --ui-line-strong:#414541;
+  --ui-text-1:#ECE9E2;
+  --ui-text-2:#B7B6B0;
+  --ui-text-3:#858984;
+
+  --ui-selected:#8198D9;
+  --ui-running:#D6A04D;
+  --ui-success:#72B58B;
+  --ui-danger:#D36F6A;
+  --ui-image:#A99BC8;
+  --ui-video:#C88E72;
+  --ui-audio:#82A991;
+  --ui-text-node:#9EA5AE;
+
+  --ui-font-brand:"Space Grotesk","Inter Variable",Inter,"PingFang SC","Microsoft YaHei",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --ui-font-sans:"Inter Variable",Inter,"PingFang SC","Microsoft YaHei",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --ui-font-mono:"IBM Plex Mono","SFMono-Regular",Consolas,"Liberation Mono",monospace;
+
+  --ui-font-size-page:20px;
+  --ui-font-size-workspace:16px;
+  --ui-font-size-section:15px;
+  --ui-font-size-body:13px;
+  --ui-font-size-control:13px;
+  --ui-font-size-meta:12px;
+  --ui-font-size-micro:11px;
+
+  --ui-line-page:28px;
+  --ui-line-workspace:22px;
+  --ui-line-section:21px;
+  --ui-line-body:19px;
+  --ui-line-control:18px;
+  --ui-line-meta:17px;
+  --ui-line-micro:15px;
+
+  --ui-space-1:4px;
+  --ui-space-2:8px;
+  --ui-space-3:12px;
+  --ui-space-4:16px;
+  --ui-space-5:20px;
+  --ui-space-6:24px;
+  --ui-space-8:32px;
+  --ui-space-10:40px;
+  --ui-space-12:48px;
+
+  --ui-radius-compact:6px;
+  --ui-radius-control:8px;
+  --ui-radius-node:10px;
+  --ui-radius-float:12px;
+  --ui-radius-large:14px;
+
+  --ui-control-sm:28px;
+  --ui-control:32px;
+  --ui-dock-control:34px;
+  --ui-dock-height:46px;
+  --ui-workspace-height:36px;
+  --ui-asset-drawer-width:272px;
+
+  --ui-shadow-float:0 12px 36px rgba(0,0,0,.28);
+  --ui-shadow-menu:0 14px 42px rgba(0,0,0,.34);
+  --ui-focus:0 0 0 2px var(--ui-bg-canvas),0 0 0 4px rgba(129,152,217,.66);
+
+  --ui-motion-fast:120ms;
+  --ui-motion-panel:160ms;
+  --ui-ease:cubic-bezier(.2,.8,.2,1);
+}

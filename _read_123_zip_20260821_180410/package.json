@@ -5,7 +5,8 @@
   "description": "画布工作室 v3.6.4：多画布工作区与工作流 / 故事版双视图。支持画布新增、切换、重命名、复制、删除，以及逐镜头故事版生产视图。",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check app.js && node --check server.js && node --check store.js && node --check models.js && node --check three-runtime.js && node --check ui-zh.js"
+    "check": "node --check app.js && node --check server.js && node --check store.js && node --check models.js && node --check three-runtime.js && node --check ui-zh.js && node --check ui-v23.js && node --check ui-connect-v23.js && node --check dist/server/secure-index.js && node --check dist/server/secure-entry.js && node --check dist/server/production-entry.js && node --check dist/server/provider-compat-entry.js && node --check dist/server/reference-guard-entry.js && node --check dist/server/final-entry.js && node --check dist/server/auth-entry.js && node --check dist/server/pages-entry.js",
+    "test": "node --test tests/*.test.mjs"
   },
   "engines": {
     "node": ">=22"

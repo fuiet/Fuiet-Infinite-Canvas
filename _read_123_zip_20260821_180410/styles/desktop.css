@@ -1,0 +1,36 @@
+.bottom-dock{position:absolute;left:50%;bottom:14px;z-index:88;height:var(--ui-dock-height);display:flex;align-items:center;gap:4px;padding:5px;border:1px solid var(--ui-line);border-radius:12px;background:rgba(27,29,28,.96);box-shadow:0 10px 28px rgba(0,0,0,.24);transform:translateX(-50%);backdrop-filter:blur(10px)}
+.dock-btn{width:var(--ui-dock-control);height:var(--ui-dock-control);display:grid;place-items:center;border:0;border-radius:8px;background:transparent;color:var(--ui-text-3);padding:0}
+.dock-btn:hover,.dock-btn.active,.dock-btn.open{background:var(--ui-surface-2);color:var(--ui-text-1)}
+.dock-btn.primary{background:var(--ui-text-1);color:#171918}
+.dock-btn.primary:hover{background:#fff;color:#111}
+.dock-btn .ui-icon{width:18px;height:18px;stroke-width:1.8}
+.dock-separator{width:1px;height:20px;margin:0 1px;background:var(--ui-line)}
+/* UI 2.3: creation stays in the dock; assets move to the bottom-left status area. */
+.bottom-dock [data-dock-action="asset"],.bottom-dock [data-dock-action="shortcuts"],.bottom-dock [data-dock-action="help"]{display:none}
+.bottom-dock .dock-separator{display:none}
+.toast{position:absolute;left:50%;top:62px;z-index:220;transform:translateX(-50%);padding:8px 12px;border:1px solid var(--ui-line);border-radius:8px;background:rgba(34,36,35,.98);color:var(--ui-text-1);box-shadow:var(--ui-shadow-float);font-size:12px;line-height:17px}
+.project-menu,.context-menu,.model-picker{border:1px solid var(--ui-line);border-radius:10px;background:rgba(27,29,28,.985);color:var(--ui-text-1);box-shadow:var(--ui-shadow-menu)}
+.menu-item{min-height:32px;border:0;border-radius:7px;background:transparent;color:var(--ui-text-2);font-size:12px;line-height:17px}
+.menu-item:hover{background:var(--ui-surface-2);color:var(--ui-text-1)}
+
+/* User-facing workflow status: show progress, hide infrastructure/task-center detail. */
+.ui-v23-workflow-hud{min-width:220px!important;max-width:300px!important;padding:10px 12px!important;border:1px solid var(--ui-line)!important;border-radius:10px!important;background:rgba(27,29,28,.96)!important;box-shadow:var(--ui-shadow-float)!important}
+.ui-v23-workflow-hud .wf-hud-meta,.ui-v23-workflow-hud .wf-hud-active,.ui-v23-workflow-hud .wf-hud-actions{display:none!important}
+.ui-v23-workflow-hud .wf-hud-head{margin-bottom:7px!important}
+.ui-v23-workflow-hud .wf-hud-head span{color:var(--ui-running)!important;font-size:11px!important}
+.ui-v23-workflow-hud .wf-hud-progress{height:3px!important;border-radius:999px!important;background:rgba(236,233,226,.12)!important;overflow:hidden!important}
+.ui-v23-workflow-hud .wf-hud-progress i{background:var(--ui-running)!important}
+
+@media (max-width:1279px){
+  .fuiet-wordmark{display:none}
+  .workspace-name{max-width:130px}
+  .canvas-switcher{max-width:115px}
+  #shareBtn{display:none}
+  .node-toolbar{max-width:calc(100vw - 48px)}
+  .generator-panel{width:min(560px,calc(100vw - 48px))}
+}
+@media (max-width:1023px){
+  .topbar{right:8px;left:8px;top:8px}
+  .bottom-left{left:8px;bottom:8px}
+  .bottom-dock{bottom:8px}
+}

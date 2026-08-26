@@ -1,0 +1,75 @@
+/* UI 2.3 result shell: result is the node. */
+.node.ui-v23-result-shell{min-height:0}
+.node.ui-v23-result-shell>.node-footer{display:none}
+.node.ui-v23-result-shell>.node-body{position:relative}
+
+/* Media results lose the surrounding card and let the media own the silhouette. */
+.node.ui-v23-media-result{background:transparent;border-color:transparent;box-shadow:none}
+.node.ui-v23-media-result:hover{border-color:transparent}
+.node.ui-v23-media-result.selected,.node.ui-v23-media-result.multi-selected{border-color:transparent;box-shadow:none}
+.node.ui-v23-media-result>.node-body{min-height:0;padding:0;background:transparent}
+.node.ui-v23-media-result .image-node-shell.has-output,
+.node.ui-v23-media-result .image-node-stage,
+.node.ui-v23-media-result .media-clip,
+.node.ui-v23-media-result .node-content-img,
+.node.ui-v23-media-result .node-content-video,
+.node.ui-v23-media-result video,
+.node.ui-v23-media-result .audio-wave,
+.node.ui-v23-media-result audio{border:1px solid var(--ui-line);border-radius:var(--ui-radius-node);background:#0F1010;overflow:hidden;box-shadow:none}
+.node.ui-v23-media-result[data-interaction-state="selected"] .image-node-shell.has-output,
+.node.ui-v23-media-result[data-interaction-state="selected"] .image-node-stage,
+.node.ui-v23-media-result[data-interaction-state="selected"] .media-clip,
+.node.ui-v23-media-result[data-interaction-state="selected"] .node-content-img,
+.node.ui-v23-media-result[data-interaction-state="selected"] .node-content-video,
+.node.ui-v23-media-result[data-interaction-state="selected"] video,
+.node.ui-v23-media-result[data-interaction-state="selected"] .audio-wave,
+.node.ui-v23-media-result[data-interaction-state="selected"] audio{border-color:var(--ui-selected);box-shadow:0 0 0 1px rgba(129,152,217,.12)}
+.node.ui-v23-media-result .node-content-img,
+.node.ui-v23-media-result .node-content-video,
+.node.ui-v23-media-result video,
+.node.ui-v23-media-result img{display:block;width:100%;height:auto;max-width:100%}
+.node.ui-v23-media-audio>.node-body{display:block}
+.node.ui-v23-media-audio .audio-wave{min-height:82px;margin:0}
+.node.ui-v23-media-audio audio{display:block;width:100%;min-height:38px}
+
+/* Result metadata lives beside the title, outside the media itself. */
+.ui-v23-result-meta{display:inline-flex;align-items:center;min-width:0;margin-right:4px;color:var(--ui-text-3);font:500 11px/15px var(--ui-font-mono);white-space:nowrap}
+.node.ui-v23-result-shell[data-interaction-state="idle"] .ui-v23-result-meta{opacity:.78}
+.node.ui-v23-result-shell[data-interaction-state="selected"] .ui-v23-result-meta{color:var(--ui-text-2);opacity:1}
+
+/* Version navigation collapses to a spatial stack badge until the node is active. */
+.node.ui-v23-result-shell .node-result-nav.ui-v23-version-nav{position:absolute;left:10px;bottom:10px;z-index:13;display:flex;align-items:center;gap:4px;min-height:28px;padding:3px 5px;border:1px solid rgba(65,69,65,.78);border-radius:8px;background:rgba(22,24,23,.88);box-shadow:0 6px 18px rgba(0,0,0,.2);backdrop-filter:blur(8px);transition:opacity var(--ui-motion-fast) var(--ui-ease),background var(--ui-motion-fast) var(--ui-ease)}
+.node.ui-v23-result-shell .node-result-nav.ui-v23-version-nav::before{content:'▱';display:grid;place-items:center;width:18px;height:18px;color:var(--ui-text-3);font-size:13px}
+.node.ui-v23-result-shell .node-result-nav.ui-v23-version-nav>span{min-width:28px;color:var(--ui-text-2);font:500 11px/15px var(--ui-font-mono);text-align:center}
+.node.ui-v23-result-shell .node-result-nav.ui-v23-version-nav button{height:22px;min-width:24px;padding:0 6px;border:0;border-radius:5px;background:transparent;color:var(--ui-text-2);font-size:12px}
+.node.ui-v23-result-shell .node-result-nav.ui-v23-version-nav button:hover{background:var(--ui-surface-3);color:var(--ui-text-1)}
+.node.ui-v23-result-shell .node-result-nav.ui-v23-version-nav.single-version{display:none}
+.node.ui-v23-result-shell[data-interaction-state="idle"] .node-result-nav.ui-v23-version-nav button{display:none}
+.node.ui-v23-result-shell[data-interaction-state="idle"] .node-result-nav.ui-v23-version-nav{opacity:.68}
+.node.ui-v23-result-shell:hover .node-result-nav.ui-v23-version-nav,.node.ui-v23-result-shell[data-interaction-state="selected"] .node-result-nav.ui-v23-version-nav{opacity:1}
+.node.ui-v23-result-shell[data-task-state="running"] .node-result-nav.ui-v23-version-nav,.node.ui-v23-result-shell[data-task-state="queued"] .node-result-nav.ui-v23-version-nav{bottom:52px}
+
+/* Result processing uses only real percentages. Missing provider progress becomes indeterminate. */
+.node.ui-v23-result-shell>.node-task-progress{display:none}
+.ui-v23-result-progress{position:absolute;left:10px;right:10px;bottom:10px;z-index:14;display:flex;flex-direction:column;gap:6px;padding:8px 9px;border:1px solid rgba(214,160,77,.34);border-radius:9px;background:rgba(18,19,19,.9);box-shadow:0 6px 18px rgba(0,0,0,.2);backdrop-filter:blur(8px);pointer-events:none}
+.ui-v23-result-progress-copy{display:flex;align-items:center;gap:8px;color:var(--ui-text-2);font:500 11px/15px var(--ui-font-sans)}
+.ui-v23-result-progress-copy strong{margin-left:auto;color:var(--ui-running);font:600 11px/15px var(--ui-font-mono)}
+.ui-v23-result-progress-track{height:3px;border-radius:999px;background:rgba(236,233,226,.12);overflow:hidden}
+.ui-v23-result-progress-track>i{display:block;height:100%;min-width:0;border-radius:inherit;background:var(--ui-running);transition:width 220ms var(--ui-ease)}
+.ui-v23-result-progress.indeterminate .ui-v23-result-progress-track>i{width:34%;animation:uiV23Indeterminate 1.15s var(--ui-ease) infinite}
+.ui-v23-result-progress.queued{border-color:rgba(141,137,132,.28)}
+.ui-v23-result-progress.queued .ui-v23-result-progress-track>i{background:var(--ui-text-3)}
+@keyframes uiV23Indeterminate{0%{transform:translateX(-120%)}100%{transform:translateX(360%)}}
+
+/* Failure UI is user-facing and hides task internals. */
+.node.ui-v23-result-shell .node-failed-actions.ui-v23-failure{position:absolute;left:10px;right:10px;bottom:10px;z-index:15;display:flex;align-items:center;gap:8px;padding:8px 9px;border:1px solid rgba(211,111,106,.38);border-radius:9px;background:rgba(31,20,20,.92);box-shadow:0 6px 18px rgba(0,0,0,.22)}
+.node.ui-v23-result-shell .node-failed-actions.ui-v23-failure span{min-width:0;flex:1;color:#E8B0AD;font:500 12px/17px var(--ui-font-sans);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.node.ui-v23-result-shell .node-failed-actions.ui-v23-failure button{height:28px;padding:0 9px;border:1px solid rgba(211,111,106,.42);border-radius:7px;background:rgba(211,111,106,.12);color:#F1C4C1;font:550 12px/17px var(--ui-font-sans)}
+.node.ui-v23-result-shell .node-failed-actions.ui-v23-failure button:hover{background:rgba(211,111,106,.2)}
+
+/* Resize is available only when a result node is intentionally selected. */
+.node.ui-v23-result-shell .node-resize-handle.ui-v23-resize-handle{right:-4px;bottom:-4px;width:15px;height:15px;border:0;border-radius:4px;background:linear-gradient(135deg,transparent 0 48%,var(--ui-text-3) 49% 57%,transparent 58% 66%,var(--ui-text-3) 67% 75%,transparent 76%);opacity:0;cursor:nwse-resize;transition:opacity var(--ui-motion-fast) var(--ui-ease)}
+.node.ui-v23-result-shell[data-interaction-state="selected"] .node-resize-handle.ui-v23-resize-handle{opacity:.72}
+.node.ui-v23-result-shell[data-interaction-state="selected"] .node-resize-handle.ui-v23-resize-handle:hover{opacity:1}
+
+@media (prefers-reduced-motion:reduce){.ui-v23-result-progress.indeterminate .ui-v23-result-progress-track>i{width:60%;animation:none;transform:none}}

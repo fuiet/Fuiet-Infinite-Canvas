@@ -1,0 +1,21 @@
+.edge{fill:none;stroke:#4A4E4A;stroke-width:1.35;opacity:.78;transition:stroke var(--ui-motion-fast) var(--ui-ease),opacity var(--ui-motion-fast) var(--ui-ease),stroke-width var(--ui-motion-fast) var(--ui-ease)}
+.edge.active,.edge.selected{stroke:var(--ui-selected);stroke-width:1.65;opacity:1}
+.edge.running,.edge.wf-running,.edge.task-running{stroke:var(--ui-running);stroke-width:1.7;opacity:1;stroke-dasharray:5 7;animation:ui-signal-spine 900ms linear infinite}
+.edge.failed,.edge.wf-failed,.edge.task-failed{stroke:var(--ui-danger);opacity:.92}
+.edge-label{font:500 11px/15px var(--ui-font-sans);fill:var(--ui-text-3)}
+.edge-layer.hide-labels .edge-label{display:none}
+
+/* Connect is an explicit canvas mode. Existing port drag mechanics remain the source of truth. */
+.canvas-viewport.ui-connect-mode{cursor:crosshair}
+.canvas-viewport.ui-connect-mode .node{border-color:var(--ui-line-strong)}
+.canvas-viewport.ui-connect-mode .node .node-port{width:18px;height:18px;opacity:1;border-color:#8F948F;background:var(--ui-surface-2);box-shadow:0 2px 9px rgba(0,0,0,.28)}
+.canvas-viewport.ui-connect-mode .node .node-port.out{right:-10px}
+.canvas-viewport.ui-connect-mode .node .node-port.in{left:-10px;right:auto}
+.canvas-viewport.ui-connect-mode .node .node-port::before{content:'+';position:absolute;inset:0;display:grid;place-items:center;color:var(--ui-text-2);font:500 13px/1 var(--ui-font-sans)}
+.canvas-viewport.ui-connect-mode .node .node-port:hover,.canvas-viewport.ui-connect-mode .node .node-port.connecting{border-color:var(--ui-selected);background:var(--ui-surface-3);box-shadow:0 0 0 2px rgba(129,152,217,.16)}
+.canvas-viewport.ui-connect-mode .node .node-port:hover::before,.canvas-viewport.ui-connect-mode .node .node-port.connecting::before{color:var(--ui-text-1)}
+.ui-connect-hint{position:absolute;left:50%;bottom:72px;z-index:90;transform:translateX(-50%);min-height:30px;display:flex;align-items:center;padding:0 10px;border:1px solid var(--ui-line);border-radius:8px;background:rgba(27,29,28,.96);box-shadow:0 8px 24px rgba(0,0,0,.22);color:var(--ui-text-2);font:500 11px/15px var(--ui-font-sans);pointer-events:none}
+.ui-connect-hint.hidden{display:none}
+
+@keyframes ui-signal-spine{to{stroke-dashoffset:-24}}
+@media (prefers-reduced-motion:reduce){.edge.running,.edge.wf-running,.edge.task-running{stroke-dasharray:none;animation:none}}
