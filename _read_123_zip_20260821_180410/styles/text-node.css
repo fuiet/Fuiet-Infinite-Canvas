@@ -303,7 +303,7 @@
 
 /* Text node manual editor v2.4 */
 .node.node-text.text-node-editing{
-  min-height:400px;
+  min-height:320px;
   border:1px solid #8f928f;
   border-radius:20px;
   background:#151616;
@@ -316,21 +316,21 @@
   box-shadow:none;
 }
 .node.node-text.text-node-editing>.node-body{
-  min-height:398px;
+  min-height:318px;
   height:100%;
   border-radius:inherit;
   background:#151616;
   overflow:hidden;
 }
 .node.node-text.text-node-editing .text-node-shell.is-manual-editing{
-  min-height:398px;
+  min-height:318px;
   height:100%;
-  padding:24px 30px 26px;
+  padding:20px 24px 22px;
   background:#151616;
 }
 .node.node-text.text-node-editing .text-node-editor{
   width:100%;
-  min-height:344px;
+  min-height:264px;
   height:100%;
   padding:0;
   border:0;

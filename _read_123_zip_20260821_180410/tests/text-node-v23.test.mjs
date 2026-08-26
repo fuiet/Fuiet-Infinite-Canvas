@@ -33,7 +33,7 @@ test('manual writing switches to a rich text editor with the reference toolbar',
   assert.match(app, /data-text-format=\"bold\"/);
   assert.match(app, /data-text-format=\"bullet\"/);
   assert.match(app, /data-text-format=\"copy\"/);
-  assert.match(app, /n\?\.type==='text'&&n\.textEditing/);
+  assert.match(app, /n\?\.type==='text'&&n\.textInputMode==='manual'/);
   assert.match(css, /node-toolbar-text-editor/);
   assert.match(css, /text-node-editing/);
 });
@@ -87,4 +87,21 @@ test('composer and contextual result toolbar remain mutually exclusive by defaul
   const app = read('app.js');
   assert.match(app, /contentState!=='result'\|\|expandedNodeId===n\.id/);
   assert.match(app, /if\(!expandedNodeId\)\{generator\.classList\.add\('hidden'\);return\}/);
+});
+
+
+test('text nodes remain stable across creation, selection, manual mode and deletion', () => {
+  const app = read('app.js');
+  const css = read('styles/text-node.css');
+  assert.match(app, /n\.textInputMode='ai';n\.textEditing=false;n\.textEditorExpanded=false/);
+  assert.match(app, /\['image','video','audio','script'\]\.includes\(created\.type\)/);
+  assert.match(app, /else if\(created\?\.type==='text'\)expandedNodeId=null/);
+  assert.match(app, /if\(n\.type==='text'\)n\.textEditing=n\.textInputMode==='manual'/);
+  assert.match(app, /function selectManualTextNode/);
+  assert.match(app, /pointerdown',e=>\{e\.stopPropagation\(\);selectManualTextNode\(n,el\)\}/);
+  assert.match(app, /e\.currentTarget\.blur\(\);renderToolbar\(\)/);
+  assert.match(app, /active\?\.matches\?\.\('\[data-text-manual\]'\)\)active\.blur\(\)/);
+  assert.match(app, /n\.w=560/);
+  assert.match(app, /n\.h=320/);
+  assert.match(css, /\.node\.node-text\.text-node-editing\{\s*min-height:320px/);
 });
