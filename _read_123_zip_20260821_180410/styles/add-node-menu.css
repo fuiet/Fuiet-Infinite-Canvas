@@ -1,0 +1,135 @@
+/* Fuiet UI 2.3 · Add Node Menu
+ * Shared by blank-canvas double click and the bottom-dock + entry.
+ */
+.context-menu.quick-add-menu.libtv-add-menu.ui-v23-add-menu{
+  width:196px;
+  min-width:196px;
+  max-width:196px;
+  padding:10px 8px 11px;
+  border:1px solid #3A3C39;
+  border-radius:15px;
+  background:#252624;
+  color:var(--ui-text-1);
+  box-shadow:0 16px 36px rgba(0,0,0,.34);
+  overflow:hidden;
+  backdrop-filter:none;
+}
+.context-menu.quick-add-menu.libtv-add-menu.ui-v23-add-menu .libtv-add-title{
+  min-height:25px;
+  display:flex;
+  align-items:center;
+  padding:1px 8px 5px;
+  margin:0;
+  color:#949893;
+  font:500 12px/17px var(--ui-font-sans);
+  letter-spacing:0;
+}
+.context-menu.quick-add-menu.libtv-add-menu.ui-v23-add-menu .libtv-add-title.resource{
+  min-height:30px;
+  padding-top:8px;
+  padding-bottom:4px;
+  margin-top:2px;
+}
+.context-menu.quick-add-menu.libtv-add-menu.ui-v23-add-menu .libtv-add-row{
+  width:100%;
+  min-height:36px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:0 8px;
+  margin:0;
+  border:0;
+  border-radius:7px;
+  background:transparent;
+  color:#F0EEE9;
+  text-align:left;
+  font:500 13px/18px var(--ui-font-sans);
+  box-shadow:none;
+  outline:0;
+}
+.context-menu.quick-add-menu.libtv-add-menu.ui-v23-add-menu .libtv-add-row:hover,
+.context-menu.quick-add-menu.libtv-add-menu.ui-v23-add-menu .libtv-add-row:focus-visible{
+  background:#2B2C2A;
+  color:#FFFDF8;
+}
+.context-menu.quick-add-menu.libtv-add-menu.ui-v23-add-menu .libtv-add-row:focus-visible{
+  box-shadow:inset 0 0 0 1px rgba(129,152,217,.62);
+}
+.context-menu.quick-add-menu.libtv-add-menu.ui-v23-add-menu .libtv-add-row>i{
+  width:16px;
+  height:16px;
+  flex:0 0 16px;
+  display:grid;
+  place-items:center;
+  margin:0;
+  color:#E8E6E1;
+  font-style:normal;
+}
+.context-menu.quick-add-menu.libtv-add-menu.ui-v23-add-menu .libtv-add-row>i svg{
+  width:16px;
+  height:16px;
+  display:block;
+  fill:none;
+  stroke:currentColor;
+  stroke-width:1.55;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+.context-menu.quick-add-menu.libtv-add-menu.ui-v23-add-menu .libtv-add-row>span{
+  min-width:0;
+  flex:0 1 auto;
+  white-space:nowrap;
+}
+.context-menu.quick-add-menu.libtv-add-menu.ui-v23-add-menu .libtv-add-row>b.add-node-chevron,
+.context-menu.quick-add-menu.libtv-add-menu.ui-v23-add-menu .libtv-add-row>b:not(.libtv-badge){
+  width:14px;
+  margin-left:auto;
+  color:#8A8E89;
+  font:500 15px/18px var(--ui-font-sans);
+  text-align:right;
+}
+.context-menu.quick-add-menu.libtv-add-menu.ui-v23-add-menu .libtv-badge{
+  min-width:0;
+  height:17px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  flex:0 0 auto;
+  padding:0 5px;
+  margin-left:0;
+  border:0;
+  border-radius:4px;
+  background:#464845;
+  color:#B9BCB7;
+  font:600 9px/17px var(--ui-font-sans);
+  letter-spacing:.01em;
+  text-transform:none;
+}
+.context-menu.quick-add-menu.libtv-add-menu.ui-v23-add-menu .libtv-add-row[data-id="director"] .libtv-badge{
+  background:#176E7B;
+  color:#B9F3FA;
+}
+.context-menu.quick-add-menu.libtv-add-menu.ui-v23-add-menu .libtv-add-row[data-id="frame-analysis"] .libtv-badge{
+  position:relative;
+  margin-left:14px;
+  background:#26788B;
+  color:#C7F5FF;
+}
+.context-menu.quick-add-menu.libtv-add-menu.ui-v23-add-menu .libtv-add-row[data-id="frame-analysis"] .libtv-badge::before{
+  content:'◆';
+  position:absolute;
+  left:-13px;
+  top:0;
+  color:#E5AF45;
+  font-size:8px;
+  line-height:17px;
+}
+.context-menu.quick-add-menu.libtv-add-menu.ui-v23-add-menu .libtv-add-row[data-id="text"]:hover,
+.context-menu.quick-add-menu.libtv-add-menu.ui-v23-add-menu .libtv-add-row[data-id="text"]:focus-visible{
+  background:#292A28;
+}
+.context-menu.quick-add-menu.libtv-add-menu.ui-v23-add-menu .add-node-menu-divider{
+  height:1px;
+  margin:6px 8px 0;
+  background:transparent;
+}
