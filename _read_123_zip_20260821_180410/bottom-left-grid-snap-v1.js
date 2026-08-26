@@ -64,4 +64,10 @@ btn.addEventListener('click',e=>{
 
 window.addEventListener('storage',e=>{if(e.key==='libtv-clone-state')sync()});
 sync();
+if(!document.querySelector('script[data-canvas-zoom-tool]')){
+  const s=document.createElement('script');
+  s.src='./bottom-left-zoom-v1.js';
+  s.dataset.canvasZoomTool='1';
+  document.head.appendChild(s);
+}
 })();
