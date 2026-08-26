@@ -1,5 +1,5 @@
 /* Canvas Studio · Bottom Dock v4
- * Crisp inline-vector icons based on the supplied reference toolbar.
+ * High-clarity inline SVG icons based on the supplied reference toolbar.
  * Keeps all existing dock behavior unchanged.
  */
 (()=>{
@@ -13,14 +13,14 @@
   const svg=(body,extra='')=>`<svg class="dock-v4-icon ${extra}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${body}</svg>`;
   const ICONS={
     add:svg('<path d="M12 5v14M5 12h14"/>'),
-    cursor:svg('<path d="M5.5 4.5 17.8 10.6l-5.2 1.5-2.1 6.1-5-13.7Z"/>','dock-mode-cursor'),
-    hand:svg('<path d="M8.4 11V7.8a1.25 1.25 0 0 1 2.5 0V11m0-1V6.9a1.25 1.25 0 0 1 2.5 0V10m0 .3V7.6a1.25 1.25 0 0 1 2.5 0v3.2m0 .7V9.4a1.25 1.25 0 0 1 2.5 0v4.4c0 3.2-2.6 5.8-5.8 5.8h-1.5a5.7 5.7 0 0 1-5.2-3.4l-1.3-3a1.25 1.25 0 0 1 2.2-1.2l1.6 2.2V11Z"/>','dock-mode-hand'),
-    toolbox:svg('<circle cx="6" cy="7" r="1.8"/><circle cx="18" cy="7" r="1.8"/><circle cx="12" cy="17" r="1.8"/><path d="M7.8 7h8.4M7.2 8.6l3.7 6.4M16.8 8.6 13.1 15"/>'),
-    materials:svg('<path d="M8 5.8 13 9l-3.1 4.7-5-3.1L8 5.8Z"/><path d="m15.7 7.4 3.2 3.4-4.3 4-3.1-3.4 4.2-4Z"/><path d="m9.3 14.3 4.9 3-2.3 3.6-4.8-3 2.2-3.6Z"/><circle cx="5.7" cy="5" r="1.45"/>'),
-    character:svg('<path d="M6.6 9.2a5.4 5.4 0 0 1 10.8 0M8.1 16.8c1-1.1 2.4-1.7 3.9-1.7s2.9.6 3.9 1.7M9.5 10.2h5"/><circle cx="7.2" cy="10.2" r="2.25"/><circle cx="16.8" cy="10.2" r="2.25"/>'),
-    history:svg('<circle cx="12" cy="12" r="8"/><path d="M12 7.5v4.9l3.2 1.9"/>'),
-    keyboard:svg('<rect x="3.5" y="6.2" width="17" height="11.6" rx="2"/><path d="M7 9.7h.01M10.4 9.7h.01M13.8 9.7h.01M17.2 9.7h.01M7 13h.01M10.4 13h.01M13.8 13h.01M17.2 13h.01M8.3 15.5h7.4"/>'),
-    help:svg('<circle cx="12" cy="12" r="8"/><path d="M9.6 9.2a2.7 2.7 0 1 1 4.6 2c-.9.8-1.9 1.2-1.9 2.7M12 17h.01"/>')
+    cursor:svg('<path d="M5 4 18 10.5l-5.5 1.6-2.2 6.4L5 4Z"/>','dock-mode-cursor'),
+    hand:svg('<path d="M8 11V8a1.5 1.5 0 0 1 3 0v3M11 10V7a1.5 1.5 0 0 1 3 0v3M14 10V8a1.5 1.5 0 0 1 3 0v3M17 11v-1a1.5 1.5 0 0 1 3 0v4c0 3.5-2.5 6-6 6h-2c-2.5 0-4.5-1.3-5.5-3.5L5 13.5a1.5 1.5 0 0 1 2.6-1.4L9 14v-3"/>','dock-mode-hand'),
+    toolbox:svg('<circle cx="6" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="12" cy="18" r="2"/><path d="M8 6h8M7.4 7.7l3.4 8M16.6 7.7l-3.4 8"/>'),
+    materials:svg('<circle cx="9" cy="9" r="3"/><path d="m14 5 5 5-5 5-5-5 5-5Z"/><path d="M7 16h6l3 3H10l-3-3Z"/>'),
+    character:svg('<circle cx="7" cy="11" r="3"/><circle cx="17" cy="11" r="3"/><path d="M10 11h4M4 11H2M22 11h-2M8 17c1.1-1.3 2.4-2 4-2s2.9.7 4 2"/>'),
+    history:svg('<circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/>'),
+    keyboard:svg('<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h.01M11 10h.01M15 10h.01M19 10h.01M7 14h.01M11 14h.01M15 14h.01M19 14h.01M8 16h8"/>'),
+    help:svg('<circle cx="12" cy="12" r="8"/><path d="M9.5 9.5a2.7 2.7 0 1 1 4.7 1.8c-1 .9-2.2 1.3-2.2 2.7M12 17h.01"/>')
   };
 
   const setIcon=(action,html)=>{
@@ -42,30 +42,52 @@
   const style=document.createElement('style');
   style.id='bottomDockV4Styles';
   style.textContent=`
-    #bottomDock .dock-btn{position:relative!important;color:#e1e1e1!important}
-    #bottomDock .dock-btn:hover,#bottomDock .dock-btn.open,#bottomDock .dock-btn.active,#bottomDock .dock-btn.mode-grab{color:#f7f7f7!important}
-    #bottomDock .dock-btn.primary{color:#171717!important}
+    #bottomDock.bottom-dock{
+      transform:none!important;
+      will-change:auto!important;
+    }
+    #bottomDock .dock-btn{
+      position:relative!important;
+      color:#eeeeee!important;
+      -webkit-font-smoothing:auto!important;
+    }
+    #bottomDock .dock-btn:hover,#bottomDock .dock-btn.open,#bottomDock .dock-btn.active,#bottomDock .dock-btn.mode-grab{color:#ffffff!important}
+    #bottomDock .dock-btn.primary{color:#111111!important}
     #bottomDock .dock-v4-icon{
       display:block!important;
-      width:20px!important;
-      height:20px!important;
-      flex:0 0 20px!important;
+      width:24px!important;
+      height:24px!important;
+      flex:0 0 24px!important;
       overflow:visible!important;
       fill:none!important;
       stroke:currentColor!important;
-      stroke-width:1.85!important;
+      stroke-width:2!important;
       stroke-linecap:round!important;
       stroke-linejoin:round!important;
-      shape-rendering:geometricPrecision;
-      vector-effect:non-scaling-stroke;
+      shape-rendering:auto!important;
+      vector-effect:non-scaling-stroke!important;
       opacity:1!important;
       transform:none!important;
       filter:none!important;
     }
-    #bottomDock .dock-btn.primary .dock-v4-icon{width:21px!important;height:21px!important;stroke-width:2!important}
+    #bottomDock .dock-btn.primary .dock-v4-icon{width:23px!important;height:23px!important;stroke-width:2.2!important}
     #bottomDock .dock-mode-hand{display:none!important}
     #bottomDock [data-dock-action="mode"].mode-grab .dock-mode-cursor{display:none!important}
     #bottomDock [data-dock-action="mode"].mode-grab .dock-mode-hand{display:block!important}
   `;
   document.head.appendChild(style);
+
+  function snapDockToDevicePixels(){
+    const dpr=window.devicePixelRatio||1;
+    const width=dock.offsetWidth;
+    const rawLeft=(window.innerWidth-width)/2;
+    const snappedLeft=Math.round(rawLeft*dpr)/dpr;
+    const rawBottom=18;
+    const snappedBottom=Math.round(rawBottom*dpr)/dpr;
+    dock.style.left=`${snappedLeft}px`;
+    dock.style.bottom=`${snappedBottom}px`;
+  }
+
+  requestAnimationFrame(snapDockToDevicePixels);
+  window.addEventListener('resize',()=>requestAnimationFrame(snapDockToDevicePixels),{passive:true});
 })();
