@@ -24,6 +24,16 @@ jobs:
       - name: Apply native toolbar and metadata migration
         working-directory: _read_123_zip_20260821_180410
         run: node scripts/migrate-ui23-native-toolbar-metadata.mjs
+      - name: Normalize migrated UI assertion
+        working-directory: _read_123_zip_20260821_180410
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('tests/ui-design-system.test.mjs')
+          s = p.read_text()
+          s = s.replace("assert.match(html, /styles/result-shell.css/);", "assert.ok(html.includes('styles/result-shell.css'));" )
+          p.write_text(s)
+          PY
       - name: Validate migrated UI
         working-directory: _read_123_zip_20260821_180410
         run: |
