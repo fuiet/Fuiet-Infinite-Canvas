@@ -26,12 +26,37 @@
 .node-port:hover,.node-port.connecting{border-color:var(--ui-selected);background:var(--ui-surface-3)}
 .node-port:hover::before,.node-port.connecting::before{color:var(--ui-text-1)}
 
+/* Universal Four-State Node Model: empty/result × idle/selected. */
+.node[data-content-state="empty"]{background:var(--ui-surface-1);border-color:var(--ui-line)}
+.node[data-content-state="empty"][data-interaction-state="selected"]{border-color:var(--ui-selected)}
+.node[data-content-state="result"]{min-height:0}
+.node[data-content-state="result"] .node-footer{display:none}
+.node[data-content-state="result"] .node-result-nav{opacity:.42;transition:opacity var(--ui-motion-fast) var(--ui-ease)}
+.node[data-content-state="result"]:hover .node-result-nav,.node[data-content-state="result"][data-interaction-state="selected"] .node-result-nav{opacity:1}
+.node[data-content-state="result"][data-interaction-state="idle"] .node-menu-btn{opacity:0;pointer-events:none}
+.node[data-content-state="result"]:hover .node-menu-btn,.node[data-content-state="result"][data-interaction-state="selected"] .node-menu-btn{opacity:1;pointer-events:auto}
+.node[data-content-state="result"] .node-resize-handle{opacity:0}
+.node[data-content-state="result"][data-interaction-state="selected"] .node-resize-handle{opacity:.6}
+.node[data-content-state="result"] .text-node-try,.node[data-content-state="result"] [data-text-quick]{display:none}
+.node[data-content-state="result"] .script-try-label,.node[data-content-state="result"] [data-script-preset]{display:none}
+.node[data-content-state="result"][data-task-state="running"] .node-footer,.node[data-content-state="result"][data-task-state="queued"] .node-footer{display:none}
+.node[data-task-state="running"],.node[data-task-state="queued"]{border-color:rgba(214,160,77,.75)}
+.node[data-task-state="failed"]{border-color:rgba(211,111,106,.72)}
+.node[data-task-state="completed"] .node-run-status{opacity:0;pointer-events:none}
+.node.ui-v23-focus-pulse{animation:uiV23NodeFocus 680ms var(--ui-ease)}
+@keyframes uiV23NodeFocus{0%,100%{box-shadow:0 0 0 1px rgba(129,152,217,.12)}45%{box-shadow:0 0 0 3px rgba(129,152,217,.3),0 10px 32px rgba(0,0,0,.2)}}
+
 /* Result-first media nodes: once media exists, the media itself becomes the card. */
 .node-image:has(.node-content-img),.node-image:has(.media-clip),.node-video:has(.node-content-video),.node-video:has(video){background:transparent;border-color:transparent;box-shadow:none}
 .node-image:has(.node-content-img) .node-body,.node-image:has(.media-clip) .node-body,.node-video:has(.node-content-video) .node-body,.node-video:has(video) .node-body{padding:0;background:transparent}
 .node-image:has(.node-content-img) .node-footer,.node-image:has(.media-clip) .node-footer,.node-video:has(.node-content-video) .node-footer,.node-video:has(video) .node-footer{display:none}
 .node-image:has(.node-content-img) .node-content-img,.node-image:has(.media-clip) .media-clip,.node-video:has(.node-content-video) .node-content-video,.node-video:has(video) video{border:1px solid var(--ui-line);border-radius:var(--ui-radius-node);overflow:hidden;background:#0F1010}
 .node-image.selected:has(.node-content-img) .node-content-img,.node-image.selected:has(.media-clip) .media-clip,.node-video.selected:has(.node-content-video) .node-content-video,.node-video.selected:has(video) video{border-color:var(--ui-selected);box-shadow:0 0 0 1px rgba(129,152,217,.12)}
+.node-image[data-content-state="result"]{width:420px!important;height:auto!important;min-height:0!important;background:transparent!important;border-color:transparent!important;box-shadow:none!important}
+.node-video[data-content-state="result"]{min-height:0;background:transparent;border-color:transparent;box-shadow:none}
+.node-image[data-content-state="result"] .node-body,.node-video[data-content-state="result"] .node-body{min-height:0;padding:0}
+.node-image[data-content-state="result"] .image-node-stage,.node-video[data-content-state="result"] video{width:100%;display:block}
+.node-image[data-content-state="result"][data-interaction-state="selected"] .image-node-stage,.node-video[data-content-state="result"][data-interaction-state="selected"] video{border-color:var(--ui-selected);box-shadow:0 0 0 1px rgba(129,152,217,.12)}
 
 /* Visible generation progress belongs to the node, not a task inspector. */
 .node-run-status{display:inline-flex;align-items:center;gap:5px;margin-left:auto;padding:2px 6px;border-radius:5px;background:var(--ui-surface-2);color:var(--ui-text-3);font:500 11px/15px var(--ui-font-sans)}
