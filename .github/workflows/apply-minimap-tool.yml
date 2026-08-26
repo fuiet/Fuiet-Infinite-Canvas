@@ -1,0 +1,84 @@
+name: Apply Minimap Tool
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Apply minimap tool
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root=Path('_read_123_zip_20260821_180410')
+
+          # 1) Third persistent button: real minimap icon.
+          p=root/'index.html'
+          s=p.read_text()
+          old='<button id="minimapBtn" class="pill-btn">▦</button>'
+          new='''<button id="minimapBtn" class="pill-btn" type="button" aria-label="小地图" title="小地图">
+        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s6-5.1 6-11a6 6 0 1 0-12 0c0 5.9 6 11 6 11Z"/><circle cx="12" cy="10" r="2.2"/></svg>
+      </button>'''
+          if old in s:
+              s=s.replace(old,new,1)
+              p.write_text(s)
+
+          # 2) Minimap behavior: active state + force a fresh render when opened.
+          p=root/'app.js'
+          s=p.read_text()
+          old="$('#minimapBtn').onclick=()=>minimap.classList.toggle('hidden');"
+          new="$('#minimapBtn').onclick=()=>{const open=minimap.classList.contains('hidden');minimap.classList.toggle('hidden',!open);$('#minimapBtn').classList.toggle('active',open);if(open)renderMinimap()};"
+          if old in s:
+              s=s.replace(old,new,1)
+
+          # Always show every node in the current canvas, even if a group is collapsed.
+          old="function renderMinimap(){if(!minimap||!minimapNodes||!minimapView)return;minimapNodes.innerHTML='';const W=190,H=120,pad=10,b=sceneBounds(),vw=Math.max(1,b.width),vh=Math.max(1,b.height),scale=Math.min((W-pad*2)/vw,(H-pad*2)/vh),ox=(W-vw*scale)/2-b.left*scale,oy=(H-vh*scale)/2-b.top*scale;minimapMap={scale,ox,oy,bounds:b};const frag=document.createDocumentFragment(),collapsedSeen=new Set();state.nodes.forEach(n=>{const cg=collapsedGroupForNode(n.id);if(cg){if(collapsedSeen.has(cg.id))return;collapsedSeen.add(cg.id);const gb=groupBounds(cg);if(!gb)return;const d=document.createElement('div');d.className='mini-node mini-group';d.dataset.groupId=cg.id;d.style.left=(ox+gb.left*scale)+'px';d.style.top=(oy+gb.top*scale)+'px';d.style.width=Math.max(4,(gb.right-gb.left)*scale)+'px';d.style.height=Math.max(4,(gb.bottom-gb.top)*scale)+'px';frag.appendChild(d);return}const d=document.createElement('div');d.className='mini-node';d.dataset.nodeId=n.id;d.style.left=(ox+n.x*scale)+'px';d.style.top=(oy+n.y*scale)+'px';d.style.width=Math.max(2,(n.w||320)*scale)+'px';d.style.height=Math.max(2,nodeHeight(n)*scale)+'px';frag.appendChild(d)});minimapNodes.appendChild(frag);updateMinimapViewport()}"
+          new="function renderMinimap(){if(!minimap||!minimapNodes||!minimapView)return;minimapNodes.innerHTML='';const W=190,H=120,pad=10,b=sceneBounds(),vw=Math.max(1,b.width),vh=Math.max(1,b.height),scale=Math.min((W-pad*2)/vw,(H-pad*2)/vh),ox=(W-vw*scale)/2-b.left*scale,oy=(H-vh*scale)/2-b.top*scale;minimapMap={scale,ox,oy,bounds:b};const frag=document.createDocumentFragment();state.nodes.forEach(n=>{const d=document.createElement('div');d.className='mini-node';d.dataset.nodeId=n.id;d.dataset.type=n.type||'';d.style.left=(ox+n.x*scale)+'px';d.style.top=(oy+n.y*scale)+'px';d.style.width=Math.max(3,(n.w||320)*scale)+'px';d.style.height=Math.max(3,nodeHeight(n)*scale)+'px';frag.appendChild(d)});minimapNodes.appendChild(frag);updateMinimapViewport()}"
+          if old in s:
+              s=s.replace(old,new,1)
+          p.write_text(s)
+
+          # 3) Visual treatment for the third tool and the floating minimap.
+          p=root/'styles'/'canvas.css'
+          s=p.read_text()
+          old=".minimap{position:absolute;left:16px;bottom:56px;width:190px;height:120px;border:1px solid var(--ui-line);border-radius:10px;background:rgba(22,24,23,.96);box-shadow:var(--ui-shadow-float);overflow:hidden;z-index:90}\n.minimap .mini-node{position:absolute;background:#5d625d;border-radius:2px;opacity:.78}\n.minimap #minimapView{position:absolute;border:1px solid var(--ui-selected);background:rgba(129,152,217,.06);pointer-events:none}"
+          new=".minimap{position:absolute;left:118px;bottom:58px;width:190px;height:120px;border:1px solid #3b3d3b;border-radius:10px;background:#202220;box-shadow:0 10px 28px rgba(0,0,0,.38);overflow:hidden;z-index:90;cursor:crosshair}\n.minimap .mini-node{position:absolute;min-width:3px;min-height:3px;background:#777b77;border-radius:1px;opacity:.9}\n.minimap .mini-node[data-type=video]{background:#6f7477}.minimap .mini-node[data-type=audio]{background:#70766f}.minimap .mini-node[data-type=text]{background:#82827c}\n.minimap #minimapView{position:absolute;border:1px solid #777b77;background:rgba(255,255,255,.035);pointer-events:none}"
+          if old in s:
+              s=s.replace(old,new,1)
+          p.write_text(s)
+
+          # 4) Match the other persistent controls.
+          p=root/'bottom-dock-v4.js'
+          s=p.read_text()
+          marker="#organizeCanvasBtn:hover::after,#organizeCanvasBtn:focus-visible::after{opacity:1;transform:translate(-50%,0)}"
+          add="""\n#minimapBtn{position:relative;width:30px!important;height:30px!important;border:0!important;background:transparent!important;color:#d7d7d7!important;border-radius:7px!important;padding:0!important;display:grid!important;place-items:center!important;font-size:0!important}#minimapBtn:hover,#minimapBtn.active,#minimapBtn:focus-visible{background:#3a3a3a!important;color:#fff!important;outline:none!important}#minimapBtn svg{width:18px!important;height:18px!important;fill:none!important;stroke:currentColor!important;stroke-width:1.8!important;stroke-linecap:round!important;stroke-linejoin:round!important}\n"""
+          if marker in s and '#minimapBtn{position:relative' not in s:
+              s=s.replace(marker,marker+add,1)
+          p.write_text(s)
+          PY
+      - name: Validate syntax
+        run: |
+          node --check _read_123_zip_20260821_180410/app.js
+          node --check _read_123_zip_20260821_180410/bottom-dock-v4.js
+          git diff --check
+      - name: Commit production minimap
+        run: |
+          if git diff --quiet; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add _read_123_zip_20260821_180410/index.html _read_123_zip_20260821_180410/app.js _read_123_zip_20260821_180410/styles/canvas.css _read_123_zip_20260821_180410/bottom-dock-v4.js
+          git commit -m "Add persistent minimap tool"
+          git push origin main
