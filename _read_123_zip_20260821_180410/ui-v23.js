@@ -4,6 +4,8 @@
   const viewport = document.getElementById('canvasViewport');
   const nodeLayer = document.getElementById('nodeLayer');
   const contextMenu = document.getElementById('contextMenu');
+  const toolbar = document.getElementById('nodeToolbar');
+  const generator = document.getElementById('generatorPanel');
   const legacyAssetAction = document.querySelector('#bottomDock [data-dock-action="asset"]');
 
   if (!drawer || !viewport || !nodeLayer) return;
@@ -25,6 +27,10 @@
     script: '☰',
     director: '◇'
   };
+
+  const composerOverride = new Set();
+  const resultSizeCache = new Map();
+  const previousTaskState = new Map();
 
   const nodeType = (node) => NODE_TYPES.find((type) => node.classList.contains(`node-${type}`)) || 'node';
 
@@ -54,15 +60,182 @@
     if (el.getAttribute(name) !== value) el.setAttribute(name, value);
   };
 
+  const rememberResultSize = (node, content, interaction) => {
+    if (content !== 'result' || !node.dataset.id) return;
+    const id = node.dataset.id;
+    if (interaction === 'idle') {
+      resultSizeCache.set(id, {
+        width: node.style.width || '',
+        height: node.style.height || ''
+      });
+      return;
+    }
+    if (interaction !== 'selected') return;
+    const cached = resultSizeCache.get(id);
+    if (cached) {
+      if (cached.width) node.style.width = cached.width;
+      else node.style.removeProperty('width');
+      if (cached.height) node.style.height = cached.height;
+      else node.style.removeProperty('height');
+      return;
+    }
+    if (node.classList.contains('node-image') && !node.classList.contains('resized-node')) {
+      node.style.width = '320px';
+      node.style.removeProperty('height');
+    }
+  };
+
   const syncNodeState = (node) => {
     const type = nodeType(node);
     const content = nodeHasResult(node, type) ? 'result' : 'empty';
     const interaction = node.classList.contains('selected') || node.classList.contains('multi-selected') ? 'selected' : 'idle';
     const task = taskState(node);
+    const id = node.dataset.id || '';
+    const previous = previousTaskState.get(id) || 'idle';
+
+    if (id && ['running', 'queued'].includes(previous) && ['completed', 'idle', 'failed', 'cancelled'].includes(task)) {
+      composerOverride.delete(id);
+    }
+    if (id) previousTaskState.set(id, task);
+
     setAttrIfChanged(node, 'data-node-type', type);
     setAttrIfChanged(node, 'data-content-state', content);
     setAttrIfChanged(node, 'data-interaction-state', interaction);
     setAttrIfChanged(node, 'data-task-state', task);
+    rememberResultSize(node, content, interaction);
+  };
+
+  const selectedNodes = () => [...nodeLayer.querySelectorAll('.node')].filter((node) => {
+    return node.classList.contains('selected') || node.classList.contains('multi-selected');
+  });
+
+  const positionContextToolbar = (node) => {
+    if (!toolbar || toolbar.classList.contains('hidden')) return;
+    requestAnimationFrame(() => {
+      const r = node.getBoundingClientRect();
+      const width = Math.max(180, toolbar.offsetWidth || 420);
+      const left = Math.max(16, Math.min(window.innerWidth - width - 16, r.left));
+      const above = r.top - (toolbar.offsetHeight || 38) - 8;
+      const top = above >= 52 ? above : Math.min(window.innerHeight - (toolbar.offsetHeight || 38) - 16, r.bottom + 8);
+      toolbar.style.left = `${left}px`;
+      toolbar.style.top = `${Math.max(12, top)}px`;
+    });
+  };
+
+  const positionComposer = (node) => {
+    if (!generator) return;
+    requestAnimationFrame(() => {
+      const r = node.getBoundingClientRect();
+      const width = Math.min(620, window.innerWidth - 64);
+      const edge = 16;
+      const gap = 12;
+      generator.style.width = `${width}px`;
+      generator.style.left = `${Math.max(edge, Math.min(window.innerWidth - width - edge, r.left - 8))}px`;
+      const below = r.bottom + gap;
+      const maxHeight = Math.max(180, window.innerHeight - below - 72);
+      if (maxHeight >= 220) {
+        generator.style.top = `${below}px`;
+        generator.style.maxHeight = `${maxHeight}px`;
+      } else {
+        const estimated = Math.min(360, Math.max(220, generator.scrollHeight || 280));
+        generator.style.top = `${Math.max(52, r.top - estimated - gap)}px`;
+        generator.style.maxHeight = `${Math.max(180, r.top - 68)}px`;
+      }
+    });
+  };
+
+  const generatorBelongsTo = (id) => generator?.dataset.uiV23NodeId === String(id);
+
+  const openResultComposer = (node) => {
+    if (!generator || !node?.dataset.id || !generatorBelongsTo(node.dataset.id)) return;
+    composerOverride.clear();
+    composerOverride.add(node.dataset.id);
+    setAttrIfChanged(node, 'data-ui-composer-open', 'true');
+    toolbar?.classList.add('hidden');
+    generator.classList.remove('hidden');
+    generator.classList.add('ui-v23-result-composer');
+    positionComposer(node);
+    requestAnimationFrame(() => {
+      generator.querySelector('#promptInput, #scriptDetailPrompt, textarea')?.focus();
+    });
+  };
+
+  const decorateContextToolbar = (node) => {
+    if (!toolbar || !node?.dataset.id || !generatorBelongsTo(node.dataset.id)) return;
+    if (toolbar.querySelector('[data-ui-v23-edit-prompt]')) return;
+
+    const separator = document.createElement('span');
+    separator.className = 'ui-v23-context-separator';
+
+    const edit = document.createElement('button');
+    edit.type = 'button';
+    edit.className = 'tool-btn ui-v23-context-action';
+    edit.dataset.uiV23EditPrompt = '';
+    edit.textContent = '改提示词';
+    edit.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openResultComposer(node);
+    });
+
+    const rerun = document.createElement('button');
+    rerun.type = 'button';
+    rerun.className = 'tool-btn ui-v23-context-action';
+    rerun.dataset.uiV23Rerun = '';
+    rerun.textContent = '重新生成';
+    rerun.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openResultComposer(node);
+    });
+
+    toolbar.append(separator, edit, rerun);
+  };
+
+  const syncInteractionSurfaces = () => {
+    const selected = selectedNodes();
+    if (selected.length !== 1) {
+      composerOverride.clear();
+      return;
+    }
+
+    const node = selected[0];
+    const id = node.dataset.id || '';
+    const content = node.getAttribute('data-content-state') || (nodeHasResult(node) ? 'result' : 'empty');
+
+    [...composerOverride].forEach((candidate) => {
+      if (candidate !== id) composerOverride.delete(candidate);
+    });
+
+    if (generator && !generator.classList.contains('hidden') && generator.querySelector('.lib-gen-main, .generator-shell, textarea')) {
+      generator.dataset.uiV23NodeId = id;
+    }
+
+    if (content === 'empty') {
+      node.removeAttribute('data-ui-composer-open');
+      toolbar?.classList.add('hidden');
+      return;
+    }
+
+    if (content !== 'result') return;
+
+    if (composerOverride.has(id) && generatorBelongsTo(id)) {
+      setAttrIfChanged(node, 'data-ui-composer-open', 'true');
+      toolbar?.classList.add('hidden');
+      generator?.classList.remove('hidden');
+      generator?.classList.add('ui-v23-result-composer');
+      positionComposer(node);
+      return;
+    }
+
+    node.removeAttribute('data-ui-composer-open');
+    generator?.classList.add('hidden');
+    generator?.classList.remove('ui-v23-result-composer');
+    if (toolbar?.children.length) {
+      toolbar.classList.remove('hidden');
+      decorateContextToolbar(node);
+      positionContextToolbar(node);
+    }
   };
 
   let nodeSyncFrame = 0;
@@ -70,12 +243,35 @@
     cancelAnimationFrame(nodeSyncFrame);
     nodeSyncFrame = requestAnimationFrame(() => {
       nodeLayer.querySelectorAll('.node').forEach(syncNodeState);
+      syncInteractionSurfaces();
     });
   };
 
   const nodeObserver = new MutationObserver(syncAllNodeStates);
   nodeObserver.observe(nodeLayer, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
   syncAllNodeStates();
+
+  document.addEventListener('click', (event) => {
+    const generate = event.target.closest?.('#generateBtn, #scriptGenerateBtn, .generate-btn');
+    if (!generate) return;
+    const selected = selectedNodes();
+    if (selected.length !== 1) return;
+    const id = selected[0].dataset.id || '';
+    composerOverride.delete(id);
+    selected[0].removeAttribute('data-ui-composer-open');
+    requestAnimationFrame(syncAllNodeStates);
+  }, true);
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    const selected = selectedNodes();
+    if (selected.length === 1 && composerOverride.has(selected[0].dataset.id || '')) {
+      composerOverride.delete(selected[0].dataset.id || '');
+      selected[0].removeAttribute('data-ui-composer-open');
+      generator?.classList.add('hidden');
+      requestAnimationFrame(syncAllNodeStates);
+    }
+  });
 
   const setOpen = (open) => {
     if (assetManagerBtn) {
@@ -226,7 +422,10 @@
     if (!hud) return;
     hud.classList.add('ui-v23-workflow-hud');
   };
-  const appObserver = new MutationObserver(() => simplifyWorkflowHud());
+  const appObserver = new MutationObserver(() => {
+    simplifyWorkflowHud();
+    syncAllNodeStates();
+  });
   appObserver.observe(document.getElementById('app') || document.body, { childList: true, subtree: true });
   simplifyWorkflowHud();
 })();
