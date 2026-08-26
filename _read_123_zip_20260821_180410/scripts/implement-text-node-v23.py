@@ -61,5 +61,25 @@ if "a.action==='text-rewrite'" not in app:
 '''
     app = replace_once(app, marker, marker + handlers, 'text toolbar handlers')
 
+# 4) Text generator always stays below its text node. It never flips above when
+# viewport space is insufficient; its fixed 594 x 142 screen-space size remains unchanged.
+text_below_marker = "      if(isText){\n        generator.style.top=top+'px';\n        return;\n      }"
+if text_below_marker not in app:
+    old_positioning = """      let top=r.bottom+gap;
+      if(top+height>bottomLimit)top=r.top-gap-height;
+      top=Math.max(48,Math.min(bottomLimit-height,top));
+      generator.style.top=top+'px';
+      return;"""
+    new_positioning = """      let top=r.bottom+gap;
+      if(isText){
+        generator.style.top=top+'px';
+        return;
+      }
+      if(top+height>bottomLimit)top=r.top-gap-height;
+      top=Math.max(48,Math.min(bottomLimit-height,top));
+      generator.style.top=top+'px';
+      return;"""
+    app = replace_once(app, old_positioning, new_positioning, 'text generator fixed-below positioning')
+
 app_path.write_text(app, encoding='utf-8')
 print('Applied UI 2.3 text node migration.')
