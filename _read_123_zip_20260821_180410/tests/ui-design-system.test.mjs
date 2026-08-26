@@ -44,8 +44,10 @@ test('result nodes use context toolbar by default and composer only by explicit 
   const runtime = read('ui-v23.js');
   assert.match(runtime, /composerOverride/);
   assert.match(runtime, /openResultComposer/);
-  assert.match(runtime, /data-ui-v23-edit-prompt/);
-  assert.match(runtime, /data-ui-v23-rerun/);
+  assert.match(runtime, /uiV23EditPrompt/);
+  assert.match(runtime, /uiV23Rerun/);
+  assert.match(runtime, /改提示词/);
+  assert.match(runtime, /重新生成/);
   assert.match(runtime, /generator\.classList\.add\('hidden'\)/);
   assert.match(runtime, /toolbar\.classList\.remove\('hidden'\)/);
 });
