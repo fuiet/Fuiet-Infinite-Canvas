@@ -69,10 +69,10 @@ extra_test = r'''
 
 test('manual text view keeps the same DOM surface across clicks so double click enters editing', () => {
   const app = read('app.js');
-  assert.match(app, /const manualView=\$\('\[data-text-manual-view\]',el\)/);
-  assert.match(app, /manualView\.addEventListener\('pointerdown'/);
-  assert.match(app, /manualView\.addEventListener\('dblclick'/);
-  assert.match(app, /startManualTextEditing\(n\)/);
+  assert.ok(app.includes("const manualView=$('[data-text-manual-view]',el);"));
+  assert.ok(app.includes("manualView.addEventListener('pointerdown'"));
+  assert.ok(app.includes("manualView.addEventListener('dblclick'"));
+  assert.ok(app.includes("startManualTextEditing(n);"));
   assert.ok(app.includes("${n.textInputMode==='manual'?'data-text-manual-view':''}"));
 });
 '''
