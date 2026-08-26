@@ -66,7 +66,12 @@ test('result context toolbar is generated natively by media type', () => {
   const runtime = read('ui-v23.js');
   const css = read('styles/context-toolbar.css');
   assert.match(app, /function nodeTopBarActions/);
-  assert.match(app, /label:'编辑图片'/);
+  assert.match(app, /label:'人像后期调节'/);
+  assert.match(app, /label:'全景'/);
+  assert.match(app, /label:'多角度'/);
+  assert.match(app, /label:'打光'/);
+  assert.match(app, /label:'九宫格'/);
+  assert.match(app, /label:'高清'/);
   assert.match(app, /label:'编辑视频'/);
   assert.match(app, /label:'截取'/);
   assert.match(app, /label:'编辑脚本'/);
