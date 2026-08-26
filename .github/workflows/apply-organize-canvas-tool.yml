@@ -1,0 +1,55 @@
+name: Apply Organize Canvas Tool
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-organize-canvas-tool.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Add persistent organize canvas tool
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('_read_123_zip_20260821_180410/bottom-dock-v4.js')
+          s = path.read_text(encoding='utf-8')
+
+          css_old = "#assetMgrBtn svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}"
+          css_new = css_old + "\n#organizeCanvasBtn{position:relative;width:30px;height:30px;border:0;background:transparent;color:#d7d7d7;border-radius:7px;padding:0;display:grid;place-items:center}#organizeCanvasBtn:hover,#organizeCanvasBtn:focus-visible{background:#272727;color:#fff;outline:none}#organizeCanvasBtn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}#organizeCanvasBtn::after{content:attr(data-tip);position:absolute;left:50%;bottom:calc(100% + 8px);transform:translate(-50%,4px);padding:5px 8px;border:1px solid #303030;border-radius:6px;background:#090909;color:#eee;font-size:12px;line-height:16px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .12s ease,transform .12s ease;box-shadow:0 6px 18px #0008;z-index:500}#organizeCanvasBtn:hover::after,#organizeCanvasBtn:focus-visible::after{opacity:1;transform:translate(-50%,0)}"
+          if '#organizeCanvasBtn{' not in s:
+              if css_old not in s:
+                  raise SystemExit('asset manager css anchor missing')
+              s = s.replace(css_old, css_new, 1)
+
+          js_old = "const btn=document.createElement('button');btn.id='assetMgrBtn';btn.type='button';btn.innerHTML='<svg viewBox=\"0 0 24 24\"><rect x=\"4\" y=\"5\" width=\"16\" height=\"14\" rx=\"2\"/><path d=\"M4 9h16M9 12h6\"/></svg><span>资产管理</span>';bl.prepend(btn);"
+          js_new = js_old + "\nconst organizeBtn=document.createElement('button');organizeBtn.id='organizeCanvasBtn';organizeBtn.type='button';organizeBtn.setAttribute('aria-label','整理画布');organizeBtn.setAttribute('title','整理画布 Alt+Shift+F');organizeBtn.dataset.tip='整理画布 Alt+Shift+F';organizeBtn.innerHTML='<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect x=\"5\" y=\"5\" width=\"5\" height=\"5\" rx=\"1.2\"/><rect x=\"14\" y=\"5\" width=\"5\" height=\"5\" rx=\"1.2\"/><rect x=\"5\" y=\"14\" width=\"5\" height=\"5\" rx=\"1.2\"/><rect x=\"14\" y=\"14\" width=\"5\" height=\"5\" rx=\"1.2\"/></svg>';btn.insertAdjacentElement('afterend',organizeBtn);\nconst triggerOrganizeCanvas=()=>{const mac=/Mac|iPhone|iPad|iPod/i.test(navigator.platform||'');window.dispatchEvent(new KeyboardEvent('keydown',{key:'l',code:'KeyL',ctrlKey:!mac,metaKey:mac,shiftKey:true,bubbles:true,cancelable:true}));organizeBtn.blur()};\norganizeBtn.onclick=e=>{e.preventDefault();e.stopPropagation();triggerOrganizeCanvas()};\nwindow.addEventListener('keydown',e=>{if(!e.altKey||!e.shiftKey||e.ctrlKey||e.metaKey||String(e.key).toLowerCase()!=='f')return;const t=e.target;if(t?.matches?.('input,textarea,select,[contenteditable=\"true\"]')||t?.closest?.('[contenteditable=\"true\"]'))return;e.preventDefault();e.stopPropagation();triggerOrganizeCanvas()},true);"
+          if 'const organizeBtn=document.createElement' not in s:
+              if js_old not in s:
+                  raise SystemExit('asset manager button anchor missing')
+              s = s.replace(js_old, js_new, 1)
+
+          path.write_text(s, encoding='utf-8')
+          PY
+      - name: Verify JavaScript
+        run: node --check _read_123_zip_20260821_180410/bottom-dock-v4.js
+      - name: Verify diff
+        run: git diff --check
+      - name: Commit production change
+        run: |
+          if git diff --quiet; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add _read_123_zip_20260821_180410/bottom-dock-v4.js
+          git commit -m "Add persistent organize canvas tool"
+          git push origin main
