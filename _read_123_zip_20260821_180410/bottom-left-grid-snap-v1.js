@@ -11,7 +11,7 @@ const btn=document.createElement('button');
 btn.id='gridSnapBtn';
 btn.type='button';
 btn.className='pill-btn grid-snap-btn';
-(edgeBtn||document.querySelector('#minimapBtn'))?.insertAdjacentElement('afterend',btn);
+zoomBtn.insertAdjacentElement('afterend',btn);
 
 const style=document.createElement('style');
 style.id='gridSnapToolV1Styles';
