@@ -1,4 +1,4 @@
-name: Fix Persistent Manual Text Mode
+name: Fix Text Node Stability
 
 on:
   push:
@@ -23,21 +23,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Apply persistent manual text mode fix
+      - name: Apply text node stability fix
         working-directory: _read_123_zip_20260821_180410
-        run: |
-          python scripts/fix-text-manual-mode-v25.py
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('app.js')
-          app = path.read_text(encoding='utf-8')
-          old = "    if(n.textInputMode!=='manual')snapshot('切换手动文本模式');\n"
-          if old in app:
-              app = app.replace(old, '', 1)
-          if "snapshot('切换手动文本模式')" in app:
-              raise SystemExit('manual mode can still be reverted through undo history')
-          path.write_text(app, encoding='utf-8')
-          PY
+        run: python scripts/fix-text-manual-mode-v25.py
       - name: Validate JavaScript syntax
         working-directory: _read_123_zip_20260821_180410
         run: node --check app.js
@@ -54,7 +42,7 @@ jobs:
         run: |
           git status --short
           git diff --check
-      - name: Commit persistent manual mode fix
+      - name: Commit text node stability fix
         run: |
           if git diff --quiet; then
             echo 'No changes to commit.'
@@ -62,6 +50,8 @@ jobs:
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add _read_123_zip_20260821_180410/app.js
-          git commit -m 'Lock manual text node mode'
+          git add _read_123_zip_20260821_180410/app.js \
+                  _read_123_zip_20260821_180410/styles/text-node.css \
+                  _read_123_zip_20260821_180410/tests/text-node-v23.test.mjs
+          git commit -m 'Fix text node stability and manual mode interactions'
           git push origin HEAD:security/video-worker-hardening-20260825
