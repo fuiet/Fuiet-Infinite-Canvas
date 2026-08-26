@@ -1,0 +1,46 @@
+name: Patch Canvas Zoom Range V1
+
+on:
+  push:
+    paths:
+      - '.github/workflows/patch-canvas-zoom-range-v1.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Extend canvas zoom to 800 percent
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('_read_123_zip_20260821_180410/app.js')
+          s=p.read_text(encoding='utf-8')
+          old="Math.max(.1,Math.min(2.2,old*Math.exp(-e.deltaY*.0014)))"
+          new="Math.max(.1,Math.min(8,old*Math.exp(-e.deltaY*.0014)))"
+          if old not in s:
+              raise SystemExit('canvas zoom clamp not found')
+          if s.count(old) != 1:
+              raise SystemExit(f'unexpected zoom clamp count: {s.count(old)}')
+          p.write_text(s.replace(old,new),encoding='utf-8')
+          PY
+      - name: Validate JavaScript
+        run: |
+          node --check _read_123_zip_20260821_180410/app.js
+          node --check _read_123_zip_20260821_180410/bottom-left-zoom-v1.js
+          node --check _read_123_zip_20260821_180410/bottom-left-grid-snap-v1.js
+      - name: Remove one-time workflow and push
+        run: |
+          rm .github/workflows/patch-canvas-zoom-range-v1.yml
+          git config user.name "fuiet"
+          git config user.email "89821101+fuiet@users.noreply.github.com"
+          git add _read_123_zip_20260821_180410/app.js .github/workflows/patch-canvas-zoom-range-v1.yml
+          git commit -m "Enable canvas zoom up to 800 percent"
+          git push origin HEAD:main
