@@ -40,6 +40,24 @@ test('universal node runtime exposes the four-state content and interaction mode
   assert.match(runtime, /selected/);
 });
 
+test('result nodes use context toolbar by default and composer only by explicit user action', () => {
+  const runtime = read('ui-v23.js');
+  assert.match(runtime, /composerOverride/);
+  assert.match(runtime, /openResultComposer/);
+  assert.match(runtime, /data-ui-v23-edit-prompt/);
+  assert.match(runtime, /data-ui-v23-rerun/);
+  assert.match(runtime, /generator\.classList\.add\('hidden'\)/);
+  assert.match(runtime, /toolbar\.classList\.remove\('hidden'\)/);
+});
+
+test('result selection does not use forced CSS resizing', () => {
+  const nodes = read('styles/nodes.css');
+  assert.doesNotMatch(nodes, /width:420px!important/);
+  assert.doesNotMatch(nodes, /height:auto!important/);
+  assert.doesNotMatch(nodes, /!important/);
+  assert.match(read('ui-v23.js'), /resultSizeCache/);
+});
+
 test('asset manager implements canvas and asset tabs', () => {
   const runtime = read('ui-v23.js');
   assert.match(runtime, /data-asset-tab="canvas"/);
@@ -55,5 +73,5 @@ test('generated progress remains visible on the node while task infrastructure i
   assert.match(nodes, /--ui-running/);
   assert.match(desktop, /wf-hud-meta/);
   assert.match(desktop, /wf-hud-actions/);
-  assert.match(desktop, /display:none!important/);
+  assert.match(desktop, /display:none/);
 });
