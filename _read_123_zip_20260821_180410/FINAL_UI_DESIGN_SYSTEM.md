@@ -1,467 +1,910 @@
-# Fuiet Infinite Canvas · Final UI Design System
+# Fuiet Infinite Canvas · UI Design System 2.0
 
-Status: **Final design direction / implementation source of truth**
-Scope: **Desktop-only web application. Target viewport width: 1024px and above. Mobile UI is explicitly out of scope.**
+Status: **Final visual and interaction source of truth**  
+Scope: **Desktop-only web application. Supported viewport width: 1024px and above. Mobile UI is out of scope.**
 
-This document replaces the visual direction of the older `canvas-ui-v1.css`, `canvas-ui-v2.css`, `workspace-canvas-v3.css`, and ad-hoc page-specific styling. New UI work must follow this system instead of adding another override layer.
+This document replaces all earlier visual directions, including the v1/v2/v3 canvas styles, LibTV-inspired styling, compact-type patches, and the previous `FINAL_UI_DESIGN_SYSTEM.md` direction. New UI work must follow this system instead of adding another override layer.
 
-## 1. Product design thesis
+---
 
-Fuiet Infinite Canvas is not a generic AI dashboard. It is a **creative routing desk** for moving text, image, audio and video through generation workflows.
+## 1. Product identity
 
-The interface should feel closer to a calm professional post-production / signal-routing workspace than to a SaaS admin panel.
+Fuiet Infinite Canvas is a **professional AI media production workspace** for routing text, image, audio and video through generation workflows.
 
-Design priorities, in order:
+The product should not look like:
 
-1. The canvas and the user's media are the visual protagonists.
-2. Workflow relationships must be understandable at a glance.
-3. Generation state must be visible without opening a task panel.
-4. Controls appear near the object they affect; global chrome stays quiet.
-5. Advanced capability is progressively disclosed rather than permanently visible.
-6. Desktop efficiency and information density take priority over touch/mobile adaptation.
+- a generic SaaS admin dashboard;
+- a neon “AI tool” with glowing cyan everywhere;
+- a card-heavy consumer application;
+- a direct visual copy of LibTV, ComfyUI, Figma, Notion or Adobe;
+- a collection of unrelated panels accumulated over time.
 
-## 2. Chosen visual direction
+The product should feel like a calm **post-production control surface**: precise, dark, dense, legible, tactile and highly state-aware.
 
-### Direction exploration
+### Design sentence
 
-**A. Floating cockpit**
+**Quiet studio. Clear signal. Fast decisions.**
 
-Pros: visually light.  
-Cons: too many floating islands; weak spatial hierarchy; starts to resemble generic AI tools.
+The canvas is the stage. Media is the content. UI chrome exists only to explain state or enable an action.
 
-**B. Routing studio — SELECTED**
+---
 
-```text
-┌ Workspace / Canvas ───────────── Run / Share ┐
-├──────────────────────────────────────────────┤
-│                                              │
-│   [Text] ───── [Image] ═════ [Video]         │
-│      │                    selected signal     │
-│      └──── [Audio]                            │
-│                                              │
-│                              ┌ Inspector ┐    │
-│                              │ contextual│    │
-│                              └───────────┘    │
-├──── status / zoom ─────────────── quick add ─┤
-└──────────────────────────────────────────────┘
-```
+## 2. Visual direction: Studio Slate
 
-Pros: canvas-first, workflow-native, quiet chrome, clear contextual editing.  
-Cons: requires disciplined component hierarchy and better state design.
+The final visual direction is called **Studio Slate**.
 
-**C. Permanent three-column studio**
+It is inspired by professional editing rooms, patch bays, broadcast tally lights, film slates and timeline tools — without visually cloning any one product.
 
-Pros: predictable.  
-Cons: permanently sacrifices canvas space and feels like a standard editor clone.
+### Core character
 
-### Final choice
+- matte graphite surfaces rather than pure black;
+- warm off-white text rather than stark white;
+- restrained cool-blue selection rather than neon cyan;
+- amber as the distinctive “live / generating / attention” signal;
+- muted media-type colors used only as identity marks;
+- shallow depth, crisp dividers and minimal glow;
+- small radii and compact geometry appropriate for a professional desktop tool.
 
-Use **Routing Studio**.
+### Explicitly avoid
 
-The interface stays mostly neutral. Color is not decoration; it is a live signal language for media types, selection, status, warnings and active workflow paths.
+- decorative gradients;
+- glassmorphism as a general surface treatment;
+- oversized 16–24px corner radii;
+- big colored cards;
+- random accent colors on hover;
+- glowing borders on every selected element;
+- all-caps UI labels;
+- giant empty-state illustrations;
+- drop shadows on every component.
 
-## 3. Signature element: Signal Path
+---
 
-The memorable Fuiet interaction is the **Signal Path**.
+## 3. Signature interaction: Signal Spine
 
-When a node is selected, reveal its upstream and downstream workflow as a restrained routing trace:
+Fuiet needs one memorable interaction that belongs to the product.
 
-- selected node: stronger border + local halo;
-- directly connected edges: brighter signal trace;
-- first-degree connected nodes: slightly lifted surface;
-- unrelated nodes: remain neutral and readable;
-- running generation: a restrained moving pulse travels on the relevant edge;
-- success: pulse resolves into the output node once, then returns to static;
-- error: no flashing; use a short danger-colored segment at the failed node/edge.
+That interaction is the **Signal Spine**.
 
-This is the one place where motion may be visually distinctive. Other motion stays restrained.
+When a node is selected, the system reveals its first-degree upstream and downstream route as a precise signal trace.
 
-`prefers-reduced-motion` replaces travelling pulses with static state styling.
+### Selected state
+
+- selected node receives a 1px cool-blue border and a very subtle local halo;
+- directly connected edges become brighter;
+- directly connected nodes lift one surface level;
+- unrelated nodes remain readable and unchanged enough to preserve spatial context.
+
+### Running state
+
+A running workflow uses an **amber tally signal**:
+
+- node status dot/tally becomes amber;
+- relevant edge receives a restrained travelling pulse;
+- node footer shows generation state and progress;
+- no flashing or continuous glowing.
+
+### Completed state
+
+- success resolves once with a short green state transition;
+- the interface then returns to its neutral state;
+- completed nodes do not stay bright green.
+
+### Failed state
+
+- node tally turns muted red;
+- failed edge segment may show a short red section;
+- failure copy explains the cause and the next action;
+- never flash the entire node.
+
+`prefers-reduced-motion: reduce` replaces travelling signal motion with static state styling.
+
+---
 
 ## 4. Color system
 
-Use six core tokens. Avoid arbitrary component-specific grays.
+Use one centralized token family. Do not invent arbitrary component grays.
 
-| Token | Hex | Purpose |
+### Core neutrals
+
+| Token | Value | Use |
 | --- | --- | --- |
-| `ink-950` | `#111210` | canvas / deepest background |
-| `ink-900` | `#181917` | primary surface |
-| `ink-800` | `#232421` | raised / interactive surface |
-| `paper-100` | `#F1EFE9` | primary text / high-emphasis controls |
-| `ash-400` | `#8D8D86` | secondary text / inactive chrome |
-| `signal-cyan` | `#58CFE0` | selection, links, active signal |
+| `--ui-bg-canvas` | `#121313` | infinite canvas / deepest workspace |
+| `--ui-bg-base` | `#161817` | application shell |
+| `--ui-surface-1` | `#1B1D1C` | nodes / primary panels |
+| `--ui-surface-2` | `#222423` | raised controls / hover surfaces |
+| `--ui-surface-3` | `#292C2A` | active raised surfaces |
+| `--ui-line` | `#303330` | default divider/border |
+| `--ui-line-strong` | `#414541` | hover / strong boundary |
+| `--ui-text-1` | `#ECE9E2` | primary text |
+| `--ui-text-2` | `#B7B6B0` | secondary text |
+| `--ui-text-3` | `#858984` | metadata / inactive text |
 
-Semantic extensions are centralized:
+### State colors
 
-- success: `#72C69A`
-- warning: `#D6A85F`
-- danger: `#D87878`
-- image: `#B8A1E3`
-- video: `#E89A72`
-- audio: `#8FC7A7`
-- text/script: `#AEB5BE`
+| Token | Value | Meaning |
+| --- | --- | --- |
+| `--ui-focus` | `#8198D9` | selection / keyboard focus / active route |
+| `--ui-live` | `#D6A04D` | generating / running / attention |
+| `--ui-success` | `#72B58B` | success / connected |
+| `--ui-danger` | `#D36F6A` | error / destructive |
+| `--ui-warning` | `#C88C55` | warning / incomplete configuration |
 
-Rules:
+### Media identity colors
 
-- `signal-cyan` is not used for decorative headings or random hover effects.
-- media colors appear only in small identity cues, not full-card backgrounds.
-- large panels stay neutral.
-- use warm `paper-100` rather than pure white for primary text.
+Media colors are identity marks only. Never fill an entire node with them.
+
+| Type | Value |
+| --- | --- |
+| Text / Script | `#A9AFB8` |
+| Image | `#AD99C4` |
+| Video | `#C8876C` |
+| Audio | `#82A78E` |
+
+### Color rules
+
+- cool blue means **selected / focused / linked**, not “brand decoration”;
+- amber means **live / generating / needs attention**;
+- green means **successful state**, not primary CTA;
+- red means **failure/destructive**, never routine emphasis;
+- media colors appear in 2–6px marks, icons, tiny badges or timeline strips;
+- large surfaces stay graphite-neutral;
+- avoid pure black `#000` and pure white `#fff` except optical corrections.
+
+---
 
 ## 5. Typography
 
-### Workspace identity / major titles
+Typography must establish hierarchy without making the desktop UI feel oversized.
 
-`Sora`, fallback `Inter`, system sans.
+### Font roles
 
-Use only for workspace identity, major page/modal titles and important empty-state headings.
+**Product / workspace identity**  
+`Space Grotesk`, fallback `Inter`, system sans.
 
-### UI / body
+Use only for:
 
-`Inter`, `PingFang SC`, `Microsoft YaHei`, system sans.
+- Fuiet product wordmark;
+- workspace name;
+- major page/modal title;
+- important empty-state headline.
 
-Use for controls, labels, menus and body text.
+**Primary UI**  
+`Inter Variable`, `PingFang SC`, `Microsoft YaHei`, `Segoe UI`, system sans.
 
-### Technical identifiers
+Use for:
 
+- buttons;
+- labels;
+- menus;
+- body copy;
+- node titles;
+- form controls.
+
+**Technical data**  
 `IBM Plex Mono`, `SFMono-Regular`, `Consolas`, monospace.
 
-Use for model IDs, task IDs, routes, technical status values and aligned timestamps.
+Use for:
+
+- model IDs;
+- task IDs;
+- API routes;
+- dimensions / FPS / timecode when alignment matters;
+- raw provider status / diagnostics.
 
 ### Type scale
 
 | Role | Size | Line height | Weight |
 | --- | ---: | ---: | ---: |
+| Page / modal title | 20px | 28px | 650 |
 | Workspace title | 16px | 22px | 650 |
-| Modal / page title | 20px | 28px | 650 |
-| Section title | 14px | 20px | 600 |
+| Large section title | 15px | 21px | 600 |
+| Section / node title | 13px | 18px | 600 |
 | UI body | 13px | 19px | 450–500 |
-| Control | 13px | 18px | 500–600 |
-| Metadata | 12px | 17px | 450 |
+| Button / control | 13px | 18px | 500–600 |
+| Metadata | 12px | 17px | 450–500 |
 | Micro data | 11px | 15px | 500 |
+| Technical mono | 11–12px | 16px | 500 |
 
-No production UI text below **11px**.
+### Typography rules
 
-## 6. Spacing and geometry
+- no production UI text below **11px**;
+- do not globally set body to 15px;
+- do not globally force every form control to 14px;
+- do not make model name and model metadata the same size/weight;
+- avoid font weights 750/800 in routine UI;
+- preferred weights are 450, 500, 600 and 650;
+- use line-height appropriate to the role rather than global `1.55` everywhere;
+- do not use letter spacing on Chinese body text;
+- technical identifiers use mono only when the identifier itself matters.
 
-Base spacing unit: **4px**.
+---
 
-Allowed spacing steps:
+## 6. Spacing and density
+
+Base unit: **4px**.
+
+Approved spacing scale:
 
 `4 / 8 / 12 / 16 / 20 / 24 / 32 / 40 / 48`
 
-Avoid one-off spacing values except for optical correction.
+### Density target
+
+Fuiet is a desktop production tool. Default density should be **compact-comfortable**, not spacious SaaS density.
+
+Typical vertical rhythm:
+
+- control-to-control: 8px;
+- label-to-field: 6–8px;
+- field group gap: 12px;
+- section gap: 20px;
+- panel padding: 12–16px;
+- large modal padding: 20px.
+
+Avoid one-off 7/9/13/17px spacing unless required for optical alignment.
+
+---
+
+## 7. Geometry
 
 ### Radius
 
-- compact control: 7px
-- button / field: 8px
-- node: 10px
-- menu / popover: 12px
-- modal / inspector: 14px
+| Component | Radius |
+| --- | ---: |
+| Small chip / compact icon button | 6px |
+| Input / button | 7px |
+| Node | 9px |
+| Menu / popover | 10px |
+| Dock | 11px |
+| Inspector / modal | 12px |
 
-Avoid blanket 16–20px rounding. This is a professional tool, not a consumer card UI.
+Do not use 16–20px rounding as a default.
 
 ### Borders
 
-- default divider: `rgba(241,239,233,.08)`
-- interactive border: `rgba(241,239,233,.12)`
-- hover border: `rgba(241,239,233,.20)`
-- selected border: signal color at 70–85% opacity
+- standard component border: 1px `--ui-line`;
+- hover border: `--ui-line-strong`;
+- selected border: 1px `--ui-focus` at 80–90% opacity;
+- avoid nested visible borders on every internal block;
+- use background level changes before adding another border.
 
-Only one visible border per component layer.
+### Shadows
 
-## 7. Desktop layout
+Use only for floating layers.
 
-### Primary target: 1280–1920px
+- node resting shadow: very subtle or none;
+- menu/popover: medium shadow;
+- modal/Inspector: stronger shadow;
+- do not add shadows to static cards in page layouts.
 
-Top bar: **48px**.
+---
 
-Left side contains context identity only:
+## 8. Desktop layout system
+
+### Supported viewports
+
+Primary design widths:
+
+- 1024px compact desktop;
+- 1280px;
+- 1366px;
+- 1440px;
+- 1920px.
+
+Below 1024px is not part of the visual acceptance scope.
+
+### Global shell
+
+```text
+┌ Workspace / Canvas / View ───────────── Run · Tasks · Share · More ┐
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│                          Infinite Canvas                            │
+│                                                                     │
+│                                                ┌ Inspector ┐        │
+│                                                │ contextual│        │
+│                                                └───────────┘        │
+│                                                                     │
+├ Zoom / Minimap ─────────── Add · Select · Layout · Assets · History ┤
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Layer priority
+
+1. Canvas/content.
+2. Selected node / contextual editing.
+3. Local toolbar / Inspector.
+4. Global top bar / bottom dock.
+5. Menus / popovers.
+6. Modals / blocking confirmations.
+
+Global chrome must never visually dominate the canvas.
+
+---
+
+## 9. Top bar
+
+Height: **46px**.
+
+The bar is not a row of equally important square buttons.
+
+### Left group
 
 - workspace name;
-- canvas switcher;
-- workflow/storyboard view switch.
+- canvas selector;
+- Workflow / Storyboard segmented switch.
 
-Right side contains global actions only:
+### Right group
 
-- undo/redo grouped;
-- run/production;
-- task status;
-- share;
-- overflow menu.
+Always visible:
 
-`Agent`, settings, context management and secondary tools move into overflow/contextual surfaces unless actively needed.
+- Undo / Redo as one grouped control;
+- Production / Run;
+- Tasks with running count;
+- Share;
+- More.
 
-Bottom center dock contains only creation/navigation primitives:
+Secondary actions move under More or appear contextually:
 
-- Add;
-- Select / Hand mode;
-- Auto layout;
-- Assets;
-- History.
+- Agent;
+- Context;
+- Settings;
+- Diagnostics;
+- Help / Shortcuts.
 
-Shortcut help and tutorial belong under Help/overflow.
+### Sizing
 
-### Compact desktop: 1024–1279px
+- top icon control: 32×32px;
+- text action height: 32px;
+- segmented control: 32px;
+- gap inside groups: 4px;
+- gap between groups: 8–12px.
 
-- compress workspace/canvas labels;
-- hide secondary text labels before hiding icons;
-- Inspector stays an overlay instead of permanently shrinking the canvas;
-- lower-priority global actions collapse into overflow;
-- preserve the full canvas workflow model rather than changing interaction patterns.
+At 1024px, collapse secondary labels before hiding primary actions.
 
-### Unsupported design range: below 1024px
+---
 
-No dedicated phone/tablet experience will be designed. The project may remain technically loadable, but visual correctness and workflow usability below 1024px are not acceptance requirements.
+## 10. Bottom dock
 
-Do not spend implementation time creating mobile navigation, touch-first controls, stacked mobile cards or mobile-specific canvas behavior.
+The dock exists only for **canvas creation and manipulation**.
 
-## 8. Canvas
+Order:
 
-Canvas background:
+`Add | Select/Hand | Auto layout | Assets | History`
 
-- base `ink-950`;
-- subtle dot field, 20–24px spacing;
-- no decorative radial gradients;
-- grid contrast under 6% opacity;
-- no permanent center hint once content exists.
+### Dimensions
 
-Empty state:
+- overall height: 46px;
+- button: 34×34px;
+- gap: 4px;
+- padding: 6px;
+- radius: 11px.
 
-- one headline;
-- one action sentence;
-- three primary quick-start actions maximum: Text / Image / Video;
-- secondary node types inside Add menu.
+### Visual hierarchy
 
-Preferred copy:
+- Add is the only high-emphasis item;
+- Add uses warm off-white surface with dark icon;
+- other controls are graphite ghost/soft buttons;
+- selected mode uses the cool-blue focus state;
+- no Help, Tutorial, Agent, Task or Settings controls in the dock.
+
+Zoom/minimap remain a small separate utility group in the lower-left corner.
+
+---
+
+## 11. Canvas
+
+### Background
+
+- `--ui-bg-canvas`;
+- subtle dot grid at 20px or 24px spacing;
+- dot contrast no more than ~5%;
+- no radial glow;
+- no permanent center watermark/hint after content exists.
+
+### Empty canvas
+
+One focused empty state only:
 
 **开始一个工作流**  
 添加提示词、拖入素材，或连接已有资产。
 
-## 9. Nodes
+Primary quick starts:
+
+`文本` · `图片` · `视频`
+
+Other node types live in Add.
+
+### Canvas feedback
+
+- selection rectangle uses blue outline with 4–6% fill;
+- snap guides use restrained blue/gray;
+- drag target is indicated locally;
+- do not tint the entire canvas during drag operations.
+
+---
+
+## 12. Node system
+
+Nodes are the core visual object of the product.
+
+### Standard anatomy
 
 ```text
- type · title                         ···
-┌───────────────────────────────────────┐
-│                                       │
-│              content                  │
-│                                       │
-├───────────────────────────────────────┤
-│ model / status              duration  │
-└───────────────────────────────────────┘
-     in ○                         ○ out
+┌ type mark  Node title                         ··· ┐
+│                                                    │
+│                   content / media                  │
+│                                                    │
+├ model · state                       duration/meta ─┤
+└─ ○ in                                          out ○┘
 ```
 
-Rules:
+### Sizes
 
-- default width: 320px;
-- media nodes may be 360px;
-- title stays inside the node header, never floating above the card;
-- node header: 36px;
-- footer/status row: 32px;
-- selected state uses `signal-cyan`;
-- ports: 14px visual, at least 24px pointer hit area;
-- connection labels appear only when useful.
+- standard node width: 320px;
+- media node width: 360px;
+- node header: 34px;
+- node footer: 30px;
+- standard minimum content height: 120px;
+- media content follows media ratio where useful.
 
-### Node status
+### Node title
 
-One compact status location in the footer:
+- lives inside the card header;
+- never floats above the node;
+- 13px / 600;
+- truncates with ellipsis;
+- type identity is a tiny mark/icon, not a large colored badge.
 
-- 就绪
-- 排队中
-- 生成中 · 42%
-- 等待供应商
-- 已完成
-- 失败 · 重试
-- 已取消
+### Node states
 
-Avoid separate floating job badges when the node can carry its own state.
+**Default**  
+Neutral border, no glow.
 
-## 10. Generator / Inspector
+**Hover**  
+Slightly stronger border only.
 
-Replace the generic floating generation modal with a **contextual Inspector** anchored to selection.
+**Selected**  
+Cool-blue border + subtle local halo.
 
-Desktop rules:
+**Running**  
+Amber tally + status/progress in footer.
 
-- width: 380–420px;
-- right overlay panel;
-- may pin open;
-- does not permanently shrink canvas unless pinned.
+**Completed**  
+Short success transition, then neutral.
 
-Information order:
+**Failed**  
+Muted red tally + `失败 · 重试`.
 
-1. Node title + media type + close/pin.
-2. Prompt / main content.
-3. Model selection.
-4. Essential parameters (3–5 visible maximum).
-5. Advanced parameters collapsed.
-6. Reference media.
-7. Generate action + estimated cost when available.
-8. Latest result / task state.
+**Disabled / unavailable**  
+Reduced contrast but text remains readable.
 
-Information hierarchy must remain visible; do not hide section labels after adding them.
+### Ports
 
-Primary actions use specific verbs: `生成`, `重新生成`, `重试`, `取消生成`.
+- visual size: 12–14px;
+- pointer hit area: at least 24px;
+- default neutral gray;
+- valid target becomes blue;
+- actively transmitting route becomes amber only while running.
 
-## 11. Top bar hierarchy
+---
 
-Permanent top-bar actions must fit without collision at **1024px**.
+## 13. Node content by type
 
-**Tier 1 — always visible**
+### Text / Script
 
-- Workspace / canvas identity
-- Undo / redo
-- Run / production
-- Tasks with running count
-- Share
+- neutral editor surface;
+- body text 13px;
+- line-height 1.55–1.6 only for long-form editing;
+- no tiny 9px table typography;
+- script tables minimum 11px metadata / 12–13px content.
 
-**Tier 2 — contextual / overflow when needed**
+### Image
 
-- Storyboard switch
-- Agent
-- Context
-- Settings
+- image dominates the node;
+- no permanent large empty gray block after image exists;
+- caption/metadata belongs in footer or overlay only when needed.
 
-**Tier 3 — overflow/help**
+### Video
 
-- shortcuts
-- tutorial
-- diagnostics
-- developer tools
+- dominant preview;
+- centered play affordance;
+- duration/timecode in compact mono metadata;
+- generation state in footer, not floating badge.
 
-Do not give every feature identical square-button visual weight.
+### Audio
 
-## 12. Bottom dock
+- restrained waveform;
+- waveform does not use bright green by default;
+- current playing position can use amber;
+- duration in mono.
 
-Purpose: creation and canvas manipulation only.
+---
 
-Order:
+## 14. Contextual Inspector
 
-`Add | Select/Hand | Layout | Assets | History`
+Replace the generic floating generation panel with one consistent **Inspector**.
 
-Dimensions:
+### Behavior
 
-- height: 48px
-- control: 36px
-- Add: 36px, paper surface / dark icon
-- gap: 4px
-- radius: 12px
+- opens on the right when editing a selected node;
+- overlays the canvas by default;
+- can be pinned if the workflow needs persistent editing;
+- width: 396px default;
+- allowed range: 380–420px.
 
-No Help, Tutorial, Agent, Tasks or Settings in the dock.
+### Header
 
-## 13. Provider and model management
+- media-type mark;
+- node title;
+- task state if active;
+- pin;
+- close.
 
-Provider setup and model management share the same tokens, typography and control geometry as the canvas.
+### Information order
 
-### Provider setup
+1. Prompt / primary content.
+2. Model.
+3. Essential parameters.
+4. Reference media.
+5. Advanced settings collapsed.
+6. Generate action.
+7. Cost estimate if available.
+8. Latest result / task status.
 
-Primary path emphasizes only:
+### Essential parameters
 
-1. 接口供应商名称
-2. Base URL
-3. API Key
-4. 测试连接
-5. 拉取模型
+No more than 3–5 controls visible by default.
 
-Advanced adapter/protocol fields stay inside **高级设置**.
+Examples:
 
-Connection states are structured blocks:
+- aspect ratio;
+- duration;
+- resolution;
+- seed;
+- output count.
 
-- 连接成功
-- API Key 验证失败
-- 接口不兼容
-- 已发现 N 个模型
-- 视频协议需要配置
+Everything else belongs under **高级设置**.
 
-### Models page
+### Generate action
 
-Keep the provider filter sidebar on desktop.
+Use exact verbs:
 
-Avoid dense six-column rows unless scanning genuinely requires them.
+- 生成;
+- 重新生成;
+- 重试;
+- 取消生成.
 
-Recommended default row:
+Primary generate button uses warm off-white fill with dark text/icon. During execution it changes to the amber live state.
 
-```text
-[icon] Model name
-       provider · model id
+---
 
-Type      Adapter status      Enabled       ···
-```
+## 15. Forms and fields
 
-Advanced routes/config live in expanded details.
+### Heights
 
-## 14. Storyboard view
+- compact field: 30px;
+- default field: 32px;
+- large/search field: 36px;
+- textarea varies by content.
 
-Storyboard is not a spreadsheet.
+### Typography
 
-Use rows/cards with dominant media preview and concise metadata.
+- input value: 13px;
+- label: 12px;
+- help/meta: 11–12px;
+- technical route or ID: mono 11–12px.
 
-Desktop order:
+### Labels
 
-`Shot | Visual | Prompt/Notes | Audio | Status/Actions`
+Labels always remain visible. Placeholder text is an example, not a replacement for labels.
 
-At compact desktop widths, allow controlled horizontal workspace overflow or reduce secondary columns, but do not create a separate mobile stacked-card system.
-
-## 15. Interaction states
-
-Every interactive control implements:
-
-- default
-- hover
-- active
-- focus-visible
-- disabled
-- loading when relevant
+### Focus
 
 Focus ring:
 
-`0 0 0 2px ink-950, 0 0 0 4px rgba(88,207,224,.65)`
+`0 0 0 1px var(--ui-bg-canvas), 0 0 0 3px rgba(129,152,217,.58)`
 
-Never remove focus outlines without replacement.
+### Error
 
-Desktop minimum pointer target: **32×32px**.
+- field border becomes muted red;
+- one concise error message appears below;
+- error text states what failed and what to do next.
 
-## 16. Motion
+---
 
-Use motion only for:
+## 16. Buttons
 
-- contextual panel open/close: 140–180ms;
-- menu/popover: 100–140ms;
+### Button hierarchy
+
+**Primary**  
+Warm off-white surface, dark text. Use for the one most important action in a local context.
+
+**Secondary**  
+Graphite surface with border.
+
+**Ghost**  
+Transparent until hover.
+
+**Danger**  
+Neutral by default; red only on hover/confirmation unless destructive intent must be obvious.
+
+### Sizes
+
+| Size | Height | Horizontal padding |
+| --- | ---: | ---: |
+| Compact | 28px | 8px |
+| Default | 32px | 10–12px |
+| Emphasis | 36px | 14px |
+
+Do not make every icon button 38–40px.
+
+---
+
+## 17. Menus, popovers and dialogs
+
+### Menu
+
+- radius: 10px;
+- padding: 6px;
+- item height: 32px;
+- menu text: 13px;
+- secondary shortcut/meta: 11px;
+- selected row uses surface change, not bright fill.
+
+### Popover
+
+Use for short contextual controls only.
+
+### Modal
+
+Use only when the user must stop and complete a task before returning.
+
+Examples:
+
+- provider settings;
+- delete confirmation;
+- project-level configuration.
+
+Do not turn routine node editing into a modal.
+
+---
+
+## 18. Provider management
+
+Provider setup must visually communicate the product promise: **Base URL + API Key first, protocol complexity later.**
+
+### Primary setup path
+
+1. 接口供应商名称.
+2. Base URL.
+3. API Key.
+4. 测试连接.
+5. 拉取模型.
+
+### Advanced section
+
+Collapsed by default:
+
+- auth-header customization;
+- video protocol configuration;
+- route overrides;
+- polling behavior;
+- adapter debugging;
+- custom headers.
+
+### Connection state block
+
+Use one consistent state component:
+
+**连接成功**  
+已识别接口，发现 18 个模型。
+
+**API Key 验证失败**  
+检查密钥后重新测试连接。
+
+**接口不兼容**  
+无法识别模型列表接口。可在高级设置中配置适配方式。
+
+**视频协议需要配置**  
+文本/图片接口可用，但视频任务协议无法自动识别。
+
+Do not communicate critical connection state only through disappearing toast messages.
+
+---
+
+## 19. Models page
+
+The Models page must feel like the same product as Canvas.
+
+### Page shell
+
+- same graphite tokens;
+- same typography;
+- same button sizes;
+- same focus/hover behavior;
+- same icon family.
+
+### Sidebar
+
+Keep provider filtering sidebar on desktop.
+
+Width: 200–220px.
+
+### Model list hierarchy
+
+Recommended row:
+
+```text
+[media mark]  Seedance 2.0
+              Volcengine · seedance-2-0-250225
+
+              视频    Adapter ready    已启用             ···
+```
+
+Typography:
+
+- model name: 13–14px / 600;
+- provider + model ID: 11–12px;
+- model ID uses mono;
+- state/type: 12px;
+- actions: 12–13px.
+
+Do not set model name and model metadata both to 15px.
+
+### Expanded details
+
+Advanced configuration appears only after expansion:
+
+- request route;
+- polling route;
+- adapter mode;
+- raw headers;
+- JSON parameters.
+
+---
+
+## 20. Storyboard
+
+Storyboard is a visual production view, not a spreadsheet.
+
+### Row structure
+
+`Shot | Visual | Prompt / Notes | Audio | Status / Actions`
+
+### Priority
+
+The media preview is visually dominant.
+
+### Typography
+
+- shot number: 13–14px / 600;
+- shot label/meta: 11–12px;
+- prompt: 12–13px;
+- technical media details: mono 11px;
+- action labels: 12px.
+
+### Compact desktop behavior
+
+At 1024–1279px:
+
+- reduce nonessential columns;
+- allow controlled workspace overflow where necessary;
+- do not create mobile stacked cards;
+- preserve desktop production interaction.
+
+---
+
+## 21. Agent panel
+
+Agent must not visually behave like a separate chatbot product pasted onto the canvas.
+
+### Panel
+
+- same Inspector surface language;
+- width: 380–400px;
+- same header/control geometry;
+- no oversized chat bubbles;
+- compact conversation density.
+
+### Messages
+
+- assistant messages use surface-1;
+- user messages use a subtle surface-2 difference;
+- no bright green chat bubbles;
+- message body 13px;
+- metadata 11px.
+
+Agent action results should link directly to affected nodes/tasks where possible.
+
+---
+
+## 22. Status system
+
+Status language must be consistent everywhere.
+
+Canonical status labels:
+
+- 就绪
+- 排队中
+- 正在生成
+- 等待供应商
+- 正在处理结果
+- 已完成
+- 失败
+- 正在取消
+- 已取消
+
+Do not use different names for the same state in Node, Task panel and Provider flow.
+
+Color is never the only status signal; pair color with text/icon.
+
+---
+
+## 23. Iconography
+
+Use one SVG icon family across the application.
+
+Rules:
+
+- 18px default icon;
+- 16px compact icon;
+- 1.7–1.8px stroke;
+- rounded caps and joins;
+- no emoji as production controls;
+- replace text glyphs such as `▦`, `⌕`, `⚙`, `＋` where an SVG exists;
+- every icon-only control gets `aria-label` and desktop tooltip.
+
+---
+
+## 24. Motion
+
+Motion communicates relationship or state, not decoration.
+
+### Timings
+
+- hover/color: 100–120ms;
+- menu/popover: 120–140ms;
+- Inspector: 150–180ms;
 - node selection: 120–150ms;
-- Signal Path generation pulse.
+- Signal Spine pulse: task-dependent restrained loop.
 
-Avoid decorative translation on every hover.
-
-Standard easing:
+Easing:
 
 `cubic-bezier(.2,.8,.2,1)`
 
-Respect `prefers-reduced-motion: reduce`.
+### Do not use
 
-## 17. Iconography
+- card lift on every hover;
+- scale effects on routine buttons;
+- bouncing icons;
+- full-screen animated backgrounds;
+- continuous glowing UI.
 
-Use one SVG icon family/style across the product.
+---
 
-- 1.7–1.8px stroke at 18–20px;
-- rounded line caps;
-- no emoji as production controls;
-- no mixed glyph controls such as `▦`, `⌕`, `⚙`, `＋` when an SVG exists;
-- icon-only controls require `aria-label` and desktop tooltip.
+## 25. Copy and terminology
 
-## 18. Writing / UI copy
+Use plain user-facing language.
 
-Use user-language, not implementation-language.
+Preferred terms:
 
-Prefer:
+- 接口供应商
+- Base URL
+- API Key
+- 测试连接
+- 拉取模型
+- 保存更改
+- 生成
+- 重新生成
+- 重试
+- 取消生成
+- 高级设置
+- 任务
+- 工作流
+- 故事版
+- 资产
 
-- `接口供应商`
-- `拉取模型`
-- `保存更改`
-- `重试`
-- `取消生成`
-
-Errors explain both cause and next action.
+Error copy must contain **cause + next action**.
 
 Bad:
 
@@ -471,30 +914,37 @@ Good:
 
 `API Key 验证失败。检查密钥后重新测试连接。`
 
-## 19. Accessibility
+---
 
-Required baseline:
+## 26. Accessibility
+
+Required desktop baseline:
 
 - WCAG AA text contrast;
-- keyboard access to menus, dialogs and canvas controls;
+- keyboard navigation for menus, dialogs and core canvas controls;
 - visible `:focus-visible` states;
 - correct dialog semantics and focus trap;
-- Escape closes popovers/dialogs when safe;
+- Escape closes menus/popovers/dialogs when safe;
 - icon-only buttons have accessible names;
-- status changes use appropriate `aria-live` behavior;
-- color is never the only state/type distinction.
+- dynamic task status uses appropriate `aria-live` behavior;
+- state/type never relies on color alone;
+- do not remove browser focus outlines without a designed replacement.
 
-## 20. CSS architecture — mandatory implementation rule
+---
 
-Do **not** create `canvas-ui-v4.css` as another override file.
+## 27. CSS architecture
+
+Do not create another overlay stylesheet such as `canvas-ui-v4.css`.
 
 Target structure:
 
 ```text
 styles/
   tokens.css
+  fonts.css
   base.css
   shell.css
+  controls.css
   canvas.css
   nodes.css
   inspector.css
@@ -502,45 +952,116 @@ styles/
   providers.css
   models.css
   storyboard.css
-  desktop-responsive.css
+  agent.css
+  desktop.css
 ```
 
-Rules:
+### Mandatory rules
 
-- one canonical token namespace: `--ui-*`;
+- one token namespace: `--ui-*`;
+- one typography source of truth;
 - no parallel `--cui-*`, `--v2-*`, `--lib-*` systems;
-- `!important` only for temporary legacy containment, then remove it;
-- shallow component selectors;
-- visual state driven by classes/data attributes, not specificity warfare;
-- responsive rules cover supported desktop widths only.
-
-## 21. Migration order
-
-1. Create final tokens/base/shell.
-2. Rebuild top bar and dock hierarchy.
-3. Normalize node structure/states/ports.
-4. Replace floating Generator styling with contextual Inspector styling.
-5. Consolidate menus/drawers/modals.
-6. Bring Provider and Models pages onto the same tokens/components.
-7. Rebuild Storyboard desktop behavior.
-8. Remove old v1/v2/v3 visual override files from `index.html`.
-9. Delete dead selectors and remaining `!important` overrides after screenshot regression testing.
-
-## 22. Acceptance criteria
-
-The redesign is complete only when:
-
-- a user can tell what is selected, running, failed and connected without opening another panel;
-- global chrome no longer visually competes with the canvas;
-- the complete primary workflow remains usable at 1024px viewport width;
-- no production text is below 11px;
-- Canvas, Provider, Models and Storyboard look like one product;
-- no new UI override stylesheet is layered on top of v1/v2/v3;
-- old `--cui-*`, `--v2-*`, `--lib-*` token families are eliminated from final production styles;
-- focus-visible and reduced-motion behavior are present;
-- visual regression screenshots exist at 1024px, 1366px, 1440px and 1920px desktop widths;
-- **there is no mobile-specific UI implementation requirement.**
+- no global `body{font-size:15px!important}` patch;
+- no global form-control size patch;
+- `!important` only for temporary legacy containment during migration;
+- component selectors remain shallow;
+- states use classes/data attributes;
+- supported desktop responsive rules live in `desktop.css` or the component file;
+- visual behavior is not implemented through specificity wars.
 
 ---
 
-**Final design principle:** quiet workspace, strong signal. The canvas carries the content; color and motion appear only when they explain workflow, state or action.
+## 28. Implementation tokens
+
+Minimum token set:
+
+```css
+:root {
+  --ui-bg-canvas: #121313;
+  --ui-bg-base: #161817;
+  --ui-surface-1: #1B1D1C;
+  --ui-surface-2: #222423;
+  --ui-surface-3: #292C2A;
+  --ui-line: #303330;
+  --ui-line-strong: #414541;
+
+  --ui-text-1: #ECE9E2;
+  --ui-text-2: #B7B6B0;
+  --ui-text-3: #858984;
+
+  --ui-focus: #8198D9;
+  --ui-live: #D6A04D;
+  --ui-success: #72B58B;
+  --ui-danger: #D36F6A;
+  --ui-warning: #C88C55;
+
+  --ui-media-text: #A9AFB8;
+  --ui-media-image: #AD99C4;
+  --ui-media-video: #C8876C;
+  --ui-media-audio: #82A78E;
+
+  --ui-font: "Inter Variable", "PingFang SC", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+  --ui-font-display: "Space Grotesk", "Inter Variable", system-ui, sans-serif;
+  --ui-font-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+
+  --ui-radius-control: 7px;
+  --ui-radius-node: 9px;
+  --ui-radius-popover: 10px;
+  --ui-radius-panel: 12px;
+
+  --ui-topbar-h: 46px;
+  --ui-control-h: 32px;
+  --ui-dock-h: 46px;
+  --ui-inspector-w: 396px;
+}
+```
+
+---
+
+## 29. Migration order
+
+1. Add final font loading and token files.
+2. Remove the global typography patch behavior from `ui-type-v2.css`.
+3. Build final base controls and focus states.
+4. Rebuild Top Bar.
+5. Rebuild Bottom Dock.
+6. Normalize Node anatomy and states.
+7. Implement Signal Spine / amber live state.
+8. Replace Generator styling with Inspector.
+9. Consolidate menus/popovers/modals.
+10. Move Provider UI to the final system.
+11. Move Models page to the final system.
+12. Move Storyboard to the final system.
+13. Move Agent panel to the final system.
+14. Remove v1/v2/v3 visual styles from `index.html`.
+15. Delete dead selectors and remaining visual `!important` patches.
+16. Run screenshot regression at 1024, 1366, 1440 and 1920 widths.
+
+---
+
+## 30. Acceptance criteria
+
+The redesign is complete only when all of the following are true:
+
+- Canvas is visually dominant over global chrome.
+- A user can identify selected, connected, running, successful and failed states without opening another panel.
+- The primary workflow remains usable at 1024px width.
+- No production UI text is below 11px.
+- Body/UI controls are not globally oversized.
+- Fonts are actually loaded or deliberately fall back; typography is not merely declared.
+- Model name, model metadata and technical IDs have distinct hierarchy.
+- Canvas, Provider, Models, Storyboard and Agent look like one product.
+- There is one token family and one typography system.
+- No new override stylesheet is stacked on v1/v2/v3.
+- `--cui-*`, `--v2-*`, `--lib-*` visual token families are removed from final production styles.
+- Routine UI does not depend on `!important`.
+- Keyboard focus and reduced-motion behavior are implemented.
+- Desktop regression screenshots exist for 1024, 1366, 1440 and 1920.
+
+---
+
+## Final rule
+
+**Fuiet should look like a professional production instrument, not an AI demo.**
+
+Use color only when it communicates identity, state, selection or action. Keep surfaces quiet. Keep typography compact and legible. Let the canvas, the media and the workflow relationships carry the visual weight.
