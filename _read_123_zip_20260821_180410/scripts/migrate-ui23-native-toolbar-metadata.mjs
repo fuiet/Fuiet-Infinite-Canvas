@@ -1,14 +1,17 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 
 const appPath = new URL('../app.js', import.meta.url);
 const uiPath = new URL('../ui-v23.js', import.meta.url);
 const connectPath = new URL('../ui-connect-v23.js', import.meta.url);
 const indexPath = new URL('../index.html', import.meta.url);
+const testsPath = new URL('../tests/ui-design-system.test.mjs', import.meta.url);
+const resultRuntimePath = new URL('../ui-result-v23.js', import.meta.url);
 
 let app = readFileSync(appPath, 'utf8');
 let ui = readFileSync(uiPath, 'utf8');
 let connect = readFileSync(connectPath, 'utf8');
 let index = readFileSync(indexPath, 'utf8');
+let tests = readFileSync(testsPath, 'utf8');
 
 const replaceOnce = (source, pattern, replacement, label) => {
   const matches = source.match(pattern);
@@ -24,7 +27,7 @@ if (!helperMatch) throw new Error('uiV23ProgressHtml/renderNode anchor not found
 const progressFn = helperMatch.slice(0, helperMatch.lastIndexOf('\n\n  function renderNode'));
 const metadataHelpers = `${progressFn}
   function uiV23FormatMediaDuration(seconds){
-    const value=Number(seconds);if(!Number.isFinite(value)||value<=0)return'';const total=Math.round(value),hours=Math.floor(total/3600),minutes=Math.floor((total%3600)/60),secs=total%60;return hours>0?\`${'${hours}'}:${'${String(minutes).padStart(2,\'0\')}' }:${'${String(secs).padStart(2,\'0\')}' }\`:\`${'${String(minutes).padStart(2,\'0\')}' }:${'${String(secs).padStart(2,\'0\')}' }\`;
+    const value=Number(seconds);if(!Number.isFinite(value)||value<=0)return'';const total=Math.round(value),hours=Math.floor(total/3600),minutes=Math.floor((total%3600)/60),secs=total%60;return hours>0?\`${'${hours}'}:${'${String(minutes).padStart(2,\'0\')}'}:${'${String(secs).padStart(2,\'0\')}'}\`:\`${'${String(minutes).padStart(2,\'0\')}'}:${'${String(secs).padStart(2,\'0\')}'}\`;
   }
   function uiV23BindMediaMetadata(n,el){
     const meta=$('[data-node-result-meta]',el);if(!meta)return;
@@ -143,8 +146,60 @@ const connectBootstrap = /  if \(!document\.querySelector\('link\[data-ui-v23-re
 if (!connectBootstrap.test(connect)) throw new Error('ui-connect result bootstrap not found');
 connect = connect.replace(connectBootstrap, '');
 
+// 5) Update architecture regression tests to the native implementation.
+tests = replaceOnce(tests, /test\('result context toolbar is pruned by media type instead of exposing one generic action set',[\s\S]*?\n\}\);/, `test('result context toolbar is generated natively by media type', () => {
+  const app = read('app.js');
+  const runtime = read('ui-v23.js');
+  const css = read('styles/context-toolbar.css');
+  assert.match(app, /function nodeTopBarActions/);
+  assert.match(app, /label:'编辑图片'/);
+  assert.match(app, /label:'编辑视频'/);
+  assert.match(app, /label:'截取'/);
+  assert.match(app, /label:'编辑脚本'/);
+  assert.match(app, /label:'打开导演台'/);
+  assert.match(app, /action:'edit-prompt'/);
+  assert.match(app, /action:'rerun'/);
+  assert.match(app, /contentState!=='result'/);
+  assert.match(runtime, /node\.dataset\.uiV23Native === 'true'/);
+  assert.match(css, /node-toolbar-image/);
+  assert.match(css, /node-toolbar-video/);
+  assert.match(css, /node-toolbar-audio/);
+  assert.match(css, /node-toolbar-script/);
+  assert.match(css, /node-toolbar-director/);
+});`, 'toolbar architecture test');
+
+tests = replaceOnce(tests, /test\('result-first shell is emitted by app\.js while metadata stays progressively enhanced',[\s\S]*?\n\}\);/, `test('result-first shell and media metadata are emitted by app.js', () => {
+  const app = read('app.js');
+  const html = read('index.html');
+  const connect = read('ui-connect-v23.js');
+  const css = read('styles/result-shell.css');
+  assert.match(html, /styles\/result-shell\.css/);
+  assert.doesNotMatch(connect, /ui-result-v23\.js/);
+  assert.match(app, /ui-v23-media-result/);
+  assert.match(app, /ui-v23-version-nav/);
+  assert.match(app, /data-version-count/);
+  assert.match(app, /function uiV23BindMediaMetadata/);
+  assert.match(app, /data-node-result-meta/);
+  assert.match(app, /videoWidth/);
+  assert.match(app, /naturalWidth/);
+  assert.match(app, /loadedmetadata/);
+  assert.match(css, /ui-v23-version-nav/);
+  assert.match(css, /ui-v23-resize-handle/);
+  assert.match(css, /node\.ui-v23-media-result/);
+});`, 'result shell metadata test');
+
+tests = replaceOnce(tests, /test\('native nodes bypass legacy state and result decorators',[\s\S]*?\n\}\);/, `test('native nodes bypass legacy state decoration and no result decorator runtime remains', () => {
+  const runtime = read('ui-v23.js');
+  const connect = read('ui-connect-v23.js');
+  assert.match(runtime, /node\.dataset\.uiV23Native === 'true'/);
+  assert.match(runtime, /const task = node\.getAttribute\('data-task-state'\)/);
+  assert.doesNotMatch(connect, /ui-result-v23\.js/);
+});`, 'native decorator retirement test');
+
 writeFileSync(appPath, app, 'utf8');
 writeFileSync(uiPath, ui, 'utf8');
 writeFileSync(connectPath, connect, 'utf8');
 writeFileSync(indexPath, index, 'utf8');
+writeFileSync(testsPath, tests, 'utf8');
+if (existsSync(resultRuntimePath)) unlinkSync(resultRuntimePath);
 console.log('Native UI 2.3 context toolbar and media metadata migration applied');
