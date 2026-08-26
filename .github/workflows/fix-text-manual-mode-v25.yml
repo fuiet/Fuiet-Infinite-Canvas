@@ -25,7 +25,19 @@ jobs:
           node-version: '22'
       - name: Apply persistent manual text mode fix
         working-directory: _read_123_zip_20260821_180410
-        run: python scripts/fix-text-manual-mode-v25.py
+        run: |
+          python scripts/fix-text-manual-mode-v25.py
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('app.js')
+          app = path.read_text(encoding='utf-8')
+          old = "    if(n.textInputMode!=='manual')snapshot('切换手动文本模式');\n"
+          if old in app:
+              app = app.replace(old, '', 1)
+          if "snapshot('切换手动文本模式')" in app:
+              raise SystemExit('manual mode can still be reverted through undo history')
+          path.write_text(app, encoding='utf-8')
+          PY
       - name: Validate JavaScript syntax
         working-directory: _read_123_zip_20260821_180410
         run: node --check app.js
@@ -51,5 +63,5 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add _read_123_zip_20260821_180410/app.js
-          git commit -m 'Make manual text mode persistent'
+          git commit -m 'Lock manual text node mode'
           git push origin HEAD:security/video-worker-hardening-20260825
