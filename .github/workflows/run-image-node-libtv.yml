@@ -6,6 +6,8 @@ on:
       - security/video-worker-hardening-20260825
     paths:
       - '.github/workflows/run-image-node-libtv.yml'
+      - '_read_123_zip_20260821_180410/scripts/implement-image-node-libtv.py'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -16,6 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: security/video-worker-hardening-20260825
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
@@ -23,16 +26,32 @@ jobs:
       - name: Apply image node migration
         working-directory: _read_123_zip_20260821_180410
         run: python scripts/implement-image-node-libtv.py
-      - name: Validate
+      - name: Validate JavaScript syntax
         working-directory: _read_123_zip_20260821_180410
+        run: node --check app.js
+      - name: Validate app checks
+        working-directory: _read_123_zip_20260821_180410
+        run: npm run check
+      - name: Validate existing tests
+        working-directory: _read_123_zip_20260821_180410
+        run: npm test
+      - name: Validate image node contract
+        working-directory: _read_123_zip_20260821_180410
+        run: node tests/image-node-libtv.test.mjs
+      - name: Verify diff
         run: |
-          npm run check
-          npm test
-          node tests/image-node-libtv.test.mjs
+          git status --short
+          git diff --check
       - name: Commit image node implementation
         run: |
+          if git diff --quiet; then
+            echo 'No changes to commit.'
+            exit 0
+          fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add _read_123_zip_20260821_180410/app.js _read_123_zip_20260821_180410/index.html _read_123_zip_20260821_180410/tests/image-node-libtv.test.mjs
+          git add _read_123_zip_20260821_180410/app.js \
+                  _read_123_zip_20260821_180410/index.html \
+                  _read_123_zip_20260821_180410/tests/image-node-libtv.test.mjs
           git commit -m 'Match LibTV image node and generator behavior'
           git push origin HEAD:security/video-worker-hardening-20260825
