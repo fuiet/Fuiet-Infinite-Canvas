@@ -6,6 +6,10 @@ on:
       - security/video-worker-hardening-20260825
     paths:
       - '.github/workflows/run-video-node-v23.yml'
+      - '_read_123_zip_20260821_180410/scripts/implement-video-node-v23.py'
+      - '_read_123_zip_20260821_180410/styles/video-node.css'
+      - '_read_123_zip_20260821_180410/tests/video-node-v23.test.mjs'
+      - '_read_123_zip_20260821_180410/tests/image-node-libtv.test.mjs'
   workflow_dispatch:
 
 permissions:
