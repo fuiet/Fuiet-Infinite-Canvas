@@ -34,15 +34,18 @@ test('UI 2.3 keeps assets in the bottom-left status area instead of a permanent 
   assert.match(css, /display:none/);
 });
 
-test('universal node runtime exposes the four-state content and interaction model', () => {
+test('app renderNode natively owns the universal four-state node model', () => {
+  const app = read('app.js');
   const runtime = read('ui-v23.js');
-  assert.match(runtime, /data-content-state/);
-  assert.match(runtime, /data-interaction-state/);
-  assert.match(runtime, /data-task-state/);
-  assert.match(runtime, /nodeHasResult/);
-  assert.match(runtime, /empty/);
-  assert.match(runtime, /result/);
-  assert.match(runtime, /selected/);
+  assert.match(app, /function uiV23NodeContentState/);
+  assert.match(app, /function uiV23TaskState/);
+  assert.match(app, /el\.dataset\.contentState=contentState/);
+  assert.match(app, /el\.dataset\.interactionState=interactionState/);
+  assert.match(app, /el\.dataset\.taskState=taskState/);
+  assert.match(app, /el\.dataset\.uiV23Native='true'/);
+  assert.match(app, /ui-v23-result-shell/);
+  assert.match(app, /ui-v23-media-result/);
+  assert.match(runtime, /node\.dataset\.uiV23Native === 'true'/);
 });
 
 test('result nodes use context toolbar by default and composer only by explicit user action', () => {
@@ -75,12 +78,14 @@ test('result context toolbar is pruned by media type instead of exposing one gen
   assert.match(css, /node-toolbar-director/);
 });
 
-test('result selection does not use forced CSS resizing', () => {
+test('result selection no longer forces image nodes to 640px', () => {
+  const app = read('app.js');
   const nodes = read('styles/nodes.css');
+  assert.doesNotMatch(app, /bigImage\?640/);
+  assert.match(app, /el\.style\.width=\(n\.w\|\|320\)/);
   assert.doesNotMatch(nodes, /width:420px!important/);
   assert.doesNotMatch(nodes, /height:auto!important/);
   assert.doesNotMatch(nodes, /!important/);
-  assert.match(read('ui-v23.js'), /resultSizeCache/);
 });
 
 test('asset manager implements canvas and asset tabs', () => {
@@ -104,32 +109,45 @@ test('bottom dock exposes a dedicated connect mode and reuses port drag mechanic
   assert.match(css, /ui-connect-mode/);
 });
 
-test('generated progress remains visible on the node while task infrastructure is hidden', () => {
-  const nodes = read('styles/nodes.css');
+test('generation progress is native, visible, and never fabricates a minimum percentage', () => {
+  const app = read('app.js');
+  const css = read('styles/result-shell.css');
   const desktop = read('styles/desktop.css');
-  assert.match(nodes, /node-task-progress/);
-  assert.match(nodes, /--ui-running/);
+  assert.match(app, /function uiV23ProgressHtml/);
+  assert.match(app, /hasRealProgress/);
+  assert.match(app, /indeterminate/);
+  assert.doesNotMatch(app, /Math\.max\(visualStatus==='pending'\?4:8/);
+  assert.match(css, /ui-v23-result-progress\.indeterminate/);
   assert.match(desktop, /wf-hud-meta/);
   assert.match(desktop, /wf-hud-actions/);
   assert.match(desktop, /display:none/);
 });
 
-test('result-first shell makes media the node and keeps task internals out of the visible result state', () => {
+test('result-first shell is emitted by app.js while metadata stays progressively enhanced', () => {
+  const app = read('app.js');
   const bootstrap = read('ui-connect-v23.js');
   const runtime = read('ui-result-v23.js');
   const css = read('styles/result-shell.css');
   assert.match(bootstrap, /result-shell\.css/);
   assert.match(bootstrap, /ui-result-v23\.js/);
-  assert.match(runtime, /ui-v23-media-result/);
-  assert.match(runtime, /node-content-video/);
-  assert.match(runtime, /actualProgress/);
-  assert.match(runtime, /percent == null/);
-  assert.match(runtime, /生成失败/);
-  assert.match(runtime, /重新生成/);
+  assert.match(app, /ui-v23-media-result/);
+  assert.match(app, /ui-v23-version-nav/);
+  assert.match(app, /data-version-count/);
+  assert.match(app, /node-failed-actions ui-v23-failure/);
+  assert.match(app, />生成失败</);
+  assert.match(app, />重新生成</);
   assert.match(runtime, /data-ui-v23-result-meta/);
-  assert.match(runtime, /versionCount/);
-  assert.match(css, /ui-v23-result-progress\.indeterminate/);
   assert.match(css, /ui-v23-version-nav/);
   assert.match(css, /ui-v23-resize-handle/);
   assert.match(css, /node\.ui-v23-media-result/);
+});
+
+test('native nodes bypass legacy state and result decorators', () => {
+  const runtime = read('ui-v23.js');
+  const resultRuntime = read('ui-result-v23.js');
+  assert.match(runtime, /node\.dataset\.uiV23Native === 'true'/);
+  assert.match(runtime, /const task = node\.getAttribute\('data-task-state'\)/);
+  assert.match(resultRuntime, /const native = node\.dataset\.uiV23Native === 'true'/);
+  assert.match(resultRuntime, /if \(native\)/);
+  assert.match(resultRuntime, /syncMediaMeta\(node, type\)/);
 });
