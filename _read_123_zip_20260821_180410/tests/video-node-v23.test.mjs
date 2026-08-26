@@ -42,7 +42,8 @@ test('video composer is fixed in screen space and keeps core generation controls
   const app = read('app.js');
   const css = read('styles/video-node.css');
   assert.match(app, /generator\.classList\.toggle\('video-generator',isVideo\)/);
-  assert.match(app, /height=isImage\?246:isVideo\?258:142/);
+  assert.match(app, /width=isImage\|\|isVideo\?820/);
+  assert.match(app, /height=isImage\?246:isVideo\?258/);
   assert.match(app, /video-generator-main/);
   assert.match(app, /id="videoReferenceBtn"/);
   assert.match(app, /id="videoFramesBtn"/);
