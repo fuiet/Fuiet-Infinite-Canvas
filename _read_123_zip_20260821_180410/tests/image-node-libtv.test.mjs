@@ -12,7 +12,7 @@ assert.match(app, /w:t==='image'\?620:320/, 'blank-canvas image uploads should u
 assert.match(app, /style_reference','风格'/, 'image composer should expose the style reference slot');
 assert.match(app, /character_reference','标记'/, 'image composer should expose the subject marker slot');
 assert.match(app, /image_reference','聚焦'/, 'image composer should expose the image/focus reference slot');
-assert.match(app, /width=isImage\?820:594,height=isImage\?246:142/, 'image composer must use fixed screen-space dimensions');
+assert.match(app, /width=isImage\|\|isVideo\?820:594,height=isImage\?246:isVideo\?258:142/, 'image composer must remain fixed in screen space while sharing the media composer geometry');
 assert.match(app, /人像后期调节/, 'image result toolbar must expose portrait post-processing');
 assert.match(app, /label:'全景'/, 'image result toolbar must expose panorama');
 assert.match(app, /label:'多角度'/, 'image result toolbar must expose multi-angle');
