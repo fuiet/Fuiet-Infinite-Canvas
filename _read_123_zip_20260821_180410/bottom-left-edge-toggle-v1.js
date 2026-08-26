@@ -50,4 +50,10 @@ btn.addEventListener('click',e=>{
 });
 
 apply(readHidden(),false);
+if(!document.querySelector('script[data-grid-snap-tool]')){
+  const s=document.createElement('script');
+  s.src='./bottom-left-grid-snap-v1.js';
+  s.dataset.gridSnapTool='1';
+  document.head.appendChild(s);
+}
 })();
