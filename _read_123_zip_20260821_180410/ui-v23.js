@@ -39,9 +39,11 @@
 
   const normalizeAddNodeMenu = () => {
     if (!contextMenu || !contextMenu.classList.contains('libtv-add-menu')) return;
+    if (contextMenu.classList.contains('ui-v23-add-menu') && contextMenu.dataset.uiV23AddMenuReady === 'true') return;
     const mainTitle = [...contextMenu.querySelectorAll('.libtv-add-title')].find((el) => !el.classList.contains('resource'));
     if (!mainTitle || mainTitle.textContent.trim() !== '添加节点') {
       contextMenu.classList.remove('ui-v23-add-menu');
+      delete contextMenu.dataset.uiV23AddMenuReady;
       return;
     }
     if (contextMenu.dataset.uiV23AddMenuBusy === 'true') return;
@@ -107,6 +109,7 @@
 
       contextMenu.setAttribute('role', 'menu');
       contextMenu.replaceChildren(mainTitle, ...orderedMain, resourceTitle, ...orderedResources);
+      contextMenu.dataset.uiV23AddMenuReady = 'true';
     } finally {
       delete contextMenu.dataset.uiV23AddMenuBusy;
     }
@@ -117,6 +120,19 @@
     addMenuObserver.observe(contextMenu, { childList:true, subtree:true, attributes:true, attributeFilter:['class'] });
     normalizeAddNodeMenu();
   }
+
+  const dockAddButton = document.querySelector('#bottomDock [data-dock-action="add"]');
+  dockAddButton?.addEventListener('click', () => {
+    queueMicrotask(() => {
+      const alreadyOpen = contextMenu?.classList.contains('libtv-add-menu') && !contextMenu.classList.contains('hidden');
+      if (alreadyOpen || !viewport) return;
+      const buttonRect = dockAddButton.getBoundingClientRect();
+      const viewportRect = viewport.getBoundingClientRect();
+      const x = buttonRect.left + buttonRect.width / 2;
+      const y = Math.max(viewportRect.top + 80, buttonRect.top - 10);
+      viewport.dispatchEvent(new MouseEvent('dblclick', { bubbles:true, cancelable:true, clientX:x, clientY:y, button:0 }));
+    });
+  });
 
   if (!drawer || !viewport || !nodeLayer) return;
 
