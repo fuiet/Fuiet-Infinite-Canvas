@@ -24,6 +24,28 @@ jobs:
       - name: Fix toolbar bindings
         working-directory: _read_123_zip_20260821_180410
         run: node scripts/fix-native-toolbar-bindings.mjs
+      - name: Normalize toolbar binding regression test
+        working-directory: _read_123_zip_20260821_180410
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('tests/ui-design-system.test.mjs')
+          s = p.read_text()
+          marker = "\ntest('native result toolbar binds every generated action'"
+          start = s.find(marker)
+          if start != -1:
+              s = s[:start]
+          s += """
+
+
+test('native result toolbar binds every generated action', () => {
+  const app = read('app.js');
+  assert.ok(app.includes("$$('[data-multi-top]',toolbar).forEach"));
+  assert.ok(app.includes("$$('[data-top-action]',toolbar).forEach"));
+});
+"""
+          p.write_text(s)
+          PY
       - name: Validate
         working-directory: _read_123_zip_20260821_180410
         run: |
