@@ -84,12 +84,8 @@
     <div id="loginModal" class="login-modal hidden"></div>
     <aside id="agentPanel" class="agent-panel" aria-label="Agent 面板"></aside>
 
-    <div class="bottom-left" aria-label="画布状态与资产">
-      <button id="assetManagerBtn" class="pill-btn" type="button" aria-expanded="false" aria-controls="drawer" title="资产管理">
-        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h6l1.6 2H20v11H4v-13Z"/><path d="M4 9h16"/></svg>
-        <span>资产管理</span>
-      </button>
-      <button id="minimapBtn" class="pill-btn" title="小地图" aria-label="小地图"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="m7 15 3-3 2 2 3-4 2 2"/></svg></button>
+    <div class="bottom-left">
+      <button id="minimapBtn" class="pill-btn">▦</button>
       <button id="zoomBtn" class="pill-btn zoom-label">100%</button>
     </div>
     <div id="minimap" class="minimap hidden"><div id="minimapNodes"></div><div id="minimapView"></div></div>
@@ -98,26 +94,28 @@
       <button class="dock-btn primary" data-dock-action="add" title="添加节点" aria-label="添加节点">
         <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6v12"/><path d="M6 12h12"/></svg>
       </button>
-      <button class="dock-btn" data-dock-action="mode" title="选择 / 移动" aria-label="选择 / 移动" aria-pressed="false">
+      <button class="dock-btn" data-dock-action="mode" title="画布操作模式" aria-label="画布操作模式" aria-pressed="false">
         <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5.2 4.8 17.9 11 12.4 12.3 10.2 19 5.2 4.8Z"/></svg>
       </button>
-      <button class="dock-btn" data-dock-action="connect" title="连接节点" aria-label="连接节点" aria-pressed="false">
-        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.2 14.8 6.8 17a3.5 3.5 0 1 1-4.9-4.9l2.2-2.2"/><path d="M14.8 9.2 17 7a3.5 3.5 0 1 1 4.9 4.9l-2.2 2.2"/><path d="M8.5 15.5 15.5 8.5"/></svg>
-      </button>
-      <button class="dock-btn" data-dock-action="layout" title="自动布局" aria-label="自动布局">
+      <button class="dock-btn" data-dock-action="layout" title="工具箱" aria-label="工具箱">
         <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="6" r="1.7"/><circle cx="18" cy="6" r="1.7"/><circle cx="12" cy="18" r="1.7"/><path d="M7.5 7.2 10.7 15M16.5 7.2 13.3 15M8.2 6h7.6"/></svg>
+      </button>
+      <button class="dock-btn" data-dock-action="workflow" title="素材库" aria-label="素材库">
+        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 9.8V7.4c0-.8.6-1.4 1.4-1.4h2.4"/><path d="M18.5 14.2v2.4c0 .8-.6 1.4-1.4 1.4h-2.4"/><rect x="7" y="6" width="6.2" height="6.2" rx="1.6"/><rect x="11" y="11.8" width="6.2" height="6.2" rx="1.6" transform="rotate(12 14.1 15.1)"/></svg>
+      </button>
+      <button class="dock-btn" data-dock-action="asset" title="角色库" aria-label="角色库">
+        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 8.2 11 5.3c.6-.5 1.4-.5 2 0l3.5 2.9"/><path d="M6 10.8 12 7l6 3.8"/><path d="M6.8 15.8 12 12.9l5.2 2.9"/><path d="M8.5 17.7 12 15.9l3.5 1.8"/></svg>
       </button>
       <button class="dock-btn" data-dock-action="history" title="历史记录" aria-label="历史记录">
         <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.2"/><path d="M12 7.2v5l3.1 1.9"/></svg>
       </button>
-
-      <!-- Hidden compatibility actions: UI 2.3 exposes these from their dedicated surfaces. -->
-      <button class="dock-btn" data-dock-action="asset" title="资产" aria-label="资产">
-        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 8.2 11 5.3c.6-.5 1.4-.5 2 0l3.5 2.9"/><path d="M6 10.8 12 7l6 3.8"/><path d="M6.8 15.8 12 12.9l5.2 2.9"/><path d="M8.5 17.7 12 15.9l3.5 1.8"/></svg>
-      </button>
       <span class="dock-separator"></span>
-      <button class="dock-btn" data-dock-action="shortcuts" title="快捷键" aria-label="快捷键"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="6" width="17" height="12" rx="2"/><path d="M7 10h.01M11 10h.01M15 10h.01M7 14h10"/><path d="M6 18h12"/></svg></button>
-      <button class="dock-btn" data-dock-action="help" title="教程" aria-label="教程"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.1 9a3 3 0 1 1 4.8 2.4c-.8.6-1.4 1.1-1.4 2.6"/><path d="M12 18h.01"/><circle cx="12" cy="12" r="9"/></svg></button>
+      <button class="dock-btn" data-dock-action="shortcuts" title="快捷键" aria-label="快捷键">
+        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="6" width="17" height="12" rx="2"/><path d="M7 10h.01M11 10h.01M15 10h.01M7 14h10"/><path d="M6 18h12"/></svg>
+      </button>
+      <button class="dock-btn" data-dock-action="help" title="使用教程" aria-label="使用教程">
+        <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.1 9a3 3 0 1 1 4.8 2.4c-.8.6-1.4 1.1-1.4 2.6"/><path d="M12 18h.01"/><circle cx="12" cy="12" r="9"/></svg>
+      </button>
     </div>
   </div>
 
