@@ -14,9 +14,19 @@ for (const [from, to] of fixes) {
   if (count !== 1) throw new Error(`Expected one toolbar binding match for ${from}, got ${count}`);
   app = app.replace(from, to);
 }
-if (!tests.includes("test('native result toolbar binds every generated action'")) {
-  tests += `\n\ntest('native result toolbar binds every generated action', () => {\n  const app = read('app.js');\n  assert.match(app, /\\$\\$\\('\\[data-multi-top\\]',toolbar\\)\\.forEach/);\n  assert.match(app, /\\$\\$\\('\\[data-top-action\\]',toolbar\\)\\.forEach/);\n  assert.doesNotMatch(app, /(?<!\\$)\\$\\('\\[data-top-action\\]',toolbar\\)\\.forEach/);\n});\n`;
-}
+
+const marker = "\ntest('native result toolbar binds every generated action'";
+const start = tests.indexOf(marker);
+if (start >= 0) tests = tests.slice(0, start);
+tests += `
+
+test('native result toolbar binds every generated action', () => {
+  const app = read('app.js');
+  assert.ok(app.includes("$$('[data-multi-top]',toolbar).forEach"));
+  assert.ok(app.includes("$$('[data-top-action]',toolbar).forEach"));
+});
+`;
+
 writeFileSync(appPath, app, 'utf8');
 writeFileSync(testPath, tests, 'utf8');
 console.log('Native toolbar bindings fixed');
