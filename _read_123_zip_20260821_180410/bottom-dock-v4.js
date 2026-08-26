@@ -74,6 +74,102 @@
     #bottomDock .dock-mode-hand{display:none!important}
     #bottomDock [data-dock-action="mode"].mode-grab .dock-mode-cursor{display:none!important}
     #bottomDock [data-dock-action="mode"].mode-grab .dock-mode-hand{display:block!important}
+
+    /* compact move / hand selector — matches the supplied reference */
+    .context-menu.dock-mode-menu{
+      width:168px!important;
+      min-width:168px!important;
+      padding:5px!important;
+      border:1px solid #3b3b3b!important;
+      border-radius:12px!important;
+      background:#252525!important;
+      box-shadow:0 10px 26px rgba(0,0,0,.34)!important;
+      overflow:visible!important;
+    }
+    .context-menu.dock-mode-menu::after{
+      content:""!important;
+      position:absolute!important;
+      left:50%!important;
+      bottom:-6px!important;
+      width:11px!important;
+      height:11px!important;
+      background:#252525!important;
+      border-right:1px solid #3b3b3b!important;
+      border-bottom:1px solid #3b3b3b!important;
+      border-radius:1px!important;
+      transform:translateX(-50%) rotate(45deg)!important;
+    }
+    .dock-mode-menu .libtv-add-title{display:none!important}
+    .dock-mode-menu .dock-mode-row{
+      width:100%!important;
+      min-height:35px!important;
+      height:35px!important;
+      margin:0!important;
+      padding:0 9px!important;
+      gap:8px!important;
+      border:0!important;
+      border-radius:7px!important;
+      background:transparent!important;
+      color:#ededed!important;
+      box-shadow:none!important;
+      font-size:13px!important;
+    }
+    .dock-mode-menu .dock-mode-row+.dock-mode-row{margin-top:2px!important}
+    .dock-mode-menu .dock-mode-row:hover{background:#3a3a3a!important;color:#fff!important}
+    .dock-mode-menu .dock-mode-row.active{background:#555555!important;color:#fff!important}
+    .dock-mode-menu .dock-mode-row i{
+      width:19px!important;
+      height:19px!important;
+      flex:0 0 19px!important;
+      display:inline-flex!important;
+      align-items:center!important;
+      justify-content:center!important;
+      padding:0!important;
+      border:0!important;
+      border-radius:0!important;
+      background:transparent!important;
+      color:inherit!important;
+      box-shadow:none!important;
+    }
+    .dock-mode-menu .dock-mode-row i svg{
+      width:18px!important;
+      height:18px!important;
+      fill:none!important;
+      stroke:currentColor!important;
+      stroke-width:1.8!important;
+      stroke-linecap:round!important;
+      stroke-linejoin:round!important;
+    }
+    .dock-mode-menu .dock-mode-row span{
+      display:flex!important;
+      flex:1!important;
+      min-width:0!important;
+      flex-direction:row!important;
+      align-items:center!important;
+      gap:0!important;
+    }
+    .dock-mode-menu .dock-mode-row span b{
+      font-size:13px!important;
+      line-height:1!important;
+      font-weight:500!important;
+      color:inherit!important;
+      white-space:nowrap!important;
+    }
+    .dock-mode-menu .dock-mode-row span small{display:none!important}
+    .dock-mode-menu .dock-mode-row em{
+      min-width:0!important;
+      width:auto!important;
+      height:auto!important;
+      padding:0!important;
+      border:0!important;
+      border-radius:0!important;
+      background:transparent!important;
+      color:#999!important;
+      font-size:12px!important;
+      font-weight:500!important;
+      line-height:1!important;
+    }
+    .dock-mode-menu .dock-mode-row.active em{background:transparent!important;color:#bdbdbd!important}
   `;
   document.head.appendChild(style);
 
