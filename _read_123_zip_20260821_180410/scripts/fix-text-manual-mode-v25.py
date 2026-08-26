@@ -2,7 +2,11 @@ from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
 app_path = root / 'app.js'
+css_path = root / 'styles' / 'text-node.css'
+test_path = root / 'tests' / 'text-node-v23.test.mjs'
 app = app_path.read_text(encoding='utf-8')
+css = css_path.read_text(encoding='utf-8')
+tests = test_path.read_text(encoding='utf-8')
 
 
 def replace_once(text, old, new, label):
@@ -12,126 +16,122 @@ def replace_once(text, old, new, label):
     return text.replace(old, new, 1)
 
 
-# Manual writing is a persistent text-node mode, not a temporary edit session.
-old_enter = r'''  function beginManualTextEdit(n){
-    if(!n||n.type!=='text')return;
-    snapshot('手动编辑文本');
-    const current=String(n.text||n.generatedText||'');
-    n.textEditBackup=current;
-    n.textEditBackupHtml=String(n.textHtml||'');
-    n.textEditBackupMode=n.textInputMode||'';
-    n.textEditSizeBackup={w:n.w||320,h:n.h||null};
-    n.text=current;
-    n.generatedText='';
-    n.textHtml=n.textHtml||plainTextToManualHtml(current);
-    n.textEditing=true;
-    n.textInputMode='manual';
-    n.w=700;
-    n.h=400;
-    selectedId=n.id;
-    state.selectedIds=[n.id];
-    state.nodes.forEach(x=>x.selected=x.id===n.id);
-    expandedNodeId=null;
-    generator.classList.add('hidden');
-    toolbar.classList.add('hidden');
-    saveState();
-    render();
-    setTimeout(()=>{
-      const field=$(`.node[data-id="${CSS.escape(String(n.id))}"] [data-text-manual]`);
-      field?.focus();
-      if(field){const range=document.createRange();range.selectNodeContents(field);range.collapse(false);const selection=window.getSelection();selection?.removeAllRanges();selection?.addRange(range)}
-    },0);
-  }
-'''
-new_enter = r'''  function beginManualTextEdit(n){
-    if(!n||n.type!=='text')return;
-    if(n.textInputMode!=='manual')snapshot('切换手动文本模式');
-    const current=String(n.text||n.generatedText||'');
-    n.text=current;
-    n.generatedText='';
-    n.textHtml=n.textHtml||plainTextToManualHtml(current);
-    n.textInputMode='manual';
-    // Legacy compatibility flag mirrors the persistent mode; it is never used to exit the mode.
-    n.textEditing=true;
-    n.w=700;
-    n.h=400;
-    selectedId=n.id;
-    state.selectedIds=[n.id];
-    state.nodes.forEach(x=>x.selected=x.id===n.id);
-    expandedNodeId=null;
-    generator.classList.add('hidden');
-    toolbar.classList.add('hidden');
-    saveState();
-    render();
-    setTimeout(()=>{
-      const field=$(`.node[data-id="${CSS.escape(String(n.id))}"] [data-text-manual]`);
-      field?.focus();
-      if(field){const range=document.createRange();range.selectNodeContents(field);range.collapse(false);const selection=window.getSelection();selection?.removeAllRanges();selection?.addRange(range)}
-    },0);
-  }
-'''
-if old_enter in app:
-    app = replace_once(app, old_enter, new_enter, 'persistent manual mode entry')
-elif "snapshot('切换手动文本模式')" not in app:
-    raise SystemExit('persistent manual mode entry: current implementation not recognized')
+# 1) Make text-node mode a single source of truth.
+# Stored legacy textEditing flags must never leave a normal text node in a half-manual state.
+migrate_marker = "if(x.type==='script'&&(!x.w||x.w===470||x.w===500))x.w=310;"
+migrate_insert = (
+    "if(x.type==='text'){"
+    "x.textInputMode=x.textInputMode==='manual'?'manual':(x.textInputMode||'ai');"
+    "x.textEditing=x.textInputMode==='manual';"
+    "if(x.textInputMode==='manual'){if(!x.w||Number(x.w)===700)x.w=560;if(!x.h||Number(x.h)===400)x.h=320}"
+    "else{x.textEditorExpanded=false;delete x.textEditorExpandedBackup}"
+    "}"
+    + migrate_marker
+)
+if migrate_insert not in app:
+    app = replace_once(app, migrate_marker, migrate_insert, 'normalize text mode during state migration')
 
-old_finish = r'''  function finishManualTextEdit(n,{cancel=false}={}){
-    if(!n||n.type!=='text')return;
-    const before=String(n.textEditBackup??'');
-    const beforeHtml=String(n.textEditBackupHtml??'');
-    const after=cancel?before:String(n.text||'');
-    n.text=after;
-    n.textHtml=cancel?beforeHtml:sanitizeManualTextHtml(String(n.textHtml||''));
-    n.generatedText='';
-    n.textEditing=false;
-    n.textInputMode=cancel?(n.textEditBackupMode||'manual'):'manual';
-    if(cancel&&n.textEditSizeBackup){n.w=Number(n.textEditSizeBackup.w||320);if(n.textEditSizeBackup.h==null)delete n.h;else n.h=Number(n.textEditSizeBackup.h)}
-    n.textEditorExpanded=false;delete n.textEditorExpandedBackup;
-    delete n.textEditBackup;delete n.textEditBackupHtml;delete n.textEditBackupMode;delete n.textEditSizeBackup;
-    if(!cancel&&after.trim()&&after!==before){
-      recordNodeResultVersion(n,{text:after,providerId:'',modelId:'',modelName:'手动输入'});
-    }
-    saveState();
-    render();
+old_render_normalize = "    if(n.type==='text'&&n.textInputMode==='manual')n.textEditing=true;\n"
+new_render_normalize = "    if(n.type==='text')n.textEditing=n.textInputMode==='manual';\n"
+if old_render_normalize in app:
+    app = replace_once(app, old_render_normalize, new_render_normalize, 'derive textEditing from persistent mode')
+elif new_render_normalize not in app:
+    raise SystemExit('derive textEditing from persistent mode: current implementation not recognized')
+
+# 2) Every newly-created text node starts from a clean, deterministic state.
+old_add_node = """  function addNode(type,worldPt,silent=false){
+    snapshot(); const same=state.nodes.length+1;const n={id:uid('n'),type,x:worldPt.x,y:worldPt.y,w:type==='image'?620:type==='script'?310:type==='director'?420:320,title:`${defaultNodeName(type)} ${same}`,prompt:'',providerId:'',modelId:'',modelName:'',selected:false}; if(type==='text') n.text=''; if(type==='image'||type==='video') n.content=''; if(type==='script') ensureScriptData(n); if(type==='director') ensureDirectorData(n); ensureDefaultModel(n);state.nodes.push(n); selectNode(n.id); saveState(); if(!silent)showToast('已创建'+labelForType(type)+'节点');return n;
   }
-'''
-new_finish = r'''  function finishManualTextEdit(n){
-    if(!n||n.type!=='text')return;
-    const editor=$(`.node[data-id="${CSS.escape(String(n.id))}"] [data-text-manual]`);
-    if(editor)syncManualTextEditor(n,editor);
-    n.textInputMode='manual';
-    n.textEditing=true;
-    n.textHtml=sanitizeManualTextHtml(String(n.textHtml||plainTextToManualHtml(n.text||'')));
-    saveState();
+"""
+new_add_node = """  function addNode(type,worldPt,silent=false){
+    snapshot(); const same=state.nodes.length+1;const n={id:uid('n'),type,x:worldPt.x,y:worldPt.y,w:type==='image'?620:type==='script'?310:type==='director'?420:320,title:`${defaultNodeName(type)} ${same}`,prompt:'',providerId:'',modelId:'',modelName:'',selected:false};
+    if(type==='text'){n.text='';n.generatedText='';n.textHtml='';n.textInputMode='ai';n.textEditing=false;n.textEditorExpanded=false}
+    if(type==='image'||type==='video') n.content=''; if(type==='script') ensureScriptData(n); if(type==='director') ensureDirectorData(n); ensureDefaultModel(n);state.nodes.push(n); selectNode(n.id); saveState(); if(!silent)showToast('已创建'+labelForType(type)+'节点');return n;
+  }
+"""
+if old_add_node in app:
+    app = replace_once(app, old_add_node, new_add_node, 'initialize text node deterministically')
+elif "n.textInputMode='ai';n.textEditing=false;n.textEditorExpanded=false" not in app:
+    raise SystemExit('initialize text node deterministically: current implementation not recognized')
+
+# Text nodes already expose their actions inside the node; do not automatically open the bottom composer.
+old_palette = "  function runPaletteNode(type,p,fromNodeId){const created=addNode(type,p,true);if(created&&['image','video','audio','text','script'].includes(created.type))expandedNodeId=created.id;if(fromNodeId&&created){const edge=createEdge(fromNodeId,created.id,{type:'asset',silent:true});if(!edge)showToast('这个节点组合无法连接')}saveState();render();return created}\n"
+new_palette = "  function runPaletteNode(type,p,fromNodeId){const created=addNode(type,p,true);if(created&&['image','video','audio','script'].includes(created.type))expandedNodeId=created.id;else if(created?.type==='text')expandedNodeId=null;if(fromNodeId&&created){const edge=createEdge(fromNodeId,created.id,{type:'asset',silent:true});if(!edge)showToast('这个节点组合无法连接')}saveState();render();return created}\n"
+if old_palette in app:
+    app = replace_once(app, old_palette, new_palette, 'do not auto-expand new text nodes')
+elif new_palette.strip() not in app:
+    raise SystemExit('do not auto-expand new text nodes: current implementation not recognized')
+
+# Selecting a persistent manual node always closes any stale generator surface.
+old_select = "  function selectNode(id,additive=false){selectedEdgeId=null;if(expandedNodeId&&expandedNodeId!==id)expandedNodeId=null;selectedGroupId=null;if(additive){const set=new Set(state.selectedIds||[]);if(set.has(id))set.delete(id);else set.add(id);state.selectedIds=[...set];selectedId=state.selectedIds.at(-1)||null}else{state.selectedIds=[id];selectedId=id}state.nodes.forEach(n=>n.selected=n.id===selectedId);render()}\n"
+new_select = "  function selectNode(id,additive=false){selectedEdgeId=null;if(expandedNodeId&&expandedNodeId!==id)expandedNodeId=null;selectedGroupId=null;if(additive){const set=new Set(state.selectedIds||[]);if(set.has(id))set.delete(id);else set.add(id);state.selectedIds=[...set];selectedId=state.selectedIds.at(-1)||null}else{state.selectedIds=[id];selectedId=id}const target=state.nodes.find(n=>n.id===selectedId);if(target?.type==='text'&&target.textInputMode==='manual')expandedNodeId=null;state.nodes.forEach(n=>n.selected=n.id===selectedId);render()}\n"
+if old_select in app:
+    app = replace_once(app, old_select, new_select, 'manual text selection closes stale composer')
+elif "target?.type==='text'&&target.textInputMode==='manual'" not in app:
+    raise SystemExit('manual text selection closes stale composer: current implementation not recognized')
+
+render_generator_marker = "    const n=state.nodes.find(x=>x.id===expandedNodeId);if(!n||!['image','video','audio','text','script'].includes(n.type)){generator.classList.add('hidden');return}\n"
+render_generator_guard = render_generator_marker + "    if(n.type==='text'&&n.textInputMode==='manual'){expandedNodeId=null;generator.classList.add('hidden');return}\n"
+if render_generator_guard not in app:
+    app = replace_once(app, render_generator_marker, render_generator_guard, 'manual mode never renders composer')
+
+# 3) Manual mode is two size steps smaller: 560x320 instead of 700x400.
+size_replacements = [
+    ("n.textEditorExpanded=true;n.textEditorExpandedBackup={w:n.w||700,h:n.h||400};n.w=Math.max(Number(n.w||700),980);n.h=Math.max(Number(n.h||400),620);",
+     "n.textEditorExpanded=true;n.textEditorExpandedBackup={w:n.w||560,h:n.h||320};n.w=Math.max(Number(n.w||560),840);n.h=Math.max(Number(n.h||320),520);",
+     'manual expanded size'),
+    ("const backup=n.textEditorExpandedBackup||{};n.w=Number(backup.w||700);n.h=Number(backup.h||400);n.textEditorExpanded=false;delete n.textEditorExpandedBackup;",
+     "const backup=n.textEditorExpandedBackup||{};n.w=Number(backup.w||560);n.h=Number(backup.h||320);n.textEditorExpanded=false;delete n.textEditorExpandedBackup;",
+     'manual restore size'),
+    ("    n.w=700;\n    n.h=400;\n", "    n.w=560;\n    n.h=320;\n", 'manual base size'),
+]
+for old, new, label in size_replacements:
+    if old in app:
+        app = replace_once(app, old, new, label)
+    elif new not in app:
+        raise SystemExit(f'{label}: current implementation not recognized')
+
+# 4) Re-selecting the manual editor itself must select the node without destroying the editor/caret.
+manual_select_helper = r'''  function selectManualTextNode(n,el){
+    if(!n||n.type!=='text'||n.textInputMode!=='manual')return;
+    selectedEdgeId=null;selectedGroupId=null;expandedNodeId=null;
+    selectedId=n.id;state.selectedIds=[n.id];state.nodes.forEach(x=>x.selected=x.id===n.id);
+    $$('.node',nodeLayer).forEach(nodeEl=>{
+      const active=nodeEl.dataset.id===n.id;
+      nodeEl.classList.toggle('selected',active);
+      nodeEl.classList.remove('multi-selected');
+      nodeEl.dataset.interactionState=active?'selected':'idle';
+    });
+    generator.classList.add('hidden');
     renderToolbar();
   }
 '''
-if old_finish in app:
-    app = replace_once(app, old_finish, new_finish, 'remove temporary manual edit finish/cancel')
-elif "function finishManualTextEdit(n){" not in app:
-    raise SystemExit('persistent manual mode finish: current implementation not recognized')
-
-# Any stored manual node is normalized back into the permanent manual canvas on render.
-normalize_marker = "    const mediaResult=contentState==='result'&&['image','video','audio'].includes(n.type);\n"
-normalize_line = "    const mediaResult=contentState==='result'&&['image','video','audio'].includes(n.type);\n    if(n.type==='text'&&n.textInputMode==='manual')n.textEditing=true;\n"
-if normalize_line not in app:
-    app = replace_once(app, normalize_marker, normalize_line, 'normalize persistent manual mode on render')
-
-# Leaving the field, pressing Escape, or pressing Ctrl/Cmd+Enter must never switch the node back.
-old_events = r'''    const ta=$('[data-text-manual]',el);
-    if(ta){
-      ta.addEventListener('pointerdown',e=>e.stopPropagation());
-      ta.addEventListener('click',e=>e.stopPropagation());
-      ta.addEventListener('input',e=>syncManualTextEditor(n,e.currentTarget));
-      ta.addEventListener('paste',e=>{e.preventDefault();const text=String(e.clipboardData?.getData('text/plain')||'');document.execCommand('insertText',false,text)});
-      ta.addEventListener('keydown',e=>{
-        if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();syncManualTextEditor(n,e.currentTarget);finishManualTextEdit(n);return}
-        if(e.key==='Escape'){e.preventDefault();e.stopPropagation();finishManualTextEdit(n,{cancel:true})}
-      });
-      ta.addEventListener('blur',()=>setTimeout(()=>{if(n.textEditing&&!toolbar.matches(':hover'))finishManualTextEdit(n)},0));
-    }
+if 'function selectManualTextNode' not in app:
+    sync_block = r'''  function syncManualTextEditor(n,editor){
+    if(!n||!editor)return;
+    n.text=manualTextPlainValue(editor);n.generatedText='';n.textInputMode='manual';n.textHtml=sanitizeManualTextHtml(editor.innerHTML);
+    saveState();renderEdges();
+  }
 '''
-new_events = r'''    const ta=$('[data-text-manual]',el);
+    app = replace_once(app, sync_block, sync_block + manual_select_helper, 'manual editor selection helper')
+
+# The toolbar must key off the persistent mode, not the legacy editing flag.
+old_toolbar_check = "    if(n?.type==='text'&&n.textEditing){\n"
+new_toolbar_check = "    if(n?.type==='text'&&n.textInputMode==='manual'){\n"
+if old_toolbar_check in app:
+    app = replace_once(app, old_toolbar_check, new_toolbar_check, 'manual toolbar persistent-mode check')
+elif new_toolbar_check not in app:
+    raise SystemExit('manual toolbar persistent-mode check: current implementation not recognized')
+
+old_result_dblclick = "    if(n.type==='text'&&contentState==='result'&&!n.textEditing){\n"
+new_result_dblclick = "    if(n.type==='text'&&contentState==='result'&&n.textInputMode!=='manual'){\n"
+if old_result_dblclick in app:
+    app = replace_once(app, old_result_dblclick, new_result_dblclick, 'text result double click mode check')
+elif new_result_dblclick not in app:
+    raise SystemExit('text result double click mode check: current implementation not recognized')
+
+# Clicking a manual editor selects the node and immediately restores its toolbar.
+old_events = r'''    const ta=$('[data-text-manual]',el);
     if(ta){
       ta.addEventListener('pointerdown',e=>e.stopPropagation());
       ta.addEventListener('click',e=>e.stopPropagation());
@@ -144,53 +144,92 @@ new_events = r'''    const ta=$('[data-text-manual]',el);
       ta.addEventListener('blur',e=>syncManualTextEditor(n,e.currentTarget));
     }
 '''
-if old_events in app:
-    app = replace_once(app, old_events, new_events, 'persistent manual mode events')
-elif "ta.addEventListener('blur',e=>syncManualTextEditor(n,e.currentTarget));" not in app:
-    raise SystemExit('persistent manual mode events: current implementation not recognized')
-
-# Fix the intermittent click: text-node quick actions belong to renderNode, not renderGenerator.
-quick_block = r'''    $$('[data-text-quick]',el).forEach(b=>b.addEventListener('click',e=>{
-      e.preventDefault();e.stopPropagation();
-      const action=b.dataset.textQuick;
-      if(action==='manual'){beginManualTextEdit(n);return}
-      if(action==='video'){
-        const next=addNode('video',{x:n.x+380,y:n.y},true);next.title='文生视频';next.prompt=String(n.text||n.prompt||'').trim()||'根据文本内容生成视频';next.videoMode='text2video';
-        saveState();render();setTimeout(()=>openVideoStudio(next),0);return;
-      }
-      if(action==='image'){
-        snapshot('图片反推提示词');
-        n.textEditing=false;n.textInputMode='ai';
-        n.prompt='请分析我提供的参考图片，准确描述主体、场景、构图、镜头、光线、色彩、材质与风格，并反推一份可以复现该画面的详细生成提示词。';
-        selectedId=n.id;state.selectedIds=[n.id];state.nodes.forEach(x=>x.selected=x.id===n.id);expandedNodeId=n.id;
-        saveState();render();setTimeout(()=>openReferencePicker(n),0);return;
-      }
-    }));
+new_events = r'''    const ta=$('[data-text-manual]',el);
+    if(ta){
+      ta.addEventListener('pointerdown',e=>{e.stopPropagation();selectManualTextNode(n,el)});
+      ta.addEventListener('click',e=>{e.stopPropagation();selectManualTextNode(n,el)});
+      ta.addEventListener('input',e=>syncManualTextEditor(n,e.currentTarget));
+      ta.addEventListener('paste',e=>{e.preventDefault();const text=String(e.clipboardData?.getData('text/plain')||'');document.execCommand('insertText',false,text)});
+      ta.addEventListener('keydown',e=>{
+        if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();syncManualTextEditor(n,e.currentTarget);return}
+        if(e.key==='Escape'){e.preventDefault();e.stopPropagation();syncManualTextEditor(n,e.currentTarget);e.currentTarget.blur();renderToolbar()}
+      });
+      ta.addEventListener('blur',e=>syncManualTextEditor(n,e.currentTarget));
+    }
 '''
-quick_count = app.count(quick_block)
-if quick_count != 1:
-    raise SystemExit(f'text quick action wiring: expected one existing block, got {quick_count}')
-app = app.replace(quick_block, '', 1)
-node_event_marker = "    $('[data-node-rerun]',el)?.addEventListener('click',e=>{e.stopPropagation();rerunFailedDownstream(n.id)});\n    const ta=$('[data-text-manual]',el);\n"
-node_quick_insert = "    $('[data-node-rerun]',el)?.addEventListener('click',e=>{e.stopPropagation();rerunFailedDownstream(n.id)});\n" + quick_block + "    const ta=$('[data-text-manual]',el);\n"
-app = replace_once(app, node_event_marker, node_quick_insert, 'wire text quick actions directly on text node')
+if old_events in app:
+    app = replace_once(app, old_events, new_events, 'manual editor re-selection and blur behavior')
+elif "selectManualTextNode(n,el)" not in app or "e.currentTarget.blur();renderToolbar()" not in app:
+    raise SystemExit('manual editor re-selection and blur behavior: current implementation not recognized')
 
-# Contract checks for the two reported bugs.
-if app.count("$$('[data-text-quick]',el).forEach") != 1:
-    raise SystemExit('text quick actions must have exactly one event binding')
-render_node_pos = app.index('  function renderNode(n){')
-quick_pos = app.index("    $$('[data-text-quick]',el).forEach")
-node_end_pos = app.index('  function nodePortWorldPoint', render_node_pos)
-if not (render_node_pos < quick_pos < node_end_pos):
-    raise SystemExit('text quick actions are not wired inside renderNode')
-if "if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();syncManualTextEditor(n,e.currentTarget);finishManualTextEdit" in app:
-    raise SystemExit('Ctrl/Cmd+Enter still exits manual mode')
-if "finishManualTextEdit(n,{cancel:true})" in app:
-    raise SystemExit('Escape still cancels manual mode')
-if "if(n.textEditing&&!toolbar.matches(':hover'))finishManualTextEdit" in app:
-    raise SystemExit('blur still exits manual mode')
-if "if(n.type==='text'&&n.textInputMode==='manual')n.textEditing=true;" not in app:
-    raise SystemExit('manual mode normalization is missing')
+# Clicking the frame/header of a manual node must release editor focus so Delete works like every other node.
+old_node_pointer = "    el.addEventListener('pointerdown', e => onNodePointerDown(e,n,el));\n"
+new_node_pointer = r'''    el.addEventListener('pointerdown',e=>{
+      if(n.type==='text'&&n.textInputMode==='manual'&&!e.target.closest('[data-text-manual]')){
+        const active=document.activeElement;if(active?.matches?.('[data-text-manual]'))active.blur();
+      }
+      onNodePointerDown(e,n,el);
+    });
+'''
+if old_node_pointer in app:
+    app = replace_once(app, old_node_pointer, new_node_pointer, 'manual node normal deletion focus behavior')
+elif "active?.matches?.('[data-text-manual]')" not in app:
+    raise SystemExit('manual node normal deletion focus behavior: current implementation not recognized')
+
+# 5) CSS must agree with the smaller 560x320 manual canvas.
+css_replacements = [
+    (".node.node-text.text-node-editing{\n  min-height:400px;", ".node.node-text.text-node-editing{\n  min-height:320px;", 'manual node css height'),
+    (".node.node-text.text-node-editing>.node-body{\n  min-height:398px;", ".node.node-text.text-node-editing>.node-body{\n  min-height:318px;", 'manual body css height'),
+    (".node.node-text.text-node-editing .text-node-shell.is-manual-editing{\n  min-height:398px;\n  height:100%;\n  padding:24px 30px 26px;", ".node.node-text.text-node-editing .text-node-shell.is-manual-editing{\n  min-height:318px;\n  height:100%;\n  padding:20px 24px 22px;", 'manual shell css size'),
+    ("  min-height:344px;\n  height:100%;", "  min-height:264px;\n  height:100%;", 'manual editor css height'),
+]
+for old, new, label in css_replacements:
+    if old in css:
+        css = replace_once(css, old, new, label)
+    elif new not in css:
+        raise SystemExit(f'{label}: current stylesheet not recognized')
+
+# 6) Extend the contract tests for all four reported regressions.
+old_toolbar_assert = "  assert.match(app, /n\\?\\.type==='text'&&n\\.textEditing/);\n"
+new_toolbar_assert = "  assert.match(app, /n\\?\\.type==='text'&&n\\.textInputMode==='manual'/);\n"
+if old_toolbar_assert in tests:
+    tests = replace_once(tests, old_toolbar_assert, new_toolbar_assert, 'manual toolbar test uses persistent mode')
+elif new_toolbar_assert not in tests:
+    raise SystemExit('manual toolbar test uses persistent mode: current test not recognized')
+
+stability_test = r'''
+
+test('text nodes remain stable across creation, selection, manual mode and deletion', () => {
+  const app = read('app.js');
+  const css = read('styles/text-node.css');
+  assert.match(app, /n\.textInputMode='ai';n\.textEditing=false;n\.textEditorExpanded=false/);
+  assert.match(app, /\['image','video','audio','script'\]\.includes\(created\.type\)/);
+  assert.match(app, /else if\(created\?\.type==='text'\)expandedNodeId=null/);
+  assert.match(app, /if\(n\.type==='text'\)n\.textEditing=n\.textInputMode==='manual'/);
+  assert.match(app, /function selectManualTextNode/);
+  assert.match(app, /pointerdown',e=>\{e\.stopPropagation\(\);selectManualTextNode\(n,el\)\}/);
+  assert.match(app, /e\.currentTarget\.blur\(\);renderToolbar\(\)/);
+  assert.match(app, /active\?\.matches\?\.\('\[data-text-manual\]'\)\)active\.blur\(\)/);
+  assert.match(app, /n\.w=560/);
+  assert.match(app, /n\.h=320/);
+  assert.match(css, /\.node\.node-text\.text-node-editing\{\s*min-height:320px/);
+});
+'''
+if "test('text nodes remain stable across creation, selection, manual mode and deletion'" not in tests:
+    tests += stability_test
+
+# Final invariants: no known mixed-state regressions may remain.
+checks = {
+    "new text node still auto-opens composer": "['image','video','audio','text','script'].includes(created.type)",
+    "manual toolbar still depends on textEditing": "n?.type==='text'&&n.textEditing",
+    "manual editor still swallows selection": "ta.addEventListener('pointerdown',e=>e.stopPropagation())",
+    "old manual size still present": "n.w=700;\n    n.h=400;",
+}
+for label, needle in checks.items():
+    if needle in app:
+        raise SystemExit(label)
 
 app_path.write_text(app, encoding='utf-8')
-print('Applied persistent manual text-node mode fix.')
+css_path.write_text(css, encoding='utf-8')
+test_path.write_text(tests, encoding='utf-8')
+print('Applied text-node stability, sizing, toolbar and deletion fixes.')
