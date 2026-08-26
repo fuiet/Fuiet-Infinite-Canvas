@@ -7,6 +7,7 @@ on:
     paths:
       - '.github/workflows/run-image-node-libtv.yml'
       - '_read_123_zip_20260821_180410/scripts/implement-image-node-libtv.py'
+      - '_read_123_zip_20260821_180410/tests/ui-design-system.test.mjs'
   workflow_dispatch:
 
 permissions:
