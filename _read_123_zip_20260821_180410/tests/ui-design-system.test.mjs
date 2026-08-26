@@ -127,7 +127,7 @@ test('result-first shell makes media the node and keeps task internals out of th
   assert.match(runtime, /生成失败/);
   assert.match(runtime, /重新生成/);
   assert.match(runtime, /data-ui-v23-result-meta/);
-  assert.match(runtime, /data-version-count/);
+  assert.match(runtime, /versionCount/);
   assert.match(css, /ui-v23-result-progress\.indeterminate/);
   assert.match(css, /ui-v23-version-nav/);
   assert.match(css, /ui-v23-resize-handle/);
