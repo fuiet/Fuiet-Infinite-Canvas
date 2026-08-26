@@ -160,3 +160,17 @@ test('native result toolbar binds every generated action', () => {
   assert.ok(app.includes("$$('[data-multi-top]',toolbar).forEach"));
   assert.ok(app.includes("$$('[data-top-action]',toolbar).forEach"));
 });
+
+
+test('legacy scaffold no longer owns core node, toolbar or composer visuals', () => {
+  const legacy = read('styles.css');
+  assert.doesNotMatch(legacy, /\.node\{position:absolute;width:320px;min-height:180px;background:#1b1d21/);
+  assert.doesNotMatch(legacy, /\.node-toolbar\{position:absolute;z-index:90/);
+  assert.doesNotMatch(legacy, /\.generator-panel\{position:absolute;z-index:89;width:420px/);
+  assert.doesNotMatch(legacy, /\.node\{background:#252628/);
+  assert.doesNotMatch(legacy, /\.node-footer\{display:none!important/);
+  assert.doesNotMatch(legacy, /@media \(max-width:900px\)\{\.bottom-center-hint/);
+  assert.match(read('styles/nodes.css'), /Universal Four-State Node Model/);
+  assert.match(read('styles/composer.css'), /\.generator-panel\{position:absolute/);
+  assert.match(read('styles/context-toolbar.css'), /\.node-toolbar\{position:absolute/);
+});
