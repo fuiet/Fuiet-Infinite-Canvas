@@ -1,0 +1,22 @@
+.app-shell{position:relative;width:100vw;height:100vh;overflow:hidden;background:var(--ui-bg-canvas)}
+.topbar{position:absolute;inset:12px 12px auto 12px;height:var(--ui-workspace-height);display:flex;align-items:center;justify-content:space-between;padding:0;background:transparent;border:0;box-shadow:none;z-index:100;pointer-events:none}
+.brand-wrap,.topbar-right{pointer-events:auto}
+.workspace-canvas-bar{height:var(--ui-workspace-height);display:flex;align-items:center;gap:4px;padding:3px 4px;border:1px solid var(--ui-line);border-radius:10px;background:rgba(27,29,28,.96);box-shadow:0 8px 28px rgba(0,0,0,.2)}
+.fuiet-wordmark{height:28px;display:flex;align-items:center;padding:0 9px;font:650 14px/20px var(--ui-font-brand);letter-spacing:-.01em;color:var(--ui-text-1);white-space:nowrap}
+.workspace-divider{width:1px;height:18px;margin:0 2px;background:var(--ui-line)}
+.workspace-name,.canvas-switcher{height:28px;min-width:0;max-width:190px;display:flex;align-items:center;border:0;border-radius:7px;background:transparent;color:var(--ui-text-2);padding:0 9px;font:600 13px/18px var(--ui-font-sans);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.workspace-name:hover,.canvas-switcher:hover{background:var(--ui-surface-2);color:var(--ui-text-1)}
+.canvas-switcher{position:relative;padding-right:23px}
+.canvas-switcher::after{content:'⌄';position:absolute;right:8px;top:4px;color:var(--ui-text-3);font-size:12px}
+.canvas-view-switch{height:28px;display:flex;align-items:center;gap:2px;margin-left:2px;padding:2px;border:0;border-left:1px solid var(--ui-line);border-radius:0;background:transparent}
+.canvas-view-btn{width:28px;height:24px;display:grid;place-items:center;border:0;border-radius:6px;background:transparent;color:var(--ui-text-3);padding:0}
+.canvas-view-btn:hover{background:var(--ui-surface-2);color:var(--ui-text-1)}
+.canvas-view-btn.active{background:var(--ui-surface-3);color:var(--ui-text-1)}
+.canvas-view-btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.topbar-right{height:var(--ui-workspace-height);display:flex;align-items:center;gap:4px;padding:3px;border:1px solid rgba(48,51,48,.72);border-radius:10px;background:rgba(22,24,23,.78);backdrop-filter:blur(10px)}
+.top-icon{width:28px;height:28px;display:grid;place-items:center;border:0;border-radius:7px;background:transparent;color:var(--ui-text-3);padding:0}
+.top-icon:hover{background:var(--ui-surface-2);color:var(--ui-text-1)}
+#productionBtn{color:var(--ui-text-2)}
+#productionBtn:hover{color:var(--ui-text-1)}
+#contextBtn,#taskBtn,#agentBtn,#settingsBtn{display:none}
+.agent-panel{display:none!important}
