@@ -27,6 +27,42 @@
     script: '☰',
     director: '◇'
   };
+  const RESULT_TOOLBAR_CONFIG = {
+    text: {
+      keep: ['复制', '更多'],
+      composer: '改提示词',
+      rerun: '重新生成'
+    },
+    image: {
+      keep: ['编辑', '转视频', '高清', '更多'],
+      rename: { 编辑: '编辑图片' },
+      composer: '改提示词',
+      rerun: '重新生成'
+    },
+    video: {
+      keep: ['视频工作台', '续写', '合成', '更多'],
+      rename: { 视频工作台: '编辑视频' },
+      composer: '改提示词',
+      rerun: '重新生成'
+    },
+    audio: {
+      keep: ['截取', '变速', '切分', '更多'],
+      composer: '改提示词',
+      rerun: '重新生成'
+    },
+    script: {
+      keep: ['脚本', '看板', '批量生成', '更多'],
+      rename: { 脚本: '编辑脚本' },
+      composer: '改生成提示',
+      rerun: '重新生成'
+    },
+    director: {
+      keep: ['导演台', '截图', '更多'],
+      rename: { 导演台: '打开导演台' },
+      composer: '',
+      rerun: ''
+    }
+  };
 
   const composerOverride = new Set();
   const resultSizeCache = new Map();
@@ -146,8 +182,17 @@
 
   const generatorBelongsTo = (id) => generator?.dataset.uiV23NodeId === String(id);
 
+  const bindGeneratorToNode = (node) => {
+    if (!generator || !node?.dataset.id) return false;
+    const hasComposer = Boolean(generator.querySelector('.lib-gen-main, .generator-shell, textarea'));
+    if (hasComposer) generator.dataset.uiV23NodeId = node.dataset.id;
+    return hasComposer;
+  };
+
   const openResultComposer = (node) => {
-    if (!generator || !node?.dataset.id || !generatorBelongsTo(node.dataset.id)) return;
+    if (!generator || !node?.dataset.id) return;
+    bindGeneratorToNode(node);
+    if (!generatorBelongsTo(node.dataset.id)) return;
     composerOverride.clear();
     composerOverride.add(node.dataset.id);
     setAttrIfChanged(node, 'data-ui-composer-open', 'true');
@@ -160,42 +205,78 @@
     });
   };
 
+  const resetToolbarMediaClasses = () => {
+    if (!toolbar) return;
+    toolbar.classList.remove('node-toolbar-media');
+    NODE_TYPES.forEach((type) => toolbar.classList.remove(`node-toolbar-${type}`));
+    toolbar.removeAttribute('data-media-type');
+    toolbar.querySelectorAll('[data-ui-v23-context-extra]').forEach((item) => item.remove());
+  };
+
+  const createContextAction = (label, datasetKey, node) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'tool-btn ui-v23-context-action';
+    button.dataset.uiV23ContextExtra = '';
+    button.dataset[datasetKey] = '';
+    button.textContent = label;
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openResultComposer(node);
+    });
+    return button;
+  };
+
   const decorateContextToolbar = (node) => {
-    if (!toolbar || !node?.dataset.id || !generatorBelongsTo(node.dataset.id)) return;
-    if (toolbar.querySelector('[data-ui-v23-edit-prompt]')) return;
+    if (!toolbar || !node?.dataset.id) return;
+    const type = nodeType(node);
+    const config = RESULT_TOOLBAR_CONFIG[type] || RESULT_TOOLBAR_CONFIG.text;
+
+    toolbar.querySelectorAll('[data-ui-v23-context-extra]').forEach((item) => item.remove());
+    toolbar.classList.add('node-toolbar-media');
+    NODE_TYPES.forEach((candidate) => toolbar.classList.toggle(`node-toolbar-${candidate}`, candidate === type));
+    toolbar.dataset.mediaType = type;
+
+    let label = toolbar.querySelector('.selection-toolbar-label');
+    if (!label) {
+      label = document.createElement('span');
+      label.className = 'selection-toolbar-label';
+      toolbar.prepend(label);
+    }
+    label.textContent = `${TYPE_LABELS[type] || '节点'}结果`;
+
+    [...toolbar.querySelectorAll('[data-top-action]')].forEach((button) => {
+      const original = button.dataset.uiV23OriginalLabel || button.textContent.trim();
+      button.dataset.uiV23OriginalLabel = original;
+      if (!config.keep.includes(original)) {
+        button.remove();
+        return;
+      }
+      button.textContent = config.rename?.[original] || original;
+      button.classList.toggle('primary', original === config.keep[0]);
+    });
+
+    if (!config.composer && !config.rerun) return;
 
     const separator = document.createElement('span');
     separator.className = 'ui-v23-context-separator';
+    separator.dataset.uiV23ContextExtra = '';
+    toolbar.append(separator);
 
-    const edit = document.createElement('button');
-    edit.type = 'button';
-    edit.className = 'tool-btn ui-v23-context-action';
-    edit.dataset.uiV23EditPrompt = '';
-    edit.textContent = '改提示词';
-    edit.addEventListener('click', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      openResultComposer(node);
-    });
-
-    const rerun = document.createElement('button');
-    rerun.type = 'button';
-    rerun.className = 'tool-btn ui-v23-context-action';
-    rerun.dataset.uiV23Rerun = '';
-    rerun.textContent = '重新生成';
-    rerun.addEventListener('click', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      openResultComposer(node);
-    });
-
-    toolbar.append(separator, edit, rerun);
+    if (config.composer) toolbar.append(createContextAction(config.composer, 'uiV23EditPrompt', node));
+    if (config.rerun) {
+      const rerun = createContextAction(config.rerun, 'uiV23Rerun', node);
+      rerun.classList.add('primary');
+      toolbar.append(rerun);
+    }
   };
 
   const syncInteractionSurfaces = () => {
     const selected = selectedNodes();
     if (selected.length !== 1) {
       composerOverride.clear();
+      resetToolbarMediaClasses();
       return;
     }
 
@@ -207,12 +288,11 @@
       if (candidate !== id) composerOverride.delete(candidate);
     });
 
-    if (generator && !generator.classList.contains('hidden') && generator.querySelector('.lib-gen-main, .generator-shell, textarea')) {
-      generator.dataset.uiV23NodeId = id;
-    }
+    bindGeneratorToNode(node);
 
     if (content === 'empty') {
       node.removeAttribute('data-ui-composer-open');
+      resetToolbarMediaClasses();
       toolbar?.classList.add('hidden');
       return;
     }
@@ -231,7 +311,7 @@
     node.removeAttribute('data-ui-composer-open');
     generator?.classList.add('hidden');
     generator?.classList.remove('ui-v23-result-composer');
-    if (toolbar?.children.length) {
+    if (toolbar) {
       toolbar.classList.remove('hidden');
       decorateContextToolbar(node);
       positionContextToolbar(node);
