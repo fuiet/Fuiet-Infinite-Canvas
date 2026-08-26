@@ -73,7 +73,7 @@ test('manual text view keeps the same DOM surface across clicks so double click 
   assert.match(app, /manualView\.addEventListener\('pointerdown'/);
   assert.match(app, /manualView\.addEventListener\('dblclick'/);
   assert.match(app, /startManualTextEditing\(n\)/);
-  assert.match(app, /text-node-shell has-text.*data-text-manual-view/);
+  assert.ok(app.includes("${n.textInputMode==='manual'?'data-text-manual-view':''}"));
 });
 '''
 if "manual text view keeps the same DOM surface across clicks" not in tests:
