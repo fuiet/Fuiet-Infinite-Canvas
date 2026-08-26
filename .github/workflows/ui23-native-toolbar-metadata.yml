@@ -1,0 +1,44 @@
+name: UI 2.3 Native Toolbar Metadata Migration
+
+on:
+  push:
+    branches:
+      - security/video-worker-hardening-20260825
+    paths:
+      - '_read_123_zip_20260821_180410/scripts/migrate-ui23-native-toolbar-metadata.mjs'
+      - '.github/workflows/ui23-native-toolbar-metadata.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply native toolbar and metadata migration
+        working-directory: _read_123_zip_20260821_180410
+        run: node scripts/migrate-ui23-native-toolbar-metadata.mjs
+      - name: Validate migrated UI
+        working-directory: _read_123_zip_20260821_180410
+        run: |
+          node --check app.js
+          node --check ui-v23.js
+          node --check ui-connect-v23.js
+          npm test
+      - name: Commit native toolbar and metadata
+        run: |
+          if git diff --quiet -- _read_123_zip_20260821_180410/app.js _read_123_zip_20260821_180410/ui-v23.js _read_123_zip_20260821_180410/ui-connect-v23.js _read_123_zip_20260821_180410/index.html; then
+            echo 'No UI changes produced'
+            exit 1
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add _read_123_zip_20260821_180410/app.js _read_123_zip_20260821_180410/ui-v23.js _read_123_zip_20260821_180410/ui-connect-v23.js _read_123_zip_20260821_180410/index.html
+          git commit -m 'Native UI 2.3 context toolbar and media metadata'
+          git push origin HEAD:security/video-worker-hardening-20260825
