@@ -178,6 +178,16 @@
 
   const syncNode = (node) => {
     const type = nodeType(node);
+    const native = node.dataset.uiV23Native === 'true';
+    if (native) {
+      const result = node.getAttribute('data-content-state') === 'result';
+      if (!result) {
+        setResultMeta(node, '');
+        return;
+      }
+      if (MEDIA_TYPES.has(type)) syncMediaMeta(node, type);
+      return;
+    }
     const mediaResult = MEDIA_TYPES.has(type) && mediaHasResult(node, type);
     if (mediaResult && node.getAttribute('data-content-state') !== 'result') node.setAttribute('data-content-state', 'result');
     const result = node.getAttribute('data-content-state') === 'result' || mediaResult;

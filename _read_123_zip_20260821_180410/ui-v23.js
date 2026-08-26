@@ -122,6 +122,16 @@
   };
 
   const syncNodeState = (node) => {
+    if (node.dataset.uiV23Native === 'true') {
+      const id = node.dataset.id || '';
+      const task = node.getAttribute('data-task-state') || 'idle';
+      const previous = previousTaskState.get(id) || 'idle';
+      if (id && ['running', 'queued'].includes(previous) && ['completed', 'idle', 'failed', 'cancelled'].includes(task)) {
+        composerOverride.delete(id);
+      }
+      if (id) previousTaskState.set(id, task);
+      return;
+    }
     const type = nodeType(node);
     const content = nodeHasResult(node, type) ? 'result' : 'empty';
     const interaction = node.classList.contains('selected') || node.classList.contains('multi-selected') ? 'selected' : 'idle';
