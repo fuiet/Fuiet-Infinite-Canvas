@@ -11,7 +11,7 @@ const btn=document.createElement('button');
 btn.id='gridSnapBtn';
 btn.type='button';
 btn.className='pill-btn grid-snap-btn';
-zoomBtn.insertAdjacentElement('afterend',btn);
+zoomBtn.insertAdjacentElement('beforebegin',btn);
 
 const style=document.createElement('style');
 style.id='gridSnapToolV1Styles';
@@ -44,7 +44,8 @@ function sync(){
 }
 function invokeSnapToggle(){
   const before=readSnap();
-  zoomBtn.click();
+  if(typeof window.__canvasOpenLegacyZoomMenu==='function')window.__canvasOpenLegacyZoomMenu();
+  else zoomBtn.click();
   const item=contextMenu.querySelector('[data-view="snap"]');
   if(!item){contextMenu.classList.add('hidden');return false}
   item.click();
