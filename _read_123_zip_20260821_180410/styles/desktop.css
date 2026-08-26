@@ -12,6 +12,15 @@
 .project-menu,.context-menu,.model-picker{border:1px solid var(--ui-line);border-radius:10px;background:rgba(27,29,28,.985);color:var(--ui-text-1);box-shadow:var(--ui-shadow-menu)}
 .menu-item{min-height:32px;border:0;border-radius:7px;background:transparent;color:var(--ui-text-2);font-size:12px;line-height:17px}
 .menu-item:hover{background:var(--ui-surface-2);color:var(--ui-text-1)}
+
+/* User-facing workflow status: show progress, hide infrastructure/task-center detail. */
+.ui-v23-workflow-hud{min-width:220px!important;max-width:300px!important;padding:10px 12px!important;border:1px solid var(--ui-line)!important;border-radius:10px!important;background:rgba(27,29,28,.96)!important;box-shadow:var(--ui-shadow-float)!important}
+.ui-v23-workflow-hud .wf-hud-meta,.ui-v23-workflow-hud .wf-hud-active,.ui-v23-workflow-hud .wf-hud-actions{display:none!important}
+.ui-v23-workflow-hud .wf-hud-head{margin-bottom:7px!important}
+.ui-v23-workflow-hud .wf-hud-head span{color:var(--ui-running)!important;font-size:11px!important}
+.ui-v23-workflow-hud .wf-hud-progress{height:3px!important;border-radius:999px!important;background:rgba(236,233,226,.12)!important;overflow:hidden!important}
+.ui-v23-workflow-hud .wf-hud-progress i{background:var(--ui-running)!important}
+
 @media (max-width:1279px){
   .fuiet-wordmark{display:none}
   .workspace-name{max-width:130px}
