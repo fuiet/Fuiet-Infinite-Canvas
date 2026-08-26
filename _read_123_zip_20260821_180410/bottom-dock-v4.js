@@ -1,189 +1,64 @@
 /* Canvas Studio · Bottom Dock v4
- * High-clarity inline SVG icons based on the supplied reference toolbar.
- * Keeps all existing dock behavior unchanged.
+ * Crisp dock icons + left-bottom Asset Management tool (#1 only).
  */
 (()=>{
-  'use strict';
+'use strict';
+document.querySelector('.bottom-center-hint')?.remove();
+const dock=document.querySelector('#bottomDock');if(!dock)return;
+const S=(body,cls='')=>`<svg class="dock-v4-icon ${cls}" viewBox="0 0 24 24" aria-hidden="true">${body}</svg>`;
+const I={
+ add:S('<path d="M12 5v14M5 12h14"/>'),
+ cursor:S('<path d="M5 4 18 10.5l-5.5 1.6-2.2 6.4L5 4Z"/>','dock-mode-cursor'),
+ hand:S('<path d="M8 11V8a1.5 1.5 0 0 1 3 0v3M11 10V7a1.5 1.5 0 0 1 3 0v3M14 10V8a1.5 1.5 0 0 1 3 0v3M17 11v-1a1.5 1.5 0 0 1 3 0v4c0 3.5-2.5 6-6 6h-2c-2.5 0-4.5-1.3-5.5-3.5L5 13.5a1.5 1.5 0 0 1 2.6-1.4L9 14v-3"/>','dock-mode-hand'),
+ toolbox:S('<circle cx="6" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="12" cy="18" r="2"/><path d="M8 6h8M7.4 7.7l3.4 8M16.6 7.7l-3.4 8"/>'),
+ materials:S('<circle cx="9" cy="9" r="3"/><path d="m14 5 5 5-5 5-5-5 5-5Z"/><path d="M7 16h6l3 3H10l-3-3Z"/>'),
+ character:S('<circle cx="7" cy="11" r="3"/><circle cx="17" cy="11" r="3"/><path d="M10 11h4M4 11H2M22 11h-2M8 17c1.1-1.3 2.4-2 4-2s2.9.7 4 2"/>'),
+ history:S('<circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/>'),
+ keyboard:S('<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h.01M11 10h.01M15 10h.01M19 10h.01M7 14h.01M11 14h.01M15 14h.01M19 14h.01M8 16h8"/>'),
+ help:S('<circle cx="12" cy="12" r="8"/><path d="M9.5 9.5a2.7 2.7 0 1 1 4.7 1.8c-1 .9-2.2 1.3-2.2 2.7M12 17h.01"/>')
+};
+[['add',I.add],['mode',I.cursor+I.hand],['layout',I.toolbox],['workflow',I.materials],['asset',I.character],['history',I.history],['shortcuts',I.keyboard],['help',I.help]].forEach(([a,h])=>{const b=dock.querySelector(`[data-dock-action="${a}"]`);if(b)b.innerHTML=h});
+const css=document.createElement('style');css.id='bottomDockV4Styles';css.textContent=`
+#bottomDock.bottom-dock{transform:none!important;will-change:auto!important}#bottomDock .dock-btn{position:relative!important;color:#eee!important}#bottomDock .dock-btn:hover,#bottomDock .dock-btn.open,#bottomDock .dock-btn.active,#bottomDock .dock-btn.mode-grab{color:#fff!important}#bottomDock .dock-btn.primary{color:#111!important}#bottomDock .dock-v4-icon{display:block!important;width:24px!important;height:24px!important;fill:none!important;stroke:currentColor!important;stroke-width:2!important;stroke-linecap:round!important;stroke-linejoin:round!important;vector-effect:non-scaling-stroke!important;filter:none!important}#bottomDock .dock-btn.primary .dock-v4-icon{width:23px!important;height:23px!important;stroke-width:2.2!important}#bottomDock .dock-mode-hand{display:none!important}#bottomDock [data-dock-action="mode"].mode-grab .dock-mode-cursor{display:none!important}#bottomDock [data-dock-action="mode"].mode-grab .dock-mode-hand{display:block!important}
+.context-menu.dock-mode-menu{width:168px!important;min-width:168px!important;padding:5px!important;border:1px solid #3b3b3b!important;border-radius:12px!important;background:#252525!important;box-shadow:0 10px 26px #0006!important}.dock-mode-menu .libtv-add-title,.dock-mode-menu .dock-mode-row span small{display:none!important}.dock-mode-menu .dock-mode-row{height:35px!important;min-height:35px!important;margin:0 0 2px!important;padding:0 9px!important;gap:8px!important;border:0!important;border-radius:7px!important;background:transparent!important;color:#ededed!important}.dock-mode-menu .dock-mode-row:hover{background:#3a3a3a!important}.dock-mode-menu .dock-mode-row.active{background:#555!important;color:#fff!important}.dock-mode-menu .dock-mode-row i{width:19px!important;height:19px!important;background:transparent!important;border:0!important;color:inherit!important}.dock-mode-menu .dock-mode-row i svg{width:18px!important;height:18px!important;fill:none!important;stroke:currentColor!important;stroke-width:1.8!important}.dock-mode-menu .dock-mode-row span{display:flex!important;flex:1!important;flex-direction:row!important;align-items:center!important}.dock-mode-menu .dock-mode-row span b{font-size:13px!important;font-weight:500!important}.dock-mode-menu .dock-mode-row em{background:transparent!important;color:#999!important;font-size:12px!important;padding:0!important}
+.bottom-left.asset-ready{display:flex!important;align-items:center!important;gap:8px!important}#assetMgrBtn{height:30px;border:0;background:transparent;color:#d7d7d7;border-radius:7px;padding:0 5px;display:flex;align-items:center;gap:6px;font-size:13px}#assetMgrBtn:hover,#assetMgrBtn.active{background:#272727;color:#fff}#assetMgrBtn svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+#assetMgrPanel{position:fixed;left:0;top:42px;bottom:0;width:278px;z-index:73;background:#181918;border-right:1px solid #333;box-shadow:16px 0 36px #0003;color:#eee;display:flex;flex-direction:column;transform:translateX(-100%);opacity:0;pointer-events:none;transition:.16s}#assetMgrPanel.open{transform:none;opacity:1;pointer-events:auto}.am-head{position:relative;padding:10px;border-bottom:1px solid #303030}.am-switch{width:100%;height:36px;border:0;background:transparent;color:#eee;border-radius:7px;padding:0 8px;display:flex;align-items:center;gap:8px;text-align:left}.am-switch:hover{background:#252525}.am-logo{width:18px;height:14px;border:2px solid currentColor;transform:skew(-16deg)}.am-switch b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}.am-switch i{margin-left:auto;color:#888;font-style:normal}.am-projects{position:absolute;left:10px;right:10px;top:50px;max-height:290px;overflow:auto;padding:5px;background:#242424;border:1px solid #3d3d3d;border-radius:10px;box-shadow:0 16px 40px #0008;z-index:5}.am-projects.hidden{display:none}.am-project{width:100%;height:35px;border:0;background:transparent;color:#ddd;border-radius:7px;text-align:left;padding:0 9px}.am-project:hover,.am-project.current{background:#353535;color:#fff}.am-tabs{height:40px;padding:0 8px;display:flex;align-items:center;gap:4px;border-bottom:1px solid #303030}.am-tab{height:28px;border:0;background:transparent;color:#999;border-radius:7px;padding:0 10px;font-size:12px}.am-tab.active{background:#343434;color:#fff}.am-tools{height:46px;display:grid;grid-template-columns:1fr 40px;border-bottom:1px solid #2b2b2b}.am-filter-wrap{position:relative;border-right:1px solid #2b2b2b}.am-filter{width:100%;height:100%;border:0;background:transparent;color:#ddd;padding:0 12px;display:flex;align-items:center;justify-content:space-between}.am-filter:hover,.am-search-btn:hover{background:#222}.am-filter-menu{position:absolute;left:4px;top:42px;width:170px;padding:5px;background:#242424;border:1px solid #3d3d3d;border-radius:9px;z-index:5}.am-filter-menu.hidden{display:none}.am-filter-opt{width:100%;height:33px;border:0;background:transparent;color:#ddd;border-radius:6px;text-align:left;padding:0 8px}.am-filter-opt:hover,.am-filter-opt.active{background:#343434;color:#fff}.am-search-btn{border:0;background:transparent;color:#ddd;display:grid;place-items:center}.am-search-btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8}.am-search-row{height:43px;padding:6px 8px;border-bottom:1px solid #2b2b2b}.am-search-row.hidden{display:none}.am-search{width:100%;height:30px;border:1px solid #3b3b3b;border-radius:7px;background:#202120;color:#eee;padding:0 9px;outline:none}.am-list{flex:1;min-height:0;overflow:auto;padding:6px 5px 64px}.am-node{width:100%;height:38px;border:0;background:transparent;color:#ccc;border-radius:7px;padding:0 8px;display:grid;grid-template-columns:20px 1fr auto;align-items:center;gap:7px;text-align:left}.am-node:hover,.am-node.sel{background:#292a29;color:#fff}.am-node svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}.am-node span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.am-node small{color:#777}.am-empty{padding:28px 14px;text-align:center;color:#777;font-size:12px}
+#globalAssetModal{position:fixed;inset:0;z-index:352;background:#000b;backdrop-filter:blur(5px);display:none;align-items:center;justify-content:center;padding:16px}#globalAssetModal.open{display:flex}.ga-box{width:min(1700px,98vw);height:min(720px,92vh);background:#1d1f1e;border:1px solid #3a3c3a;border-radius:10px;overflow:hidden;display:grid;grid-template-columns:200px 1fr;grid-template-rows:58px 1fr;color:#eee}.ga-head{grid-column:1/-1;border-bottom:1px solid #343634;display:flex;align-items:center;padding:0 18px;gap:10px}.ga-head h2{font-size:17px;margin:0}.ga-count{font-size:12px;color:#7f847f}.ga-close{margin-left:auto;width:32px;height:32px;border:0;background:transparent;color:#999;border-radius:7px;font-size:22px}.ga-close:hover{background:#303230;color:#fff}.ga-side{border-right:1px solid #333;padding:16px 13px}.ga-lib{width:100%;height:42px;border:0;border-radius:7px;background:#2c2f2d;color:#eee;text-align:left;padding:0 12px}.ga-body{min-width:0;padding:18px 20px 0;display:flex;flex-direction:column}.ga-search{align-self:flex-end;width:min(400px,42vw);height:38px;border:1px solid #3b3d3b;border-radius:7px;background:#171918;color:#eee;padding:0 11px;outline:none}.ga-row{height:38px;display:flex;align-items:center;gap:8px;color:#7e827f;font-size:12px}.ga-row>span{width:42px}.ga-f{height:30px;border:0;background:transparent;color:#aaa;border-radius:7px;padding:0 11px}.ga-f:hover{background:#282a28;color:#eee}.ga-f.active{background:#303330;color:#fff}.ga-grid{flex:1;min-height:0;overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:14px;padding:10px 2px 24px;align-content:start}.ga-card{min-width:0;border:1px solid #363836;border-radius:8px;background:#232523;overflow:hidden}.ga-prev{position:relative;aspect-ratio:1.55;background:#121412;overflow:hidden}.ga-prev img,.ga-prev video{width:100%;height:100%;object-fit:cover;display:block}.ga-audio{height:100%;display:grid;place-items:center;color:#999}.ga-audio svg{width:34px;height:34px;fill:none;stroke:currentColor;stroke-width:1.5}.ga-kind{position:absolute;left:7px;top:7px;background:#090a09cc;border-radius:4px;padding:3px 6px;font-size:10px}.ga-meta{padding:10px}.ga-title{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ga-sub{font-size:10px;color:#7f837f;margin-top:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ga-load{grid-column:1/-1;text-align:center;padding:60px;color:#808480}
+@media(max-width:850px){#assetMgrPanel{width:250px}.ga-box{grid-template-columns:1fr}.ga-side{display:none}.ga-grid{grid-template-columns:repeat(auto-fill,minmax(145px,1fr))}}
+`;
+document.querySelector('#bottomDockV4Styles')?.remove();document.head.appendChild(css);
+function snap(){const d=window.devicePixelRatio||1,w=dock.offsetWidth;dock.style.left=`${Math.round(((innerWidth-w)/2)*d)/d}px`;dock.style.bottom=`${Math.round(18*d)/d}px`}requestAnimationFrame(snap);addEventListener('resize',()=>requestAnimationFrame(snap),{passive:true});
 
-  document.querySelector('.bottom-center-hint')?.remove();
-
-  const dock=document.querySelector('#bottomDock');
-  if(!dock)return;
-
-  const svg=(body,extra='')=>`<svg class="dock-v4-icon ${extra}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${body}</svg>`;
-  const ICONS={
-    add:svg('<path d="M12 5v14M5 12h14"/>'),
-    cursor:svg('<path d="M5 4 18 10.5l-5.5 1.6-2.2 6.4L5 4Z"/>','dock-mode-cursor'),
-    hand:svg('<path d="M8 11V8a1.5 1.5 0 0 1 3 0v3M11 10V7a1.5 1.5 0 0 1 3 0v3M14 10V8a1.5 1.5 0 0 1 3 0v3M17 11v-1a1.5 1.5 0 0 1 3 0v4c0 3.5-2.5 6-6 6h-2c-2.5 0-4.5-1.3-5.5-3.5L5 13.5a1.5 1.5 0 0 1 2.6-1.4L9 14v-3"/>','dock-mode-hand'),
-    toolbox:svg('<circle cx="6" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="12" cy="18" r="2"/><path d="M8 6h8M7.4 7.7l3.4 8M16.6 7.7l-3.4 8"/>'),
-    materials:svg('<circle cx="9" cy="9" r="3"/><path d="m14 5 5 5-5 5-5-5 5-5Z"/><path d="M7 16h6l3 3H10l-3-3Z"/>'),
-    character:svg('<circle cx="7" cy="11" r="3"/><circle cx="17" cy="11" r="3"/><path d="M10 11h4M4 11H2M22 11h-2M8 17c1.1-1.3 2.4-2 4-2s2.9.7 4 2"/>'),
-    history:svg('<circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/>'),
-    keyboard:svg('<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h.01M11 10h.01M15 10h.01M19 10h.01M7 14h.01M11 14h.01M15 14h.01M19 14h.01M8 16h8"/>'),
-    help:svg('<circle cx="12" cy="12" r="8"/><path d="M9.5 9.5a2.7 2.7 0 1 1 4.7 1.8c-1 .9-2.2 1.3-2.2 2.7M12 17h.01"/>')
-  };
-
-  const setIcon=(action,html)=>{
-    const btn=dock.querySelector(`[data-dock-action="${action}"]`);
-    if(!btn)return;
-    btn.innerHTML=html;
-  };
-
-  setIcon('add',ICONS.add);
-  setIcon('mode',ICONS.cursor+ICONS.hand);
-  setIcon('layout',ICONS.toolbox);
-  setIcon('workflow',ICONS.materials);
-  setIcon('asset',ICONS.character);
-  setIcon('history',ICONS.history);
-  setIcon('shortcuts',ICONS.keyboard);
-  setIcon('help',ICONS.help);
-
-  document.querySelector('#bottomDockV4Styles')?.remove();
-  const style=document.createElement('style');
-  style.id='bottomDockV4Styles';
-  style.textContent=`
-    #bottomDock.bottom-dock{
-      transform:none!important;
-      will-change:auto!important;
-    }
-    #bottomDock .dock-btn{
-      position:relative!important;
-      color:#eeeeee!important;
-      -webkit-font-smoothing:auto!important;
-    }
-    #bottomDock .dock-btn:hover,#bottomDock .dock-btn.open,#bottomDock .dock-btn.active,#bottomDock .dock-btn.mode-grab{color:#ffffff!important}
-    #bottomDock .dock-btn.primary{color:#111111!important}
-    #bottomDock .dock-v4-icon{
-      display:block!important;
-      width:24px!important;
-      height:24px!important;
-      flex:0 0 24px!important;
-      overflow:visible!important;
-      fill:none!important;
-      stroke:currentColor!important;
-      stroke-width:2!important;
-      stroke-linecap:round!important;
-      stroke-linejoin:round!important;
-      shape-rendering:auto!important;
-      vector-effect:non-scaling-stroke!important;
-      opacity:1!important;
-      transform:none!important;
-      filter:none!important;
-    }
-    #bottomDock .dock-btn.primary .dock-v4-icon{width:23px!important;height:23px!important;stroke-width:2.2!important}
-    #bottomDock .dock-mode-hand{display:none!important}
-    #bottomDock [data-dock-action="mode"].mode-grab .dock-mode-cursor{display:none!important}
-    #bottomDock [data-dock-action="mode"].mode-grab .dock-mode-hand{display:block!important}
-
-    /* compact move / hand selector — matches the supplied reference */
-    .context-menu.dock-mode-menu{
-      width:168px!important;
-      min-width:168px!important;
-      padding:5px!important;
-      border:1px solid #3b3b3b!important;
-      border-radius:12px!important;
-      background:#252525!important;
-      box-shadow:0 10px 26px rgba(0,0,0,.34)!important;
-      overflow:visible!important;
-    }
-    .context-menu.dock-mode-menu::after{
-      content:""!important;
-      position:absolute!important;
-      left:50%!important;
-      bottom:-6px!important;
-      width:11px!important;
-      height:11px!important;
-      background:#252525!important;
-      border-right:1px solid #3b3b3b!important;
-      border-bottom:1px solid #3b3b3b!important;
-      border-radius:1px!important;
-      transform:translateX(-50%) rotate(45deg)!important;
-    }
-    .dock-mode-menu .libtv-add-title{display:none!important}
-    .dock-mode-menu .dock-mode-row{
-      width:100%!important;
-      min-height:35px!important;
-      height:35px!important;
-      margin:0!important;
-      padding:0 9px!important;
-      gap:8px!important;
-      border:0!important;
-      border-radius:7px!important;
-      background:transparent!important;
-      color:#ededed!important;
-      box-shadow:none!important;
-      font-size:13px!important;
-    }
-    .dock-mode-menu .dock-mode-row+.dock-mode-row{margin-top:2px!important}
-    .dock-mode-menu .dock-mode-row:hover{background:#3a3a3a!important;color:#fff!important}
-    .dock-mode-menu .dock-mode-row.active{background:#555555!important;color:#fff!important}
-    .dock-mode-menu .dock-mode-row i{
-      width:19px!important;
-      height:19px!important;
-      flex:0 0 19px!important;
-      display:inline-flex!important;
-      align-items:center!important;
-      justify-content:center!important;
-      padding:0!important;
-      border:0!important;
-      border-radius:0!important;
-      background:transparent!important;
-      color:inherit!important;
-      box-shadow:none!important;
-    }
-    .dock-mode-menu .dock-mode-row i svg{
-      width:18px!important;
-      height:18px!important;
-      fill:none!important;
-      stroke:currentColor!important;
-      stroke-width:1.8!important;
-      stroke-linecap:round!important;
-      stroke-linejoin:round!important;
-    }
-    .dock-mode-menu .dock-mode-row span{
-      display:flex!important;
-      flex:1!important;
-      min-width:0!important;
-      flex-direction:row!important;
-      align-items:center!important;
-      gap:0!important;
-    }
-    .dock-mode-menu .dock-mode-row span b{
-      font-size:13px!important;
-      line-height:1!important;
-      font-weight:500!important;
-      color:inherit!important;
-      white-space:nowrap!important;
-    }
-    .dock-mode-menu .dock-mode-row span small{display:none!important}
-    .dock-mode-menu .dock-mode-row em{
-      min-width:0!important;
-      width:auto!important;
-      height:auto!important;
-      padding:0!important;
-      border:0!important;
-      border-radius:0!important;
-      background:transparent!important;
-      color:#999!important;
-      font-size:12px!important;
-      font-weight:500!important;
-      line-height:1!important;
-    }
-    .dock-mode-menu .dock-mode-row.active em{background:transparent!important;color:#bdbdbd!important}
-  `;
-  document.head.appendChild(style);
-
-  function snapDockToDevicePixels(){
-    const dpr=window.devicePixelRatio||1;
-    const width=dock.offsetWidth;
-    const rawLeft=(window.innerWidth-width)/2;
-    const snappedLeft=Math.round(rawLeft*dpr)/dpr;
-    const rawBottom=18;
-    const snappedBottom=Math.round(rawBottom*dpr)/dpr;
-    dock.style.left=`${snappedLeft}px`;
-    dock.style.bottom=`${snappedBottom}px`;
-  }
-
-  requestAnimationFrame(snapDockToDevicePixels);
-  window.addEventListener('resize',()=>requestAnimationFrame(snapDockToDevicePixels),{passive:true});
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const state=()=>{try{return JSON.parse(localStorage.getItem('libtv-clone-state')||'{}')||{}}catch{return {}}};
+const label=t=>({text:'文本',image:'图片',video:'视频',audio:'音频',script:'脚本',director:'导演台'})[t]||t||'节点';
+const nodeSvg=t=>({text:'<rect x="5" y="4" width="14" height="16" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>',image:'<rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.4"/><path d="m5 17 5-5 3 3 2-2 4 4"/>',video:'<rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="m10 9 5 3-5 3z"/>',audio:'<path d="M9 18V7l9-2v11"/><circle cx="6.5" cy="18" r="2.4"/><circle cx="15.5" cy="16" r="2.4"/>',script:'<path d="M6 3h9l3 3v15H6z"/><path d="M15 3v4h4M9 11h6M9 15h6"/>',director:'<circle cx="12" cy="12" r="7"/><path d="M12 8v8M8 12h8"/>'})[t]||'<rect x="5" y="5" width="14" height="14" rx="2"/>';
+const bl=$('.bottom-left');if(!bl)return;bl.classList.add('asset-ready');
+const btn=document.createElement('button');btn.id='assetMgrBtn';btn.type='button';btn.innerHTML='<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 9h16M9 12h6"/></svg><span>资产管理</span>';bl.prepend(btn);
+const panel=document.createElement('aside');panel.id='assetMgrPanel';document.body.appendChild(panel);const modal=document.createElement('div');modal.id='globalAssetModal';document.body.appendChild(modal);
+let filter='all',query='',searching=false,projects=[],projOpen=false;
+const current=()=>{const s=state();return{id:s.projectId||new URL(location.href).searchParams.get('projectId')||'',name:s.projectName||$('#projectName')?.textContent||'当前画布'}};
+async function jget(u){const r=await fetch(u,{credentials:'same-origin'});if(!r.ok)throw Error(String(r.status));return r.json()}
+async function loadProjects(){try{projects=(await jget('/api/projects')).projects||[]}catch{const c=current();projects=c.id?[c]:[]}return projects}
+function projectMenu(){const m=$('.am-projects',panel);if(!m)return;m.classList.toggle('hidden',!projOpen);if(!projOpen)return;m.innerHTML=projects.map(p=>`<button class="am-project ${String(p.id)===String(current().id)?'current':''}" data-p="${esc(p.id)}">${esc(p.name||'未命名画布')}</button>`).join('')||'<div class="am-empty">暂无其他画布</div>';$$('[data-p]',m).forEach(x=>x.onclick=()=>{if(String(x.dataset.p)===String(current().id)){projOpen=false;projectMenu();return}const u=new URL(location.href);u.searchParams.set('projectId',x.dataset.p);u.searchParams.delete('open');location.href=u})}
+function rows(){const root=$('.am-list',panel);if(!root)return;const n=state().nodes||[],q=query.trim().toLowerCase(),sel=$('.node.selected')?.dataset.id||'';const v=n.filter(x=>(filter==='all'||x.type===filter)&&(!q||`${x.title||''} ${x.prompt||''} ${x.text||''} ${label(x.type)}`.toLowerCase().includes(q)));root.innerHTML=v.length?v.map(x=>`<button class="am-node ${String(x.id)===String(sel)?'sel':''}" data-n="${esc(x.id)}"><svg viewBox="0 0 24 24">${nodeSvg(x.type)}</svg><span>${esc(x.title||label(x.type))}</span><small>${esc(label(x.type))}</small></button>`).join(''):'<div class="am-empty">没有符合条件的节点</div>';$$('[data-n]',root).forEach(x=>x.onclick=()=>focusNode(x.dataset.n))}
+function render(){const s=state(),types=['all',...[...new Set((s.nodes||[]).map(n=>n.type).filter(Boolean))]];panel.innerHTML=`<div class="am-head"><button class="am-switch"><span class="am-logo"></span><b>${esc(current().name)}</b><i>⌄</i></button><div class="am-projects hidden"></div></div><div class="am-tabs"><button class="am-tab active">画布</button><button class="am-tab" data-assets>资产</button></div><div class="am-tools"><div class="am-filter-wrap"><button class="am-filter"><span>${esc(filter==='all'?'全部':label(filter))}</span><i>⌄</i></button><div class="am-filter-menu hidden">${types.map(t=>`<button class="am-filter-opt ${t===filter?'active':''}" data-f="${t}">${esc(t==='all'?'全部':label(t))}</button>`).join('')}</div></div><button class="am-search-btn"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg></button></div><div class="am-search-row ${searching?'':'hidden'}"><input class="am-search" placeholder="搜索节点" value="${esc(query)}"></div><div class="am-list"></div>`;$('.am-switch',panel).onclick=async()=>{projOpen=!projOpen;if(projOpen)await loadProjects();projectMenu()};$('[data-assets]',panel).onclick=openAssets;$('.am-filter',panel).onclick=()=>$('.am-filter-menu',panel).classList.toggle('hidden');$$('[data-f]',panel).forEach(x=>x.onclick=()=>{filter=x.dataset.f;render()});$('.am-search-btn',panel).onclick=()=>{searching=!searching;render();if(searching)requestAnimationFrame(()=>$('.am-search',panel)?.focus())};const i=$('.am-search',panel);if(i)i.oninput=e=>{query=e.target.value;rows()};rows();projectMenu()}
+function toggle(on){const o=typeof on==='boolean'?on:!panel.classList.contains('open');panel.classList.toggle('open',o);btn.classList.toggle('active',o);if(o){render();loadProjects()}}
+btn.onclick=e=>{e.stopPropagation();toggle()};
+function vp(){const s=state().viewport||{},t=$('#canvasWorld')?.style.transform||'',m=t.match(/translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)\s*scale\(([\d.]+)\)/);return m?{x:+m[1],y:+m[2],z:+m[3]}:{x:+s.x||0,y:+s.y||0,z:+s.zoom||1}}
+function pan(dx,dy){const v=$('#canvasViewport');if(!v)return;const r=v.getBoundingClientRect(),x=r.left+r.width/2,y=r.top+r.height/2,o={bubbles:true,cancelable:true,pointerId:921,pointerType:'mouse',button:0,buttons:1,clientX:x,clientY:y};dispatchEvent(new KeyboardEvent('keydown',{key:' ',code:'Space',bubbles:true,cancelable:true}));v.dispatchEvent(new PointerEvent('pointerdown',o));v.dispatchEvent(new PointerEvent('pointermove',{...o,clientX:x+dx,clientY:y+dy}));dispatchEvent(new PointerEvent('pointermove',{...o,clientX:x+dx,clientY:y+dy}));dispatchEvent(new PointerEvent('pointerup',{...o,buttons:0,clientX:x+dx,clientY:y+dy}));v.dispatchEvent(new PointerEvent('pointerup',{...o,buttons:0,clientX:x+dx,clientY:y+dy}));dispatchEvent(new KeyboardEvent('keyup',{key:' ',code:'Space',bubbles:true,cancelable:true}))}
+function exact(id){const v=$('#canvasViewport'),el=$(`.node[data-id="${CSS.escape(String(id))}"]`);if(!v||!el)return false;const a=v.getBoundingClientRect(),b=el.getBoundingClientRect();pan(a.left+a.width/2-b.left-b.width/2,a.top+a.height/2-b.top-b.height/2);setTimeout(()=>{const n=$(`.node[data-id="${CSS.escape(String(id))}"]`),h=n?.querySelector('.node-header')||n;if(!h)return;const r=h.getBoundingClientRect(),x=r.left+r.width/2,y=r.top+r.height/2;h.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,cancelable:true,pointerId:922,pointerType:'mouse',button:0,buttons:1,clientX:x,clientY:y}));dispatchEvent(new PointerEvent('pointerup',{bubbles:true,cancelable:true,pointerId:922,pointerType:'mouse',button:0,buttons:0,clientX:x,clientY:y}));setTimeout(rows,40)},70);return true}
+function focusNode(id){if(exact(id))return;const s=state(),n=(s.nodes||[]).find(x=>String(x.id)===String(id)),v=$('#canvasViewport');if(!n||!v)return;const p=vp(),r=v.getBoundingClientRect(),cx=(+n.x||0)+(+n.w||320)/2,cy=(+n.y||0)+(+n.h||180)/2;pan(r.width/2-(p.x+cx*p.z),r.height/2-(p.y+cy*p.z));setTimeout(()=>exact(id),130)}
+let assets=[],atype='all',acat='all',aq='';
+const norm=(x,p)=>({id:x.id||`${p.id}:${x.outputUrl||x.mediaUrl||x.url||x.title}`,type:x.type||x.kind||'image',title:x.title||x.name||label(x.type||x.kind),url:x.mediaUrl||x.outputUrl||x.url||'',desc:x.description||x.prompt||x.text||'',tags:Array.isArray(x.tags)?x.tags.join(' '):String(x.tags||''),folder:x.folder||x.category||'',project:p.name||'未命名画布',time:x.createdAt||x.updatedAt||''});
+function fromProject(p){const d=p.data||{},a=[];(d.assets||[]).forEach(x=>a.push(norm(x,p)));(d.nodes||[]).filter(x=>['image','video','audio'].includes(x.type)&&x.outputUrl).forEach(x=>a.push(norm(x,p)));return a}
+function cat(a){const h=`${a.folder} ${a.tags} ${a.title} ${a.desc}`.toLowerCase();if(/人物|角色|character|person/.test(h))return'人物';if(/场景|scene|background/.test(h))return'场景';if(/物品|道具|product|prop/.test(h))return'物品';if(/风格|style/.test(h))return'风格';if(/音效|sfx|sound effect/.test(h))return'音效';return'未分类'}
+async function allAssets(){await loadProjects();const ps=projects.length?projects:[current()],out=[];let k=0,res=new Array(ps.length);async function w(){while(k<ps.length){const i=k++;try{res[i]=(await jget(`/api/projects/${encodeURIComponent(ps[i].id)}`)).project}catch{res[i]=null}}}await Promise.all(Array.from({length:Math.min(6,ps.length||1)},w));res.filter(Boolean).forEach(p=>out.push(...fromProject(p)));if(!out.length){const s=state();out.push(...fromProject({id:s.projectId||'current',name:s.projectName||'当前画布',data:s}))}const d=new Map;out.forEach(a=>{const k=a.url?`${a.type}|${a.url}`:`${a.project}|${a.id}`;if(!d.has(k))d.set(k,a)});return[...d.values()].sort((a,b)=>String(b.time).localeCompare(String(a.time)))}
+function grid(){const g=$('.ga-grid',modal);if(!g)return;const q=aq.toLowerCase(),v=assets.filter(a=>(atype==='all'||a.type===atype)&&(acat==='all'||cat(a)===acat)&&(!q||`${a.title} ${a.desc} ${a.tags} ${a.project}`.toLowerCase().includes(q)));$('.ga-count',modal).textContent=`${assets.length} 个资产`;g.innerHTML=v.length?v.map(a=>{let m=a.type==='image'&&a.url?`<img src="${esc(a.url)}">`:a.type==='video'&&a.url?`<video src="${esc(a.url)}" muted playsinline preload="metadata"></video>`:a.type==='audio'?'<div class="ga-audio"><svg viewBox="0 0 24 24"><path d="M9 18V7l9-2v11"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="15.5" cy="16" r="2.5"/></svg></div>':'<div class="ga-audio"></div>';return`<article class="ga-card"><div class="ga-prev">${m}<span class="ga-kind">${esc(label(a.type))}</span></div><div class="ga-meta"><div class="ga-title">${esc(a.title)}</div><div class="ga-sub">${esc(a.project)}${a.folder?` · ${esc(a.folder)}`:''}</div></div></article>`}).join(''):'<div class="ga-load">没有符合条件的资产</div>'}
+async function openAssets(){projOpen=false;projectMenu();modal.classList.add('open');modal.innerHTML=`<div class="ga-box"><header class="ga-head"><h2>资产管理</h2><span class="ga-count">加载中…</span><button class="ga-close">×</button></header><aside class="ga-side"><button class="ga-lib">▱&nbsp;&nbsp;个人资产库</button></aside><main class="ga-body"><input class="ga-search" placeholder="搜索名称、描述或标签"><div class="ga-row"><span>类型</span>${[['all','全部'],['image','图片'],['video','视频'],['audio','音频']].map(([v,l])=>`<button class="ga-f ${v==='all'?'active':''}" data-t="${v}">${l}</button>`).join('')}</div><div class="ga-row"><span>分类</span>${['all','未分类','人物','场景','物品','风格','音效'].map(v=>`<button class="ga-f ${v==='all'?'active':''}" data-c="${v}">${v==='all'?'全部':v}</button>`).join('')}</div><div class="ga-grid"><div class="ga-load">正在读取所有画布资产…</div></div></main></div>`;atype=acat='all';aq='';$('.ga-close',modal).onclick=closeAssets;$('.ga-search',modal).oninput=e=>{aq=e.target.value;grid()};$$('[data-t]',modal).forEach(b=>b.onclick=()=>{atype=b.dataset.t;$$('[data-t]',modal).forEach(x=>x.classList.toggle('active',x===b));grid()});$$('[data-c]',modal).forEach(b=>b.onclick=()=>{acat=b.dataset.c;$$('[data-c]',modal).forEach(x=>x.classList.toggle('active',x===b));grid()});assets=await allAssets();if(modal.classList.contains('open'))grid()}
+function closeAssets(){modal.classList.remove('open');modal.innerHTML=''}
+modal.addEventListener('pointerdown',e=>{if(e.target===modal)closeAssets()});addEventListener('keydown',e=>{if(e.key==='Escape'){if(modal.classList.contains('open')){e.preventDefault();closeAssets()}else if(panel.classList.contains('open'))toggle(false)}},true);
+document.addEventListener('pointerdown',e=>{if(projOpen&&!e.target.closest('.am-switch')&&!e.target.closest('.am-projects')){projOpen=false;projectMenu()}},true);
+const nl=$('#nodeLayer');if(nl){let tm;new MutationObserver(()=>{if(panel.classList.contains('open')){clearTimeout(tm);tm=setTimeout(rows,100)}}).observe(nl,{childList:true,attributes:true,attributeFilter:['class']})}
 })();
