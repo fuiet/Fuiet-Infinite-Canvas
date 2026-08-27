@@ -1,0 +1,143 @@
+name: Regression Image Generator V3
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/regression-image-generator-v3.yml'
+
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax check
+        working-directory: _read_123_zip_20260821_180410
+        run: node --check image-generator-v2.js
+      - name: Install browser
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Start frontend
+        working-directory: _read_123_zip_20260821_180410
+        run: |
+          python3 -m http.server 8080 --bind 127.0.0.1 >/tmp/canvas-http.log 2>&1 &
+          for i in {1..40}; do curl -fsS http://127.0.0.1:8080/ >/dev/null && break; sleep .5; done
+      - name: Browser regression
+        run: |
+          cat > regression.mjs <<'JS'
+          import { chromium } from 'playwright';
+          const browser=await chromium.launch({headless:true});
+          const page=await browser.newPage({viewport:{width:1365,height:768}});
+          const errors=[];
+          page.on('pageerror',e=>errors.push(String(e.stack||e.message)));
+          await page.goto('http://127.0.0.1:8080/',{waitUntil:'domcontentloaded'});
+          await page.waitForTimeout(1200);
+          const viewport=page.locator('#canvasViewport');
+          const vr=await viewport.boundingBox();
+          if(!vr) throw new Error('canvas missing');
+
+          async function addNode(type,x,y){
+            await page.mouse.dblclick(vr.x+x,vr.y+y,{delay:70});
+            await page.waitForTimeout(120);
+            const row=page.locator(`#contextMenu .libtv-add-row[data-kind="node"][data-id="${type}"]`).first();
+            if(!(await row.count())) throw new Error(`add row missing: ${type}`);
+            await row.click();
+            await page.waitForTimeout(260);
+            return page.locator(`.node[data-node-type="${type}"]`).last();
+          }
+
+          const image=await addNode('image',470,210);
+          if(!(await image.count())) throw new Error('image node missing');
+          const gen=page.locator('#generatorPanel.image-generator.image-generator-v2:not(.hidden)');
+          await gen.waitFor({state:'visible',timeout:2500});
+          if(await page.locator('#generatorPanel [data-image-preset-cat]').count()!==4) throw new Error('4 preset groups missing');
+          if(!(await page.locator('#generatorPanel #modelPickerBtn').count())) throw new Error('model picker missing');
+          if(!(await page.locator('#generatorPanel #imageSettingsSummary').count())) throw new Error('settings summary missing');
+          const gr=await gen.boundingBox();
+          console.log('GENERATOR_RECT',JSON.stringify(gr));
+          if(!gr||gr.x<0||gr.y<0||gr.x+gr.width>1365||gr.y+gr.height>768) throw new Error('generator clipped');
+
+          await page.locator('#imageSettingsSummary').click();
+          const settings=page.locator('.image-settings-popover');
+          await settings.waitFor({state:'visible'});
+          for(const label of ['画质','清晰度','比例','生成数量']){
+            if(!(await settings.getByText(label,{exact:true}).count())) throw new Error(`settings missing ${label}`);
+          }
+          const ratioButton=settings.locator('[data-ratio-value]').nth(1);
+          if(await ratioButton.count()){
+            const value=await ratioButton.getAttribute('data-ratio-value');
+            await ratioButton.click();
+            await page.waitForTimeout(80);
+            const actual=await page.locator('#generatorPanel #ratioSelect').inputValue();
+            if(actual!==value) throw new Error(`ratio sync failed ${actual} != ${value}`);
+          }
+          await page.locator('#generatorPanel #promptInput').click();
+          await page.waitForTimeout(80);
+          if(await page.locator('.image-settings-popover').count()) throw new Error('settings popover did not close');
+
+          const storyBtn=page.locator('#generatorPanel [data-image-preset-cat="story"]');
+          await storyBtn.click();
+          const presetPop=page.locator('.image-preset-popover');
+          await presetPop.waitFor({state:'visible'});
+          await presetPop.locator('[data-preset-index="0"]').click();
+          await page.waitForTimeout(100);
+          const prompt=await page.locator('#generatorPanel #promptInput').inputValue();
+          if(!prompt.includes('建立镜头')) throw new Error('preset prompt not applied');
+
+          await page.locator('#generatorPanel #modelPickerBtn').click();
+          await page.waitForTimeout(120);
+          if(!(await page.locator('#modelPicker:not(.hidden)').count())) throw new Error('model picker no longer opens');
+          await page.locator('#modelPicker').evaluate(el=>el.classList.add('hidden'));
+          await page.mouse.click(vr.x+80,vr.y+100);
+          await page.waitForTimeout(120);
+
+          await addNode('text',920,190);
+          const manual=page.locator('.node[data-node-type="text"] [data-text-quick="manual"]').last();
+          if(await manual.count()){await manual.click();await page.waitForTimeout(180)}
+          const surface=page.locator('.node[data-node-type="text"] [data-text-manual-view]').last();
+          const sr=await surface.boundingBox();
+          if(!sr) throw new Error('manual text surface missing');
+          await page.mouse.dblclick(sr.x+sr.width/2,sr.y+Math.min(80,sr.height/2),{delay:90});
+          await page.waitForTimeout(180);
+          const editor=page.locator('.node[data-node-type="text"] [data-text-manual][contenteditable="true"]').last();
+          if(!(await editor.count())) throw new Error('text double-click regression');
+          await page.keyboard.type('回归测试');
+          await page.keyboard.press('Escape');
+          await page.waitForTimeout(120);
+
+          const textOut=page.locator('.node[data-node-type="text"] .node-port.out').last();
+          const imageIn=page.locator('.node[data-node-type="image"] .node-port.in').first();
+          const tor=await textOut.boundingBox(),iir=await imageIn.boundingBox();
+          if(!tor||!iir) throw new Error('connection ports missing');
+          const pathsBefore=await page.locator('#edgeLayer path').count();
+          await page.mouse.move(tor.x+tor.width/2,tor.y+tor.height/2);
+          await page.mouse.down();
+          await page.mouse.move(iir.x+iir.width/2,iir.y+iir.height/2,{steps:8});
+          await page.mouse.up();
+          await page.waitForTimeout(180);
+          const pathsAfter=await page.locator('#edgeLayer path').count();
+          console.log('EDGE_PATHS',pathsBefore,pathsAfter);
+          if(pathsAfter<=pathsBefore) throw new Error('text-to-image connection regression');
+
+          const imageOut=page.locator('.node[data-node-type="image"] .node-port.out').first();
+          const ior=await imageOut.boundingBox();
+          if(!ior) throw new Error('blank-drop port missing');
+          await page.mouse.move(ior.x+ior.width/2,ior.y+ior.height/2);
+          await page.mouse.down();
+          await page.mouse.move(vr.x+1110,vr.y+610,{steps:9});
+          await page.mouse.up();
+          await page.waitForTimeout(220);
+          const connecting=await viewport.evaluate(el=>el.classList.contains('connecting-mode'));
+          const quickAdd=page.locator('#contextMenu.libtv-add-menu:not(.hidden)');
+          console.log('BLANK_DROP',JSON.stringify({connecting,quickAdd:await quickAdd.count()}));
+          if(connecting) throw new Error('blank release stuck in connecting-mode');
+          if(!(await quickAdd.count())) throw new Error('blank release add-node menu missing');
+
+          if(errors.length) throw new Error('page errors: '+errors.join('\n'));
+          await browser.close();
+          JS
+          node regression.mjs
