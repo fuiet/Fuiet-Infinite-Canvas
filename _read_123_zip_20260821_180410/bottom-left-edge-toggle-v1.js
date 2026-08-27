@@ -56,8 +56,8 @@ apply(readHidden(),false);
 /* Load the final event-ownership layer after app.js + dock v3/v4 are ready. */
 if(!document.querySelector('script[data-bottom-interaction-stability]')){
   const s=document.createElement('script');
-  s.src='./bottom-interaction-stability-v1.js?v=5';
-  s.dataset.bottomInteractionStability='5';
+  s.src='./bottom-interaction-stability-v1.js?v=6';
+  s.dataset.bottomInteractionStability='6';
   document.head.appendChild(s);
 }
 if(!document.querySelector('script[data-grid-snap-tool]')){
