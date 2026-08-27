@@ -112,7 +112,7 @@ function placePopup(pop,anchor){
   const ar=anchor.getBoundingClientRect();
   pop.style.visibility='hidden';document.body.appendChild(pop);
   const pr=pop.getBoundingClientRect(),edge=12,gap=7;
-  let left=Math.min(window.innerWidth-pr.width-edge,Math.max(edge,ar.left));
+  const left=Math.min(window.innerWidth-pr.width-edge,Math.max(edge,ar.left));
   let top=ar.bottom+gap;
   if(top+pr.height>window.innerHeight-edge)top=Math.max(edge,ar.top-gap-pr.height);
   pop.style.left=Math.round(left)+'px';pop.style.top=Math.round(top)+'px';pop.style.visibility='visible';
@@ -198,10 +198,12 @@ function enhance(root){
 function scan(){
   const root=generator.querySelector('.image-generator-main');
   if(!generator.classList.contains('image-generator')||generator.classList.contains('hidden')||!root){closeFloating();return}
-  if(root!==lastRoot)enhance(root);else{syncSummary();syncPresetButtons();placeGenerator()}
+  if(root!==lastRoot)enhance(root);else{syncSummary();syncPresetButtons()}
 }
 
-new MutationObserver(scan).observe(generator,{childList:true,subtree:true,attributes:true,attributeFilter:['class','style']});
+/* Observe content/class changes only. Do not observe style: this script owns final positioning
+ * and observing its own left/top writes can create a feedback loop in some browsers. */
+new MutationObserver(scan).observe(generator,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});
 window.addEventListener('resize',()=>{closeFloating();placeGenerator()},{passive:true});
 window.addEventListener('scroll',()=>{closeFloating();placeGenerator()},{passive:true,capture:true});
 document.addEventListener('pointerdown',e=>{if(floating&&!floating.contains(e.target)&&!e.target.closest('#imageSettingsSummary,[data-image-preset-cat]'))closeFloating()},true);
