@@ -6,28 +6,29 @@ pages_build_output_dir = "."
 SUPABASE_STORAGE_BUCKET = "canvas-media"
 CANVAS_TASK_CONCURRENCY = "2"
 CANVAS_ALLOW_PRIVATE_PROVIDER_HOSTS = "0"
+CANVAS_MAX_UPLOAD_BYTES = "52428800"
+CANVAS_LOGIN_ATTEMPTS_PER_10M = "10"
 
-# Current product mode: desktop/single-user. No account, login, Bearer token or owner id
-# is required to configure providers, projects, tasks or media.
-CANVAS_DESKTOP_SINGLE_USER = "1"
-CANVAS_ENFORCE_OWNER = "0"
+# Hosted Cloudflare Pages is secure-by-default. Provider/project/task/media access
+# requires an authenticated owner. Never publish the account-free desktop mode as
+# the default for a public Pages deployment.
+CANVAS_DESKTOP_SINGLE_USER = "0"
+CANVAS_ENFORCE_OWNER = "1"
 CANVAS_CLAIM_UNOWNED = "0"
 CANVAS_ALLOW_UNAUTHENTICATED_OWNER = "0"
 CANVAS_AUTO_SINGLE_SUPABASE_OWNER = "0"
 
-# Optional environment values while developing the web preview:
-# PROVIDER_SECRET_KEY                 # optional in desktop mode; if absent, the app supplies its desktop fallback internally
-# SUPABASE_URL
-# SUPABASE_SERVICE_ROLE_KEY
-# CANVAS_PUBLIC_BASE_URL=https://fuiet-infinite-canvas.pages.dev
+# Configure these as Cloudflare Secrets / Variables; never commit real values:
+# PROVIDER_SECRET_KEY          = a long random encryption key (required in hosted mode)
+# CANVAS_SESSION_SECRET        = optional dedicated session-signing secret
+# SUPABASE_URL                 = your Supabase project URL
+# SUPABASE_SERVICE_ROLE_KEY    = server only; never expose to browser code
+# SUPABASE_ANON_KEY            = recommended for validating Supabase user tokens
+# CANVAS_ADMIN_PASSWORD        = admin login password (if using admin mode)
+# CANVAS_OWNER_ID              = admin's auth.users UUID (if using admin mode)
+# CANVAS_PUBLIC_BASE_URL       = https://fuiet-infinite-canvas.pages.dev
 #
-# CANVAS_ADMIN_PASSWORD, CANVAS_OWNER_ID and SUPABASE_ANON_KEY are not required in
-# desktop/single-user mode. Even if old values remain in Cloudflare, the desktop-mode
-# entry point ignores them for normal application/provider API access.
-#
-# The built-in desktop provider secret exists only so provider API keys are not stored
-# as plaintext and users do not need to configure a server secret. A future packaged
-# desktop build can replace it with a per-device secret/keychain without changing the API.
-#
-# If a future hosted multi-user edition is built, set CANVAS_DESKTOP_SINGLE_USER=0,
-# CANVAS_ENFORCE_OWNER=1 and configure a real authentication/owner strategy there.
+# For a genuinely local/packaged single-user build only, explicitly set
+# CANVAS_DESKTOP_SINGLE_USER=1. That mode intentionally disables login and owner
+# isolation and uses a desktop-only provider-secret fallback when no secret is set;
+# it must not be treated as a safe public-hosting configuration.
