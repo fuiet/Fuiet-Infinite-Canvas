@@ -1,0 +1,38 @@
+name: Provider CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '_read_123_zip_20260821_180410/app.js'
+      - '_read_123_zip_20260821_180410/server.js'
+      - '_read_123_zip_20260821_180410/models.js'
+      - '_read_123_zip_20260821_180410/provider-adapter-contract.js'
+      - '_read_123_zip_20260821_180410/dist/server/**'
+      - '_read_123_zip_20260821_180410/tests/provider-*.test.mjs'
+      - '.github/workflows/provider-ci.yml'
+  pull_request:
+    paths:
+      - '_read_123_zip_20260821_180410/app.js'
+      - '_read_123_zip_20260821_180410/server.js'
+      - '_read_123_zip_20260821_180410/models.js'
+      - '_read_123_zip_20260821_180410/provider-adapter-contract.js'
+      - '_read_123_zip_20260821_180410/dist/server/**'
+      - '_read_123_zip_20260821_180410/tests/provider-*.test.mjs'
+      - '.github/workflows/provider-ci.yml'
+
+jobs:
+  provider-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: _read_123_zip_20260821_180410
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax check provider runtime
+        run: node --check provider-adapter-contract.js && node --check server.js && node --check dist/server/secure-index.js && node --check dist/server/provider-compat-entry.js && node --check app.js
+      - name: Provider regression tests
+        run: node --test tests/provider-*.test.mjs
