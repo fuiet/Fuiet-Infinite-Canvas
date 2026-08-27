@@ -1,5 +1,6 @@
-/* Canvas Studio · Bottom interaction stability v1
- * Owns the three conflict-prone dock actions and hardens connection pointer cleanup.
+/* Canvas Studio · Bottom interaction stability v2
+ * Gives the persistent bottom dock one deterministic owner per action and
+ * hardens connection pointer cleanup.
  */
 (()=>{
 'use strict';
@@ -9,48 +10,71 @@ const viewport=document.querySelector('#canvasViewport');
 if(!dock||!viewport)return;
 
 /*
- * app.js assigns button.onclick before bottom-dock-v3 installs delegated click
- * handling. Keep the app closure for the + action, but remove every later direct
- * listener by replacing that button with a clone.
+ * Why this exists:
+ * - app.js installs direct button.onclick handlers.
+ * - bottom-dock-v3 installs a delegated dock click handler.
+ * - bottom-dock-v4 only redraws icons/styles.
+ * When both app.js and v3 handle the same trusted click, panels can open and
+ * immediately be replaced/closed. Clone every dock button once to remove old
+ * button-local listeners, then explicitly choose exactly one owner.
  */
-function replaceDockButton(action,mode){
+const APP_ONLY_ACTIONS=new Set(['add','mode','layout','workflow','asset','help']);
+const V3_ONLY_ACTIONS=new Set(['shortcuts']);
+const HISTORY_ACTION='history';
+
+function replaceDockButton(action){
   const old=dock.querySelector(`[data-dock-action="${action}"]`);
   if(!old)return null;
   const appHandler=typeof old.onclick==='function'?old.onclick:null;
   const next=old.cloneNode(true);
   old.replaceWith(next);
 
-  if(mode==='app-only'){
+  if(APP_ONLY_ACTIONS.has(action)){
     next.onclick=e=>{
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
       if(appHandler)appHandler.call(next,e);
     };
-  }else if(mode==='delegated'){
+    return next;
+  }
+
+  if(action===HISTORY_ACTION){
     /*
-     * History v3 intentionally calls button.click() once with isTrusted=false so
-     * app.js can build the underlying drawer before v3 decorates it. User clicks
-     * must NOT run app.js first or both surfaces race each other.
+     * Trusted user click belongs to bottom-dock-v3 so it can open the upgraded
+     * history modal. v3 then performs one synthetic btn.click() while
+     * bypassHistoryClick=true; that synthetic click must reach app.js exactly
+     * once so the underlying history drawer is rendered before decoration.
      */
     next.onclick=e=>{
       if(e.isTrusted)return;
       if(appHandler)appHandler.call(next,e);
     };
+    return next;
   }
+
+  if(V3_ONLY_ACTIONS.has(action)){
+    /* No button-local handler: the trusted click bubbles to v3 exactly once. */
+    next.onclick=null;
+    return next;
+  }
+
   return next;
 }
 
-replaceDockButton('add','app-only');
-replaceDockButton('history','delegated');
-replaceDockButton('shortcuts','delegated');
+['add','mode','layout','workflow','asset','history','shortcuts','help'].forEach(replaceDockButton);
 
-/* Keep pointer gestures on the dock out of canvas selection / pan handlers. */
+/*
+ * Keep all dock pointer gestures out of canvas selection / pan handling.
+ * This also prevents a pointerdown on an icon from changing canvas state before
+ * the corresponding click handler runs.
+ */
 dock.addEventListener('pointerdown',e=>{
-  if(e.target.closest('[data-dock-action="add"],[data-dock-action="history"],[data-dock-action="shortcuts"]')){
-    e.stopPropagation();
-  }
-});
+  if(e.target.closest('[data-dock-action]'))e.stopPropagation();
+},true);
+dock.addEventListener('pointerup',e=>{
+  if(e.target.closest('[data-dock-action]'))e.stopPropagation();
+},true);
 
 /*
  * Connection hardening.
