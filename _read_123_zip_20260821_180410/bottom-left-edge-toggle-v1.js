@@ -52,6 +52,14 @@ btn.addEventListener('click',e=>{
 });
 
 apply(readHidden(),false);
+
+/* Load the final event-ownership layer after app.js + dock v3/v4 are ready. */
+if(!document.querySelector('script[data-bottom-interaction-stability]')){
+  const s=document.createElement('script');
+  s.src='./bottom-interaction-stability-v1.js';
+  s.dataset.bottomInteractionStability='1';
+  document.head.appendChild(s);
+}
 if(!document.querySelector('script[data-grid-snap-tool]')){
   const s=document.createElement('script');
   s.src='./bottom-left-grid-snap-v1.js';
