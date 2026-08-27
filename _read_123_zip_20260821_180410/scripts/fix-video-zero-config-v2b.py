@@ -57,12 +57,14 @@ replacement = r'''def replace_function(text, marker, new_code):
     raise SystemExit(f'unclosed function: {marker}')
 '''
 
-patched, count = re.subn(
+pattern = re.compile(
     r"def replace_function\(text, marker, new_code\):.*?\n# ---- Shared contract:",
-    replacement + "\n# ---- Shared contract:",
+    flags=re.S,
+)
+patched, count = pattern.subn(
+    lambda _match: replacement + "\n# ---- Shared contract:",
     source,
     count=1,
-    flags=re.S,
 )
 if count != 1:
     raise SystemExit(f'could not patch replace_function helper; matches={count}')
