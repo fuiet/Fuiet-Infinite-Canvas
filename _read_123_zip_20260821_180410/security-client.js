@@ -15,4 +15,11 @@
     }
     return originalFetch(input, init);
   };
+
+  if (!document.querySelector('script[data-provider-auto-ready]')) {
+    const script = document.createElement('script');
+    script.src = './provider-auto-ready-v1.js?v=20260827-auto-adapter-1';
+    script.dataset.providerAutoReady = '1';
+    document.head.appendChild(script);
+  }
 })();
