@@ -8,6 +8,7 @@ on:
       - '.github/workflows/unify-provider-runtime-core-v1.yml'
       - '_read_123_zip_20260821_180410/provider-runtime-core.js'
       - '_read_123_zip_20260821_180410/scripts/unify-provider-runtime-core-v1.py'
+      - '_read_123_zip_20260821_180410/tests/node-provider-security.test.mjs'
   workflow_dispatch:
 
 permissions:
@@ -42,6 +43,7 @@ jobs:
           node --test tests/provider-runtime-parity.test.mjs
           node --test tests/video-zero-config-v2.test.mjs
           node --test tests/worker-task-recovery.test.mjs
+          node --test tests/node-provider-security.test.mjs
       - name: Run full checks
         working-directory: _read_123_zip_20260821_180410
         run: |
