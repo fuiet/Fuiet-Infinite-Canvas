@@ -76,21 +76,33 @@ function adapterDefaults(key,nodeType){
   if(key==='generic-sync')return{createPath:'',method:'POST',responseMode:'sync'};
   return{createPath:'',method:'POST',responseMode:nodeType==='video'?'async':'sync',pollMethod:'GET',successValues:SUCCESS,failureValues:FAILURE,pollIntervalMs:1500,timeoutMs:1200000};
 }
+function routeIsExplicit(model={}){
+  const explicitAdapter=Boolean(String(model.adapterKey||'').trim()&&String(model.adapterKey||'auto').trim()!=='auto');
+  const hasExplicitRoute=Boolean(String(model.createPath||model.operationRoutes?.generate?.createPath||'').trim());
+  return {explicitAdapter,hasExplicitRoute,autoDefaults:!explicitAdapter&&!hasExplicitRoute};
+}
 function resolveRoute(provider={},model={},nodeType='',operation='generate'){
   const adapterKey=inferAdapterKey(provider,model);
   const defaults=adapterDefaults(adapterKey,nodeType);
   const providerVideo=nodeType==='video'?compact(provider.videoProtocolConfig||{}):{};
-  const explicitAdapter=Boolean(String(model.adapterKey||'').trim()&&String(model.adapterKey||'auto').trim()!=='auto');
-  const hasExplicitRoute=Boolean(String(model.createPath||model.operationRoutes?.generate?.createPath||'').trim());
+  const {explicitAdapter,hasExplicitRoute,autoDefaults}=routeIsExplicit(model);
   const direct=compact({
     createPath:model.createPath,
-    method:(explicitAdapter||hasExplicitRoute)?model.method:undefined,
-    responseMode:(explicitAdapter||hasExplicitRoute)?model.responseMode:undefined,
-    outputPath:model.outputPath,
-    taskIdPath:model.taskIdPath,pollPath:model.pollPath,pollMethod:model.pollMethod,pollBodyTemplate:model.pollBodyTemplate,
-    statusPath:model.statusPath,progressPath:model.progressPath,successValues:model.successValues,failureValues:model.failureValues,
-    pollIntervalMs:model.pollIntervalMs,timeoutMs:model.timeoutMs,requestTemplate:model.requestTemplate,
-    allowOutputWithoutTerminalStatus:model.allowOutputWithoutTerminalStatus
+    method:autoDefaults?undefined:model.method,
+    responseMode:autoDefaults?undefined:model.responseMode,
+    outputPath:autoDefaults?undefined:model.outputPath,
+    taskIdPath:autoDefaults?undefined:model.taskIdPath,
+    pollPath:autoDefaults?undefined:model.pollPath,
+    pollMethod:autoDefaults?undefined:model.pollMethod,
+    pollBodyTemplate:autoDefaults?undefined:model.pollBodyTemplate,
+    statusPath:autoDefaults?undefined:model.statusPath,
+    progressPath:autoDefaults?undefined:model.progressPath,
+    successValues:autoDefaults?undefined:model.successValues,
+    failureValues:autoDefaults?undefined:model.failureValues,
+    pollIntervalMs:autoDefaults?undefined:model.pollIntervalMs,
+    timeoutMs:autoDefaults?undefined:model.timeoutMs,
+    requestTemplate:autoDefaults?undefined:model.requestTemplate,
+    allowOutputWithoutTerminalStatus:autoDefaults?undefined:model.allowOutputWithoutTerminalStatus
   });
   const op=compact(model.operationRoutes?.[operation]||model.operationRoutes?.generate||{});
   const route={...defaults,...providerVideo,...direct,...op,adapterKey};
@@ -101,6 +113,37 @@ function resolveRoute(provider={},model={},nodeType='',operation='generate'){
   route.pollIntervalMs=clamp(route.pollIntervalMs,500,30000,1500);
   route.timeoutMs=clamp(route.timeoutMs,5000,3600000,1200000);
   return route;
+}
+function finalizeModel(provider={},model={},nodeType=''){
+  const next=clone(model||{}), type=String(nodeType||next.modality||'text').toLowerCase();
+  const before=routeIsExplicit(next), route=resolveRoute(provider,next,type,'generate');
+  const ready=Boolean(next.id&&route.adapterKey&&route.adapterKey!=='auto'&&route.createPath);
+  if(!before.explicitAdapter&&route.adapterKey&&route.adapterKey!=='auto')next.adapterKey=route.adapterKey;
+  if(before.autoDefaults&&ready){
+    next.createPath=route.createPath||'';
+    next.method=route.method||'POST';
+    next.responseMode=route.responseMode||'sync';
+    next.outputPath=route.outputPath||'';
+    next.taskIdPath=route.taskIdPath||'';
+    next.pollPath=route.pollPath||'';
+    next.pollMethod=route.pollMethod||'GET';
+    next.statusPath=route.statusPath||'';
+    next.progressPath=route.progressPath||'';
+    next.successValues=route.successValues||SUCCESS;
+    next.failureValues=route.failureValues||FAILURE;
+    next.pollIntervalMs=route.pollIntervalMs||1500;
+    next.timeoutMs=route.timeoutMs||1200000;
+    // Generic import placeholders are not adapter-specific. Clearing them lets
+    // the runtime build the correct request body for text/image/video/audio.
+    next.requestTemplate={};
+  }
+  next.adapterResolved={key:route.adapterKey||'auto',ready,auto:!before.explicitAdapter,createPath:route.createPath||'',responseMode:route.responseMode||''};
+  return next;
+}
+function finalizeProvider(provider={}){
+  const next=clone(provider||{});
+  next.models=Array.isArray(next.models)?next.models.map(model=>finalizeModel(next,model,model?.modality)):[];
+  return next;
 }
 function detectModelListProtocol(data,endpoint=''){
   const list=Array.isArray(data?.data)?data.data:Array.isArray(data?.models)?data.models:Array.isArray(data)?data:null;
@@ -113,5 +156,5 @@ function detectModelListProtocol(data,endpoint=''){
   if(objects.length>0&&withIds/objects.length>=.8&&/\/models(?:$|\?)/i.test(String(endpoint||'')))return{protocol:'openai-compatible',confidence:.9,reason:'models endpoint + model ids'};
   return{protocol:'',confidence:0,reason:`generic-model-list:${endpoint||'unknown'}`};
 }
-globalThis.CanvasProviderAdapters=Object.freeze({SUCCESS,FAILURE,normalizeReferenceTransport,providerLooksOpenAIStyle,inferAdapterKey,adapterDefaults,resolveRoute,detectModelListProtocol});
+globalThis.CanvasProviderAdapters=Object.freeze({SUCCESS,FAILURE,normalizeReferenceTransport,providerLooksOpenAIStyle,inferAdapterKey,adapterDefaults,resolveRoute,finalizeModel,finalizeProvider,detectModelListProtocol});
 })();
