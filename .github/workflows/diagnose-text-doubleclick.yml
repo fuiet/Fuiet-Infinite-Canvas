@@ -1,0 +1,67 @@
+name: Diagnose Text Doubleclick
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/diagnose-text-doubleclick.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browser test runtime
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Start frontend
+        working-directory: _read_123_zip_20260821_180410
+        run: |
+          python3 -m http.server 8080 --bind 127.0.0.1 >/tmp/canvas-http.log 2>&1 &
+          for i in {1..40}; do curl -fsS http://127.0.0.1:8080/ >/dev/null && break; sleep .5; done
+      - name: Verify text double-click editing
+        run: |
+          cat > diag-text.mjs <<'JS'
+          import { chromium } from 'playwright';
+          const browser=await chromium.launch({headless:true});
+          const page=await browser.newPage({viewport:{width:1440,height:1000}});
+          page.on('pageerror',e=>console.log('PAGEERROR',e.stack||e.message));
+          await page.goto('http://127.0.0.1:8080/',{waitUntil:'domcontentloaded'});
+          await page.waitForTimeout(1200);
+          const viewport=page.locator('#canvasViewport');
+          const vr=await viewport.boundingBox();
+          if(!vr) throw new Error('canvas viewport missing');
+
+          await page.mouse.dblclick(vr.x+420,vr.y+300,{delay:80});
+          await page.waitForTimeout(180);
+          const textRow=page.locator('#contextMenu .libtv-add-row[data-kind="node"]').filter({hasText:'文本'}).first();
+          if(!(await textRow.count())) throw new Error('text node add row missing');
+          await textRow.click();
+          await page.waitForTimeout(300);
+
+          const surface=page.locator('.node [data-text-manual-view] .text-node-preview').first();
+          const sb=await surface.boundingBox();
+          if(!sb) throw new Error('manual text preview missing');
+          await page.mouse.dblclick(sb.x+sb.width/2,sb.y+80,{delay:90});
+          await page.waitForTimeout(200);
+
+          const editor=page.locator('.node [data-text-manual][contenteditable="true"]').first();
+          if(!(await editor.count())) throw new Error('double-click did not enter manual text editor');
+          const focused=await editor.evaluate(el=>document.activeElement===el);
+          console.log('EDITOR_FOCUSED',focused);
+          if(!focused) throw new Error('manual text editor not focused');
+
+          await page.keyboard.type('双击编辑测试');
+          await page.keyboard.press('Escape');
+          await page.waitForTimeout(180);
+          const preview=page.locator('.node [data-text-manual-view] .text-node-preview').first();
+          const text=(await preview.innerText()).trim();
+          console.log('SAVED_TEXT',text);
+          if(!text.includes('双击编辑测试')) throw new Error('typed text was not saved');
+          await browser.close();
+          JS
+          node diag-text.mjs
