@@ -29,7 +29,8 @@ async function withFetch(handler, fn) {
 test('single Supabase auth user can be used as the admin owner automatically', { concurrency: false }, async () => {
   clearCache();
   await withFetch(async input => {
-    const url = new URL(typeof input === 'string' ? input : input.url);
+    const raw = input instanceof URL ? input.toString() : typeof input === 'string' ? input : input?.url;
+    const url = new URL(raw);
     assert.equal(url.pathname, '/auth/v1/admin/users');
     assert.equal(url.searchParams.get('per_page'), '2');
     return new Response(JSON.stringify({ users: [{ id: OWNER_A }] }), {
