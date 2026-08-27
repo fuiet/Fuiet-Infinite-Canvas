@@ -26,72 +26,66 @@ jobs:
           path = Path('_read_123_zip_20260821_180410/app.js')
           s = path.read_text(encoding='utf-8')
 
-          helper = r'''  function finishConnectionPointerUp(e){
-            if(!connectingFrom)return false;
-            if(connectingPointerId!=null&&e.pointerId!==connectingPointerId)return false;
-            const clientX=Number(e.clientX),clientY=Number(e.clientY),from=connectingFrom;
-            const target=findConnectionTarget(clientX,clientY);
-            if(target){completeConnection(target.id);return true}
-            const vr=viewport.getBoundingClientRect();
-            const moved=connectingStartScreen?Math.hypot(clientX-connectingStartScreen.x,clientY-connectingStartScreen.y):999;
-            const onCanvas=clientX>=vr.left&&clientX<=vr.right&&clientY>=vr.top&&clientY<=vr.bottom;
-            const hit=document.elementFromPoint(clientX,clientY);
-            const shouldQuickAdd=onCanvas&&moved>10&&!hit?.closest?.('.node');
-            const dropPoint=shouldQuickAdd?screenToWorld(clientX,clientY):null;
+          helper = "\n".join([
+              "  function finishConnectionPointerUp(e){",
+              "    if(!connectingFrom)return false;",
+              "    if(connectingPointerId!=null&&e.pointerId!==connectingPointerId)return false;",
+              "    const clientX=Number(e.clientX),clientY=Number(e.clientY),from=connectingFrom;",
+              "    const target=findConnectionTarget(clientX,clientY);",
+              "    if(target){completeConnection(target.id);return true}",
+              "    const vr=viewport.getBoundingClientRect();",
+              "    const moved=connectingStartScreen?Math.hypot(clientX-connectingStartScreen.x,clientY-connectingStartScreen.y):999;",
+              "    const onCanvas=clientX>=vr.left&&clientX<=vr.right&&clientY>=vr.top&&clientY<=vr.bottom;",
+              "    const hit=document.elementFromPoint(clientX,clientY);",
+              "    const shouldQuickAdd=onCanvas&&moved>10&&!hit?.closest?.('.node');",
+              "    const dropPoint=shouldQuickAdd?screenToWorld(clientX,clientY):null;",
+              "    cleanupConnectionDrag(true);",
+              "    if(shouldQuickAdd){",
+              "      window.__quickAddOpenedAt=Date.now();",
+              "      requestAnimationFrame(()=>showQuickAdd(clientX,clientY,dropPoint,from));",
+              "    }",
+              "    return true;",
+              "  }",
+              ""
+          ])
 
-            // Always finish the connection gesture completely before mounting another UI.
-            // Rendering here also clears any stale node/selection interaction surface that
-            // could otherwise leave the canvas feeling locked after a blank release.
-            cleanupConnectionDrag(true);
-
-            if(shouldQuickAdd){
-              window.__quickAddOpenedAt=Date.now();
-              requestAnimationFrame(()=>{
-                showQuickAdd(clientX,clientY,dropPoint,from);
-              });
-            }
-            return true;
-          }
-'''
-
+          anchor = "  function completeConnection(targetId){\n    const sourceId=connectingFrom;if(!sourceId||!targetId){cleanupConnectionDrag();return false}\n    const source=state.nodes.find(n=>n.id===sourceId),target=state.nodes.find(n=>n.id===targetId),check=edgeCompatibility(source,target);if(!check.ok){cleanupConnectionDrag(false);render();showToast(check.reason);return false}\n    snapshot('创建连线');const edge=createEdge(sourceId,targetId,{type:'asset',role:check.role,silent:true});cleanupConnectionDrag(false);saveState();render();showToast(`已连接 · ${edgeRoleLabel(edge.role)}`);return true;\n  }\n"
           if 'function finishConnectionPointerUp(e)' not in s:
-              anchor = "  function completeConnection(targetId){\n    const sourceId=connectingFrom;if(!sourceId||!targetId){cleanupConnectionDrag();return false}\n    const source=state.nodes.find(n=>n.id===sourceId),target=state.nodes.find(n=>n.id===targetId),check=edgeCompatibility(source,target);if(!check.ok){cleanupConnectionDrag(false);render();showToast(check.reason);return false}\n    snapshot('创建连线');const edge=createEdge(sourceId,targetId,{type:'asset',role:check.role,silent:true});cleanupConnectionDrag(false);saveState();render();showToast(`已连接 · ${edgeRoleLabel(edge.role)}`);return true;\n  }\n"
               if anchor not in s:
                   raise SystemExit('completeConnection anchor missing')
               s = s.replace(anchor, anchor + helper, 1)
 
-          old_release = """    if(!connectingFrom)return;
-    if(connectingPointerId!=null&&e.pointerId!==connectingPointerId)return;
-    const from=connectingFrom;const target=findConnectionTarget(e.clientX,e.clientY);
-    if(target){completeConnection(target.id);return;}
-    const vr=viewport.getBoundingClientRect();const moved=connectingStartScreen?Math.hypot(e.clientX-connectingStartScreen.x,e.clientY-connectingStartScreen.y):999;
-    const onCanvas=e.clientX>=vr.left&&e.clientX<=vr.right&&e.clientY>=vr.top&&e.clientY<=vr.bottom;
-    if(onCanvas&&moved>10&&!document.elementFromPoint(e.clientX,e.clientY)?.closest?.('.node')){
-      cleanupConnectionDrag(false);window.__quickAddOpenedAt=Date.now();showQuickAdd(e.clientX,e.clientY,screenToWorld(e.clientX,e.clientY),from);
-    }else cleanupConnectionDrag();
-"""
-          new_release = """    if(finishConnectionPointerUp(e))return;
-"""
+          old_release = "\n".join([
+              "    if(!connectingFrom)return;",
+              "    if(connectingPointerId!=null&&e.pointerId!==connectingPointerId)return;",
+              "    const from=connectingFrom;const target=findConnectionTarget(e.clientX,e.clientY);",
+              "    if(target){completeConnection(target.id);return;}",
+              "    const vr=viewport.getBoundingClientRect();const moved=connectingStartScreen?Math.hypot(e.clientX-connectingStartScreen.x,e.clientY-connectingStartScreen.y):999;",
+              "    const onCanvas=e.clientX>=vr.left&&e.clientX<=vr.right&&e.clientY>=vr.top&&e.clientY<=vr.bottom;",
+              "    if(onCanvas&&moved>10&&!document.elementFromPoint(e.clientX,e.clientY)?.closest?.('.node')){",
+              "      cleanupConnectionDrag(false);window.__quickAddOpenedAt=Date.now();showQuickAdd(e.clientX,e.clientY,screenToWorld(e.clientX,e.clientY),from);",
+              "    }else cleanupConnectionDrag();",
+              ""
+          ])
+          new_release = "    if(finishConnectionPointerUp(e))return;\n"
           if old_release in s:
               s = s.replace(old_release, new_release, 1)
           elif new_release not in s:
               raise SystemExit('window pointerup connection branch missing')
 
-          capture_anchor = """  window.addEventListener('pointerup',e=>{
-    if(resizingNode&&(resizingNode.pointerId==null||e.pointerId===resizingNode.pointerId)){finishNodeResize();return;}
-"""
-          capture_listener = """  // A blank connection release must not depend on bubbling all the way to window.
-  // Record it in capture phase and finish in a microtask only if the normal target/
-  // bubble handlers did not already consume and complete the connection.
-  window.addEventListener('pointerup',e=>{
-    if(!connectingFrom)return;
-    if(connectingPointerId!=null&&e.pointerId!==connectingPointerId)return;
-    const release={pointerId:e.pointerId,clientX:e.clientX,clientY:e.clientY};
-    queueMicrotask(()=>{if(connectingFrom)finishConnectionPointerUp(release)});
-  },true);
-
-"""
-          if 'A blank connection release must not depend on bubbling' not in s:
+          capture_anchor = "  window.addEventListener('pointerup',e=>{\n    if(resizingNode&&(resizingNode.pointerId==null||e.pointerId===resizingNode.pointerId)){finishNodeResize();return;}\n"
+          capture_listener = "\n".join([
+              "  // Blank connection releases must not rely only on bubble-phase pointerup.",
+              "  window.addEventListener('pointerup',e=>{",
+              "    if(!connectingFrom)return;",
+              "    if(connectingPointerId!=null&&e.pointerId!==connectingPointerId)return;",
+              "    const release={pointerId:e.pointerId,clientX:e.clientX,clientY:e.clientY};",
+              "    queueMicrotask(()=>{if(connectingFrom)finishConnectionPointerUp(release)});",
+              "  },true);",
+              "",
+              ""
+          ])
+          if 'Blank connection releases must not rely only on bubble-phase pointerup' not in s:
               if capture_anchor not in s:
                   raise SystemExit('window pointerup anchor missing')
               s = s.replace(capture_anchor, capture_listener + capture_anchor, 1)
@@ -108,9 +102,10 @@ jobs:
           from pathlib import Path
           s=Path('_read_123_zip_20260821_180410/app.js').read_text(encoding='utf-8')
           assert 'function finishConnectionPointerUp(e)' in s
+          assert 'Blank connection releases must not rely only on bubble-phase pointerup' in s
           assert 'queueMicrotask(()=>{if(connectingFrom)finishConnectionPointerUp(release)})' in s
           assert 'cleanupConnectionDrag(true);' in s
-          assert 'requestAnimationFrame(()=>{' in s
+          assert 'requestAnimationFrame(()=>showQuickAdd(clientX,clientY,dropPoint,from));' in s
           PY
           git diff --check
 
