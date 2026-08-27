@@ -1,6 +1,6 @@
-/* Canvas Studio · Bottom interaction stability v3
+/* Canvas Studio · Bottom interaction stability v4
  * Gives the persistent bottom dock one deterministic activation path and
- * hardens connection pointer cleanup.
+ * hardens connection pointer cleanup, including single-node blank drops.
  */
 (()=>{
 'use strict';
@@ -33,11 +33,6 @@ function replaceDockButton(action){
       if(appHandler)appHandler.call(next,e);
     };
   }else if(action==='history'){
-    /*
-     * bottom-dock-v3 opens the upgraded history UI, then performs one internal
-     * untrusted click with bypassHistoryClick=true so app.js renders the base
-     * history drawer. Only that internal click is allowed to call app.js.
-     */
     next.onclick=e=>{
       if(e?.isTrusted)return;
       if(appHandler)appHandler.call(next,e);
@@ -70,8 +65,6 @@ function invokeAppAction(action){
 function invokeV3Action(action){
   const btn=dock.querySelector(`[data-dock-action="${action}"]`);
   if(!btn)return false;
-  /* Untrusted programmatic clicks bypass this central user dispatcher and are
-   * intentionally consumed by bottom-dock-v3's existing capture handler. */
   queueMicrotask(()=>btn.click());
   return true;
 }
@@ -82,13 +75,6 @@ function activate(action){
   return false;
 }
 
-/*
- * Pointer-up is the primary mouse/touch activation. It is more deterministic
- * than relying on a later synthetic click, which can be dropped when overlays,
- * focus changes or DOM replacement happen between pointerdown and click.
- * The subsequent trusted click is swallowed so every physical press executes
- * exactly once. Keyboard-generated trusted clicks still work as a fallback.
- */
 let press=null;
 let suppressClick={action:'',until:0};
 let lastActivation={action:'',at:0};
@@ -130,9 +116,6 @@ document.addEventListener('pointercancel',e=>{
   if(press&&(press.pointerId==null||press.pointerId===e.pointerId))press=null;
 },true);
 
-/* Central click fallback for keyboard activation and browsers that do not expose
- * pointer events in the expected sequence. Synthetic internal clicks are left
- * alone so bottom-dock-v3 can run its controlled history/shortcut flow. */
 document.addEventListener('click',e=>{
   if(!e.isTrusted)return;
   const btn=dockButtonFromEvent(e);if(!btn)return;
@@ -144,21 +127,22 @@ document.addEventListener('click',e=>{
   runUserActivation(btn,e);
 },true);
 
-/*
- * Connection hardening.
- * app.js tracks connection drag at window level but historically did not capture
- * the pointer on the source port. A lost pointerup therefore leaves
- * .connecting-mode active indefinitely. Capture the pointer after app.js starts
- * the gesture, throttle event storms to one move per animation frame, and cancel
- * stale connection state as soon as the primary button is no longer down.
- */
+/* Connection hardening. */
 let connectionMoveFrameOpen=true;
 let sourcePort=null;
 let sourcePointerId=null;
+let singleNodeConnection=false;
 let cancelQueued=false;
 
 function connectionActive(){
   return viewport.classList.contains('connecting-mode');
+}
+function forceConnectionDomCleanup(){
+  viewport.classList.remove('connecting-mode');
+  document.querySelector('#tempEdge')?.remove();
+  document.querySelectorAll('.node-port.connecting').forEach(el=>el.classList.remove('connecting'));
+  document.querySelectorAll('.connection-target,.connection-invalid').forEach(el=>el.classList.remove('connection-target','connection-invalid'));
+  document.querySelectorAll('.connection-target-port,.connection-invalid-port').forEach(el=>el.classList.remove('connection-target-port','connection-invalid-port'));
 }
 function dispatchConnectionCancel(pointerId=sourcePointerId){
   if(!connectionActive()||cancelQueued)return;
@@ -179,28 +163,30 @@ function dispatchConnectionCancel(pointerId=sourcePointerId){
   });
 }
 
-/* Capture phase sees every current/future node port without rebinding after render. */
+/*
+ * With one node there is no existing connection target. The normal app path on
+ * pointerup cleans the connection state and opens the compatible-node menu.
+ * Do not capture the pointer in that case: keeping capture on the only node while
+ * the menu is being mounted can leave browsers in a stale connection gesture.
+ */
 document.addEventListener('pointerdown',e=>{
   const port=e.target.closest?.('.node-port.out');
   if(!port||e.button!==0)return;
   sourcePort=port;
   sourcePointerId=e.pointerId;
+  singleNodeConnection=document.querySelectorAll('#nodeLayer .node').length<=1;
   queueMicrotask(()=>{
-    if(!connectionActive()||sourcePort!==port)return;
+    if(!connectionActive()||sourcePort!==port||singleNodeConnection)return;
     try{port.setPointerCapture(e.pointerId)}catch{}
   });
 },true);
 
 window.addEventListener('pointermove',e=>{
   if(!connectionActive())return;
-
-  /* Missed pointerup: terminate immediately instead of leaving the canvas stuck. */
   if(typeof e.buttons==='number'&&(e.buttons&1)===0){
     dispatchConnectionCancel(e.pointerId);
     return;
   }
-
-  /* Avoid layout-heavy connection hit-testing hundreds of times in one frame. */
   if(!connectionMoveFrameOpen){
     e.stopImmediatePropagation();
     return;
@@ -209,13 +195,36 @@ window.addEventListener('pointermove',e=>{
   requestAnimationFrame(()=>{connectionMoveFrameOpen=true});
 },true);
 
-window.addEventListener('pointerup',()=>{
-  sourcePort=null;
-  sourcePointerId=null;
+window.addEventListener('pointerup',e=>{
+  const pointerId=e.pointerId;
+  const wasSingle=singleNodeConnection&&(sourcePointerId==null||sourcePointerId===pointerId);
+
+  if(wasSingle&&sourcePort){
+    try{if(sourcePort.hasPointerCapture?.(pointerId))sourcePort.releasePointerCapture(pointerId)}catch{}
+  }
+
+  /* Let app.js process the same pointerup first. Then verify that its blank-drop
+   * branch actually left connecting-mode. If not, cancel through app.js's own
+   * pointercancel handler so closure state is cleared as well as DOM state. */
+  queueMicrotask(()=>{
+    if(wasSingle&&connectionActive())dispatchConnectionCancel(pointerId);
+    sourcePort=null;
+    sourcePointerId=null;
+    singleNodeConnection=false;
+  });
+
+  if(wasSingle){
+    setTimeout(()=>{
+      if(connectionActive())dispatchConnectionCancel(pointerId);
+      setTimeout(()=>{if(connectionActive())forceConnectionDomCleanup()},0);
+    },80);
+  }
 },true);
+
 window.addEventListener('pointercancel',()=>{
   sourcePort=null;
   sourcePointerId=null;
+  singleNodeConnection=false;
   connectionMoveFrameOpen=true;
 },true);
 window.addEventListener('blur',()=>{
@@ -226,7 +235,7 @@ document.addEventListener('visibilitychange',()=>{
   if(document.hidden){press=null;if(connectionActive())dispatchConnectionCancel()}
 });
 document.addEventListener('lostpointercapture',()=>{
-  if(connectionActive())dispatchConnectionCancel();
+  if(connectionActive()&&!singleNodeConnection)dispatchConnectionCancel();
 },true);
 
 })();
