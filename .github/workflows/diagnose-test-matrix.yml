@@ -7,29 +7,36 @@ on:
       - '.github/workflows/diagnose-test-matrix.yml'
 
 jobs:
-  test-file:
+  subtest:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        file:
-          - audio-node-v23.test.mjs
-          - canvas-add-node-menu.test.mjs
-          - final-entry.test.mjs
-          - image-node-libtv.test.mjs
-          - owner-isolation.test.mjs
-          - provider-adapter-v2.test.mjs
-          - provider-production-defaults.test.mjs
-          - provider-runtime-parity.test.mjs
-          - provider-settings-access.test.mjs
-          - reference-ownership.test.mjs
-          - stateless-auth.test.mjs
-          - text-node-v23.test.mjs
-          - ui-design-system.test.mjs
-          - upload-stream-limit.test.mjs
-          - video-node-v23.test.mjs
-          - worker-security.test.mjs
-    name: test ${{ matrix.file }}
+        include:
+          - { id: text-style-layer, file: text-node-v23.test.mjs, pattern: 'text node stylesheet' }
+          - { id: text-empty-actions, file: text-node-v23.test.mjs, pattern: 'text node empty state' }
+          - { id: text-rich-editor, file: text-node-v23.test.mjs, pattern: 'manual writing switches' }
+          - { id: text-transforms, file: text-node-v23.test.mjs, pattern: 'selected text results' }
+          - { id: text-branch, file: text-node-v23.test.mjs, pattern: 'text result transforms' }
+          - { id: text-translate, file: text-node-v23.test.mjs, pattern: 'translation asks' }
+          - { id: text-composer, file: text-node-v23.test.mjs, pattern: 'text composer stays' }
+          - { id: text-exclusive, file: text-node-v23.test.mjs, pattern: 'composer and contextual' }
+          - { id: text-stability, file: text-node-v23.test.mjs, pattern: 'text nodes remain stable' }
+          - { id: text-manual-dblclick, file: text-node-v23.test.mjs, pattern: 'manual text mode shows' }
+          - { id: ui-stack, file: ui-design-system.test.mjs, pattern: 'canvas loads the UI' }
+          - { id: ui-assets, file: ui-design-system.test.mjs, pattern: 'keeps assets in the bottom-left' }
+          - { id: ui-four-state, file: ui-design-system.test.mjs, pattern: 'universal four-state' }
+          - { id: ui-result-composer, file: ui-design-system.test.mjs, pattern: 'result nodes use context toolbar' }
+          - { id: ui-toolbar, file: ui-design-system.test.mjs, pattern: 'result context toolbar' }
+          - { id: ui-image-width, file: ui-design-system.test.mjs, pattern: 'result selection no longer' }
+          - { id: ui-asset-tabs, file: ui-design-system.test.mjs, pattern: 'asset manager implements' }
+          - { id: ui-connect, file: ui-design-system.test.mjs, pattern: 'bottom dock exposes' }
+          - { id: ui-progress, file: ui-design-system.test.mjs, pattern: 'generation progress is native' }
+          - { id: ui-result-shell, file: ui-design-system.test.mjs, pattern: 'result-first shell' }
+          - { id: ui-runtime-scope, file: ui-design-system.test.mjs, pattern: 'ui-v23 is limited' }
+          - { id: ui-action-bindings, file: ui-design-system.test.mjs, pattern: 'native result toolbar binds' }
+          - { id: ui-legacy, file: ui-design-system.test.mjs, pattern: 'legacy scaffold no longer' }
+    name: diag ${{ matrix.id }}
     defaults:
       run:
         working-directory: _read_123_zip_20260821_180410
@@ -38,4 +45,4 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: node --test tests/${{ matrix.file }}
+      - run: node --test --test-name-pattern="${{ matrix.pattern }}" tests/${{ matrix.file }}
