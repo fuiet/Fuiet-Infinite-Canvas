@@ -107,20 +107,26 @@ async function validateOutboundUrl(urlText,provider={}){
   return u.toString();
 }
 async function fetchSafe(url,options={},provider={},policy={}){
-  const sameOrigin=policy.sameOrigin!==false&&Boolean(provider?.baseUrl);
+  let enforceProviderOrigin=policy.sameOrigin!==false&&Boolean(provider?.baseUrl);
   let baseOrigin='';
-  if(sameOrigin){
+  if(enforceProviderOrigin){
     const base=await validateOutboundUrl(provider.baseUrl,provider);baseOrigin=new URL(base).origin;
   }
   let current=await validateOutboundUrl(url,provider);
-  if(sameOrigin&&new URL(current).origin!==baseOrigin)throw new Error('上游请求必须与 API Base URL 同源');
+  if(enforceProviderOrigin&&new URL(current).origin!==baseOrigin)throw new Error('上游请求必须与 API Base URL 同源');
+  let requestOptions={...options};
   for(let i=0;i<4;i++){
-    const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),options.timeoutMs||60000);
+    const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),requestOptions.timeoutMs||60000);
     try{
-      const res=await fetch(current,{...options,signal:controller.signal,redirect:'manual',timeoutMs:undefined});
+      const res=await fetch(current,{...requestOptions,signal:controller.signal,redirect:'manual',timeoutMs:undefined});
       if([301,302,303,307,308].includes(res.status)&&res.headers.get('location')){
         const next=new URL(res.headers.get('location'),current).toString();const validated=await validateOutboundUrl(next,provider);
-        if(sameOrigin&&new URL(validated).origin!==baseOrigin)throw new Error('上游重定向到不同域名，已阻止以避免认证信息泄露');
+        if(enforceProviderOrigin&&new URL(validated).origin!==baseOrigin){
+          if(policy.allowCredentiallessCrossOriginRedirect===true){
+            requestOptions={...requestOptions,headers:sanitizeHeaderObject(requestOptions.headers||{})};
+            enforceProviderOrigin=false;
+          }else throw new Error('上游重定向到不同域名，已阻止以避免认证信息泄露');
+        }
         current=validated;continue;
       }
       return res;
@@ -400,12 +406,13 @@ function normalizeVideoProtocolConfig(input={}, existing={}) {
   const old=(existing&&typeof existing==='object')?existing:{};
   const arr=(v,fallback)=>Array.isArray(v)&&v.length?v.map(String).map(x=>x.trim()).filter(Boolean):fallback;
   return {
-    createPath:String(raw.createPath ?? old.createPath ?? '/v1/video/generations').trim() || '/v1/video/generations',
+    createPath:String(raw.createPath ?? old.createPath ?? '/v1/videos').trim() || '/v1/videos',
     createMethod:String(raw.createMethod ?? old.createMethod ?? raw.method ?? old.method ?? 'POST').trim().toUpperCase() || 'POST',
     requestTemplate:(raw.requestTemplate&&typeof raw.requestTemplate==='object')?raw.requestTemplate:((old.requestTemplate&&typeof old.requestTemplate==='object')?old.requestTemplate:{}),
-    pollPath:String(raw.pollPath ?? old.pollPath ?? '/v1/video/generations/{{taskId}}').trim() || '/v1/video/generations/{{taskId}}',
+    pollPath:String(raw.pollPath ?? old.pollPath ?? '/v1/videos/{{taskId}}').trim() || '/v1/videos/{{taskId}}',
     pollMethod:String(raw.pollMethod ?? old.pollMethod ?? 'GET').trim().toUpperCase() || 'GET',
     pollBodyTemplate:(raw.pollBodyTemplate&&typeof raw.pollBodyTemplate==='object')?raw.pollBodyTemplate:((old.pollBodyTemplate&&typeof old.pollBodyTemplate==='object')?old.pollBodyTemplate:null),
+    contentPath:String(raw.contentPath ?? old.contentPath ?? '/v1/videos/{{taskId}}/content').trim(),
     taskIdPath:String(raw.taskIdPath ?? old.taskIdPath ?? '').trim(),
     statusPath:String(raw.statusPath ?? old.statusPath ?? '').trim(),
     progressPath:String(raw.progressPath ?? old.progressPath ?? '').trim(),
@@ -530,6 +537,7 @@ function normalizeModel(m={}) {
     pollPath: String(m.pollPath || '').trim(),
     pollMethod: String(m.pollMethod || 'GET').trim().toUpperCase(),
     pollBodyTemplate: (m.pollBodyTemplate&&typeof m.pollBodyTemplate==='object')?m.pollBodyTemplate:null,
+    contentPath: String(m.contentPath || '').trim(),
     statusPath: String(m.statusPath || '').trim(),
     progressPath: String(m.progressPath || '').trim(),
     successValues: Array.isArray(m.successValues) ? m.successValues : ['succeeded','completed','success'],
@@ -938,21 +946,37 @@ function findStringByPrefix(value,prefix,depth=0){
   if(typeof value==='object'){for(const x of Object.values(value)){const hit=findStringByPrefix(x,prefix,depth+1);if(hit)return hit}}
   return '';
 }
-function standardVideoBody(model,payload){
+function standardVideoBody(model,payload,config={}){
   const p={...(payload.parameters||{})};
+  const refs=Array.isArray(payload.references)?payload.references:[];
+  const images=refs.filter(x=>String(x?.type||'').toLowerCase()==='image').map(x=>String(x?.url||x?.value||'')).filter(Boolean);
+  const videos=refs.filter(x=>String(x?.type||'').toLowerCase()==='video').map(x=>String(x?.url||x?.value||'')).filter(Boolean);
+  const audios=refs.filter(x=>String(x?.type||'').toLowerCase()==='audio').map(x=>String(x?.url||x?.value||'')).filter(Boolean);
+  const createPath=String(config.createPath||'');
+  const openAIVideos=/\/v1\/videos(?:$|\?)/i.test(createPath)&&!/generations/i.test(createPath);
   const body={model:model.id,prompt:payload.prompt||''};
-  const duration=Number(p.duration);if(Number.isFinite(duration)&&duration>0)body.duration=duration;
-  const ratio=String(p.ratio||p.aspectRatio||'').trim();if(ratio)body.ratio=ratio;
-  if(p.resolution!=null&&String(p.resolution).trim())body.resolution=p.resolution;
-  // 允许供应商扩展参数透传，但过滤 Canvas 内部状态，避免把能力描述/上下文包误发给上游。
-  const internal=new Set(['aspectRatio','ratio','duration','resolution','count','capabilities','creativeContext','contextPacket','operation','sourceVersionId','sourceVideoUrl','sourceDuration','preserveOutsideRange']);
+  const duration=Number(p.duration||p.seconds);
+  const ratio=String(p.ratio||p.aspectRatio||'16:9').trim();
+  if(openAIVideos){
+    if(Number.isFinite(duration)&&duration>0)body.seconds=String(duration);
+    const explicitSize=String(p.size||'').trim();
+    body.size=explicitSize||((ratio==='9:16')?'720x1280':(ratio==='1:1'?'1024x1024':'1280x720'));
+    if(images[0])body.input_reference={image_url:images[0]};
+  }else{
+    if(Number.isFinite(duration)&&duration>0)body.duration=duration;
+    if(ratio)body.ratio=ratio;
+    if(p.resolution!=null&&String(p.resolution).trim())body.resolution=p.resolution;
+    if(images.length)body.images=images;
+    if(videos.length)body.videos=videos;
+    if(audios.length)body.audios=audios;
+  }
+  const internal=new Set(['aspectRatio','ratio','duration','seconds','resolution','size','count','capabilities','creativeContext','contextPacket','operation','sourceVersionId','sourceVideoUrl','sourceDuration','preserveOutsideRange']);
   for(const [k,v] of Object.entries(p)){
     if(internal.has(k)||v===undefined)continue;
     if(k==='supplierParams'||k==='providerParams'){
       if(v&&typeof v==='object'&&!Array.isArray(v))Object.assign(body,v);
       continue;
     }
-    // 普通生成参数允许透传；明显属于 Canvas 内部对象的键不进入上游。
     if(!/^[_$]/.test(k))body[k]=v;
   }
   return body;
@@ -977,13 +1001,33 @@ function standardVideoOutput(polled,config={}){
     'video_url','videoUrl','result.url','result.video_url','data.result.url','data.result.video_url','url','data.url','output.0.url','data.output.0.url'
   ]);
 }
+async function downloadStandardVideoContent(task,provider,config,taskId){
+  const template=String(config.contentPath||'').trim();
+  if(!template)return null;
+  const contentPath=template.replace(/\{\{taskId\}\}/g,encodeURIComponent(String(taskId)));
+  const contentUrl=joinUrl(provider.baseUrl,contentPath);
+  const res=await fetchSafe(contentUrl,{method:'GET',headers:providerHeaders(provider),timeoutMs:120000},provider,{allowCredentiallessCrossOriginRedirect:true});
+  if(!res.ok)throw new Error(`视频内容下载失败 HTTP ${res.status}：${(await res.text()).slice(0,300)}`);
+  const mime=String(res.headers.get('content-type')||'video/mp4').split(';')[0].trim().toLowerCase();
+  if(mime.includes('json')){
+    const parsed=await res.json();const output=standardVideoOutput(parsed,config);
+    if(output!=null)return normalizeOutput(output,'video',provider);
+    throw new Error('视频内容接口返回 JSON，但未识别到视频 URL');
+  }
+  const declared=Number(res.headers.get('content-length')||0);const limit=Math.max(MAX_UPLOAD_BYTES,250*1024*1024);
+  if(declared>limit)throw new Error('生成视频文件过大，超过服务端持久化限制');
+  const bytes=Buffer.from(await res.arrayBuffer());if(bytes.length>limit)throw new Error('生成视频文件过大，超过服务端持久化限制');
+  const file=outFile(safeExt('',mime)||'.mp4');fs.writeFileSync(file,bytes);
+  return {type:'url',value:mediaUrl(file),mime,sourceUrl:contentUrl,persisted:true};
+}
 async function executeStandardVideoAsync(task,provider,model,payload){
   if(task.nodeType!=='video')throw new Error('标准异步视频协议只能用于视频模型');
-  const config=normalizeVideoProtocolConfig(provider.videoProtocolConfig,provider.videoProtocolConfig);
-  const createPath=String(config.createPath||'/v1/video/generations');
+  const sharedRoute=ProviderAdapterContract.resolveRoute(provider,model,'video','generate');
+  const config=normalizeVideoProtocolConfig(sharedRoute,sharedRoute);
+  const createPath=String(config.createPath||'/v1/videos');
   const createUrl=joinUrl(provider.baseUrl,createPath);
   const ctx={model:model.id,modelId:model.id,prompt:payload.prompt||'',parameters:payload.parameters||{},params:payload.parameters||{},references:payload.references||[]};
-  const body=config.requestTemplate&&Object.keys(config.requestTemplate).length?renderTemplate(config.requestTemplate,ctx):standardVideoBody(model,payload);
+  const body=config.requestTemplate&&Object.keys(config.requestTemplate).length?renderTemplate(config.requestTemplate,ctx):standardVideoBody(model,payload,config);
   updateTask(task,{progress:8});
   let taskId='';
   const resume=payload._upstream&&payload._upstream.protocol==='standard-video-async-v1'&&payload._upstream.modelId===model.id?payload._upstream:null;
@@ -1002,7 +1046,7 @@ async function executeStandardVideoAsync(task,provider,model,payload){
   while(Date.now()-started<config.timeoutMs){
     assertTaskActive(task);await new Promise(r=>setTimeout(r,config.pollIntervalMs));checks++;
     const pollCtx={...ctx,taskId};
-    const pollPath=renderPathTemplate(config.pollPath||'/v1/video/generations/{{taskId}}',pollCtx);
+    const pollPath=renderPathTemplate(config.pollPath||'/v1/videos/{{taskId}}',pollCtx);
     const pollMethod=String(config.pollMethod||'GET').toUpperCase();
     const pollBody=config.pollBodyTemplate&&typeof config.pollBodyTemplate==='object'?renderTemplate(config.pollBodyTemplate,pollCtx):undefined;
     const polled=await fetchJson(joinUrl(provider.baseUrl,pollPath),{method:pollMethod,headers:providerHeaders(provider),body:['GET','HEAD'].includes(pollMethod)?undefined:(pollBody===undefined?undefined:JSON.stringify(pollBody)),timeoutMs:60000,provider});
@@ -1012,8 +1056,10 @@ async function executeStandardVideoAsync(task,provider,model,payload){
     if(failure.includes(status))throw new Error(`上游视频任务失败：${status||'unknown'}`);
     const output=standardVideoOutput(polled,config);
     if(success.includes(status)||(config.allowOutputWithoutTerminalStatus===true&&!status&&output!=null)){
-      if(output==null)throw new Error(`视频任务状态为 ${status||'成功'}，但没有解析到视频结果 URL。请配置 outputPath。`);
-      return normalizeOutput(output,'video',provider);
+      if(output!=null)return normalizeOutput(output,'video',provider);
+      const content=await downloadStandardVideoContent(task,provider,config,taskId);
+      if(content)return content;
+      throw new Error(`视频任务状态为 ${status||'成功'}，但没有解析到视频结果 URL，且未配置可用的 contentPath。`);
     }
   }
   throw new Error('标准异步视频任务超时');

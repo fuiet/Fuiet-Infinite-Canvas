@@ -166,25 +166,30 @@ function resolveProviderUrl(provider, route, env) {
   }
   return target.toString();
 }
-async function safeProviderFetch(provider, urlText, options = {}, env = {}) {
+async function safeProviderFetch(provider, urlText, options = {}, env = {}, policy = {}) {
   const base = validateOutboundUrl(provider?.baseUrl, provider, env);
   let current = validateOutboundUrl(urlText, provider, env);
+  let enforceProviderOrigin = true;
   if (current.origin !== base.origin) throw new Error('上游请求必须与 API Base URL 同源');
+  let requestOptions={...options};
   for (let i = 0; i < 4; i++) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), clamp(options.timeoutMs, 1000, 180000, 30000));
+    const timeout = setTimeout(() => controller.abort(), clamp(requestOptions.timeoutMs, 1000, 180000, 30000));
     try {
-      const res = await fetch(current.toString(), { ...options, timeoutMs: undefined, signal: controller.signal, redirect: 'manual' });
+      const res = await fetch(current.toString(), { ...requestOptions, timeoutMs: undefined, signal: controller.signal, redirect: 'manual' });
       if ([301, 302, 303, 307, 308].includes(res.status) && res.headers.get('location')) {
         const next = validateOutboundUrl(new URL(res.headers.get('location'), current).toString(), provider, env);
-        if (next.origin !== base.origin) throw new Error('上游重定向到不同域名，已阻止以避免认证信息泄露');
+        if (enforceProviderOrigin && next.origin !== base.origin) {
+          if (policy.allowCredentiallessCrossOriginRedirect === true) {
+            requestOptions={...requestOptions,headers:sanitizeHeaderObject(Object.fromEntries(new Headers(requestOptions.headers||{}).entries()))};
+            enforceProviderOrigin=false;
+          } else throw new Error('上游重定向到不同域名，已阻止以避免认证信息泄露');
+        }
         current = next;
         continue;
       }
       return res;
-    } finally {
-      clearTimeout(timeout);
-    }
+    } finally { clearTimeout(timeout); }
   }
   throw new Error('上游重定向次数过多');
 }
@@ -474,7 +479,7 @@ function defaultRoute(nodeType) {
   if (nodeType === 'text' || nodeType === 'script') return { createPath: '/v1/chat/completions', method: 'POST', responseMode: 'sync', outputPath: 'choices.0.message.content' };
   if (nodeType === 'image') return { createPath: '/v1/images/generations', method: 'POST', responseMode: 'sync', outputPath: 'data.0.url' };
   if (nodeType === 'audio') return { createPath: '/v1/audio/speech', method: 'POST', responseMode: 'sync', outputPath: '' };
-  if (nodeType === 'video') return { createPath: '/v1/video/generations', method: 'POST', responseMode: 'async', taskIdPath: '', pollPath: '/v1/video/generations/{{taskId}}', statusPath: '', progressPath: '', outputPath: '', successValues: TERMINAL_SUCCESS, failureValues: TERMINAL_FAILURE, pollIntervalMs: 1500, timeoutMs: 1200000 };
+  if (nodeType === 'video') return { createPath: '/v1/videos', method: 'POST', responseMode: 'async', taskIdPath: '', pollPath: '/v1/videos/{{taskId}}', contentPath: '/v1/videos/{{taskId}}/content', statusPath: '', progressPath: '', outputPath: '', successValues: TERMINAL_SUCCESS, failureValues: TERMINAL_FAILURE, pollIntervalMs: 1500, timeoutMs: 1200000 };
   return { createPath: '', method: 'POST', responseMode: 'sync' };
 }
 function compactRoute(route) {
@@ -494,7 +499,7 @@ function replaceTemplate(value, context) {
   return value;
 }
 function ratioToSize(ratio) { return ratio === '9:16' ? '720x1280' : ratio === '1:1' ? '1024x1024' : '1280x720'; }
-function defaultBody(task, model, references) {
+function defaultBody(task, model, references, route={}) {
   const payload = task.payload || {}, parameters = payload.parameters || {}, prompt = String(payload.prompt || '');
   if (task.nodeType === 'text' || task.nodeType === 'script') return { model: model.id, messages: parameters.messages || [{ role: 'user', content: prompt }] };
   if (task.nodeType === 'image') {
@@ -504,11 +509,20 @@ function defaultBody(task, model, references) {
     return body;
   }
   if (task.nodeType === 'audio') return { model: model.id, input: prompt, voice: parameters.voice || 'alloy', response_format: parameters.responseFormat || 'mp3' };
-  const body = { model: model.id, prompt, duration: Number(parameters.duration || 5), ratio: parameters.ratio || parameters.aspectRatio || '16:9' };
-  if (parameters.resolution) body.resolution = parameters.resolution;
   const images = references.filter(x => x.type === 'image').map(x => x.url), videos = references.filter(x => x.type === 'video').map(x => x.url), audios = references.filter(x => x.type === 'audio').map(x => x.url);
-  if (images.length) body.images = images; if (videos.length) body.videos = videos; if (audios.length) body.audios = audios;
-  for (const [key, value] of Object.entries(parameters)) if (!['messages', 'duration', 'ratio', 'aspectRatio', 'resolution', 'size'].includes(key) && !key.startsWith('_')) body[key] = value;
+  const createPath=String(route.createPath||'');
+  const openAIVideos=/\/v1\/videos(?:$|\?)/i.test(createPath)&&!/generations/i.test(createPath);
+  let body;
+  if(openAIVideos){
+    const duration=Number(parameters.duration||parameters.seconds||5);
+    body={model:model.id,prompt,seconds:String(duration),size:String(parameters.size||ratioToSize(parameters.ratio||parameters.aspectRatio||'16:9'))};
+    if(images[0])body.input_reference={image_url:images[0]};
+  }else{
+    body={model:model.id,prompt,duration:Number(parameters.duration||parameters.seconds||5),ratio:parameters.ratio||parameters.aspectRatio||'16:9'};
+    if(parameters.resolution)body.resolution=parameters.resolution;
+    if(images.length)body.images=images;if(videos.length)body.videos=videos;if(audios.length)body.audios=audios;
+  }
+  for (const [key, value] of Object.entries(parameters)) if (!['messages', 'duration', 'seconds', 'ratio', 'aspectRatio', 'resolution', 'size'].includes(key) && !key.startsWith('_')) body[key] = value;
   return body;
 }
 
@@ -626,6 +640,22 @@ async function persistMediaOutput(task, output, provider, env) {
   return { type: 'url', value: localUrl, sourceUrl, persisted: true };
 }
 
+async function fetchCompletedVideoContent(task, provider, model, route, taskId, env) {
+  const template=String(route.contentPath||'').trim();if(!template)return null;
+  const contentPath=template.replace(/\{\{taskId\}\}/g,encodeURIComponent(String(taskId)));
+  const contentUrl=resolveProviderUrl(provider,contentPath,env);
+  const res=await safeProviderFetch(provider,contentUrl,{method:'GET',headers:buildHeaders(provider,model),timeoutMs:120000},env,{allowCredentiallessCrossOriginRedirect:true});
+  if(!res.ok)throw new Error(`视频内容下载失败 ${res.status}：${(await res.text()).slice(0,300)}`);
+  const mime=String(res.headers.get('content-type')||'video/mp4').split(';')[0].trim();
+  if(mime.includes('json')){
+    const parsed=await res.json();const output=extractOutput(parsed,task.nodeType,route);
+    return output&&output.type==='url'?persistMediaOutput(task,output,provider,env):null;
+  }
+  const objectPath=`video_${task.id}_${crypto.randomUUID().slice(0,8)}${extensionForMime(mime)}`;
+  const localUrl=await storageUpload(env,objectPath,res.body,mime);
+  await recordMediaAsset(task,objectPath,mime,contentUrl,env);
+  return {type:'url',value:localUrl,sourceUrl:contentUrl,persisted:true};
+}
 async function submitTask(task, request, env, ctx) {
   const state = globalThis.__canvasWorkerState;
   const stored = (state.providers || []).find(item => item.id === task.providerId);
@@ -638,7 +668,7 @@ async function submitTask(task, request, env, ctx) {
   if (!route.createPath) throw new Error('无法确定生成接口路径');
   const references = await prepareReferences(task, provider, model, request, env, ctx);
   const context = { model: model.id, modelId: model.id, prompt: task.payload?.prompt || '', parameters: task.payload?.parameters || {}, references };
-  const body = route.requestTemplate && Object.keys(route.requestTemplate).length ? replaceTemplate(route.requestTemplate, context) : defaultBody(task, model, references);
+  const body = route.requestTemplate && Object.keys(route.requestTemplate).length ? replaceTemplate(route.requestTemplate, context) : defaultBody(task, model, references, route);
   const url = resolveProviderUrl(provider, route.createPath, env);
   const method = String(route.method || 'POST').toUpperCase();
   const res = await safeProviderFetch(provider, url, { method, headers: buildHeaders(provider, model), body: ['GET', 'HEAD'].includes(method) ? undefined : JSON.stringify(body), timeoutMs: task.nodeType === 'video' ? 180000 : 120000 }, env);
@@ -735,7 +765,8 @@ async function pollTask(task, request, env) {
   }
   if (success.has(status)) {
     let output = extractOutput(parsed, task.nodeType, route);
-    if (!output || output.type !== 'url') throw new Error(`上游任务状态为 ${status}，但没有识别到最终媒体 URL`);
+    if ((!output || output.type !== 'url') && task.nodeType === 'video') output = await fetchCompletedVideoContent(task, provider, model, route, upstream.taskId, env);
+    if (!output || output.type !== 'url') throw new Error(`上游任务状态为 ${status}，但没有识别到最终媒体 URL，也无法从 contentPath 获取媒体内容`);
     output = await persistMediaOutput(task, output, provider, env);
     task.output = output; task.status = 'succeeded'; task.progress = 100; task.error = null; task.updatedAt = nowIso(); await persistTask(task, env);
     return { done: true };

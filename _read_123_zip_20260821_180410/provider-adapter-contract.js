@@ -80,18 +80,30 @@ function adapterDefaults(key,nodeType){
   if(key==='generic-sync')return{createPath:'',method:'POST',responseMode:'sync'};
   return{createPath:'',method:'POST',responseMode:nodeType==='video'?'async':'sync',pollMethod:'GET',successValues:SUCCESS,failureValues:FAILURE,pollIntervalMs:1500,timeoutMs:1200000};
 }
+function looksLikeLegacyAutoVideoRoute(value={}){
+  const create=String(value.createPath||'').trim(), poll=String(value.pollPath||'').trim();
+  const request=value.requestTemplate&&typeof value.requestTemplate==='object'?value.requestTemplate:{};
+  const pollBody=value.pollBodyTemplate&&typeof value.pollBodyTemplate==='object'?value.pollBodyTemplate:{};
+  const noCustom=!String(value.taskIdPath||'').trim()&&!String(value.statusPath||'').trim()&&!String(value.progressPath||'').trim()&&!String(value.outputPath||'').trim()&&!Object.keys(request).length&&!Object.keys(pollBody).length;
+  return create==='/v1/video/generations'&&poll==='/v1/video/generations/{{taskId}}'&&noCustom;
+}
+function migrateLegacyAutoVideoRoute(value={}){
+  if(!looksLikeLegacyAutoVideoRoute(value))return value;
+  return {...value,createPath:'/v1/videos',pollPath:'/v1/videos/{{taskId}}',contentPath:'/v1/videos/{{taskId}}/content'};
+}
 function routeIsExplicit(model={}){
-  const explicitAdapter=Boolean(String(model.adapterKey||'').trim()&&String(model.adapterKey||'auto').trim()!=='auto');
-  const hasExplicitRoute=Boolean(String(model.createPath||model.operationRoutes?.generate?.createPath||'').trim());
+  const legacyAuto=looksLikeLegacyAutoVideoRoute(model);
+  const explicitAdapter=!legacyAuto&&Boolean(String(model.adapterKey||'').trim()&&String(model.adapterKey||'auto').trim()!=='auto');
+  const hasExplicitRoute=!legacyAuto&&Boolean(String(model.createPath||model.operationRoutes?.generate?.createPath||'').trim());
   return {explicitAdapter,hasExplicitRoute,autoDefaults:!explicitAdapter&&!hasExplicitRoute};
 }
 function resolveRoute(provider={},model={},nodeType='',operation='generate'){
   const adapterKey=inferAdapterKey(provider,model);
   const defaults=adapterDefaults(adapterKey,nodeType);
-  const providerVideo=nodeType==='video'?compact(provider.videoProtocolConfig||{}):{};
+  const providerVideo=nodeType==='video'?migrateLegacyAutoVideoRoute(compact(provider.videoProtocolConfig||{})):{};
   const {explicitAdapter,hasExplicitRoute,autoDefaults}=routeIsExplicit(model);
   const direct=compact({
-    createPath:model.createPath,
+    createPath:autoDefaults?undefined:model.createPath,
     method:autoDefaults?undefined:model.method,
     responseMode:autoDefaults?undefined:model.responseMode,
     outputPath:autoDefaults?undefined:model.outputPath,
