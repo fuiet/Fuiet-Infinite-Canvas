@@ -2067,11 +2067,10 @@
     let info=seedTask;
     while(true){
       await new Promise(r=>setTimeout(r,Math.max(1000,Number(attempt?.model?.pollIntervalMs||1500))));
-      if(info?.status==='polling'&&info?.payload?._upstream?.taskId){
-        info=(await apiJson('/api/tasks/poll',{method:'POST',body:JSON.stringify({task:info})})).task;
-      }else{
-        info=(await apiJson('/api/tasks/'+encodeURIComponent(taskId))).task;
-      }
+      // The browser never supplies upstream polling routes or task snapshots.
+      // GETing the server-owned task is cross-runtime: Node keeps its own worker loop,
+      // while Cloudflare GET triggers the persisted server queue/poller via kickQueue.
+      info=(await apiJson('/api/tasks/'+encodeURIComponent(taskId))).task;
       n.taskStatus=info.status;n.taskProgress=info.progress||0;n.taskError=info.error||'';saveState();scheduleWorkflowVisualUpdate();
       if(expandedNodeId===n.id)renderGenerator();
       if(info.status==='succeeded')return info;
