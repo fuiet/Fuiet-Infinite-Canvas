@@ -201,9 +201,10 @@ function scan(){
   if(root!==lastRoot)enhance(root);else{syncSummary();syncPresetButtons()}
 }
 
-/* Observe content/class changes only. Do not observe style: this script owns final positioning
- * and observing its own left/top writes can create a feedback loop in some browsers. */
-new MutationObserver(scan).observe(generator,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});
+/* app.js replaces generatorPanel's direct children when switching nodes and toggles classes
+ * on the panel itself. Observe only those root-level changes; observing descendants lets our
+ * own summary/preset DOM updates recursively retrigger this observer. */
+new MutationObserver(scan).observe(generator,{childList:true,attributes:true,attributeFilter:['class']});
 window.addEventListener('resize',()=>{closeFloating();placeGenerator()},{passive:true});
 window.addEventListener('scroll',()=>{closeFloating();placeGenerator()},{passive:true,capture:true});
 document.addEventListener('pointerdown',e=>{if(floating&&!floating.contains(e.target)&&!e.target.closest('#imageSettingsSummary,[data-image-preset-cat]'))closeFloating()},true);
