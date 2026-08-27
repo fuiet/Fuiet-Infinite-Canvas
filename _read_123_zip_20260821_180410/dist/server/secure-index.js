@@ -1,4 +1,6 @@
 import legacyWorker from './index.js';
+import '../../provider-adapter-contract.js';
+const ProviderAdapterContract = globalThis.CanvasProviderAdapters;
 
 const SENSITIVE_HEADER_NAMES = new Set([
   'authorization', 'proxy-authorization', 'x-api-key', 'api-key', 'apikey',
@@ -374,6 +376,7 @@ function normalizeModel(input, index = 0) {
   model.name = String(model.name || model.id).trim();
   model.modality = ['text', 'script', 'image', 'video', 'audio'].includes(String(model.modality)) ? String(model.modality) : 'text';
   model.enabled = model.enabled !== false;
+  model.adapterKey = String(model.adapterKey || 'auto').trim() || 'auto';
   model.operationRoutes = model.operationRoutes && typeof model.operationRoutes === 'object' ? model.operationRoutes : {};
   model.requestTemplate = model.requestTemplate && typeof model.requestTemplate === 'object' ? model.requestTemplate : {};
   return model;
@@ -429,8 +432,10 @@ async function discoverModels(provider, env) {
           if ((res.status === 401 || res.status === 403) && auth !== authCandidates(provider).at(-1)) continue;
           break;
         }
-        const models = normalizeDiscoveredModels(await parseJsonResponse(res));
-        if (models.length) return { endpoint, models, auth };
+        const data = await parseJsonResponse(res);
+        const models = normalizeDiscoveredModels(data);
+        const protocolEvidence = ProviderAdapterContract.detectModelListProtocol(data, endpoint);
+        if (models.length) return { endpoint, models, auth, suggestedProtocol: protocolEvidence.protocol, protocolEvidence };
         errors.push(`${endpoint}：已连接，但未识别到模型列表`);
         break;
       } catch (error) { errors.push(`${endpoint}：${String(error?.message || error)}`); break; }
@@ -446,13 +451,13 @@ async function normalizeProviderForSave(input, existing, env) {
   next.baseUrl = String(next.baseUrl || '').trim().replace(/\/+$/, '');
   validateOutboundUrl(next.baseUrl, next, env);
   next.name = String(next.name || (() => { try { return new URL(next.baseUrl).hostname.replace(/^api\./, ''); } catch { return 'API 供应商'; } })());
-  next.protocol = String(next.protocol || 'openai-compatible');
+  next.protocol = ['auto','generic-rest','openai-compatible','comfyui'].includes(String(next.protocol)) ? String(next.protocol) : 'auto';
   next.videoProtocol = String(next.videoProtocol || 'auto');
   next.videoProtocolConfig = next.videoProtocolConfig && typeof next.videoProtocolConfig === 'object' ? next.videoProtocolConfig : {};
   next.authHeader = String(next.authHeader || 'Authorization');
   next.authScheme = String(next.authScheme ?? 'Bearer');
   next.defaultHeaders = next.defaultHeaders && typeof next.defaultHeaders === 'object' ? clone(next.defaultHeaders) : {};
-  next.referenceTransport = String(next.referenceTransport || 'url');
+  next.referenceTransport = ProviderAdapterContract.normalizeReferenceTransport(next.referenceTransport,{cloud:true});
   next.downloadOutputs = next.downloadOutputs !== false;
   next.models = Array.isArray(next.models) ? next.models.map(normalizeModel) : [];
   delete next.hasApiKey;
@@ -478,22 +483,10 @@ function compactRoute(route) {
   return out;
 }
 function routeForTask(provider, model, nodeType) {
-  const defaults = defaultRoute(nodeType);
-  const providerVideo = nodeType === 'video' ? compactRoute(provider?.videoProtocolConfig || {}) : {};
-  const modelDirect = compactRoute({
-    createPath: model?.createPath, method: model?.method, responseMode: model?.responseMode, outputPath: model?.outputPath,
-    taskIdPath: model?.taskIdPath, pollPath: model?.pollPath, statusPath: model?.statusPath, progressPath: model?.progressPath,
-    successValues: model?.successValues, failureValues: model?.failureValues, pollIntervalMs: model?.pollIntervalMs, timeoutMs: model?.timeoutMs,
-    requestTemplate: model?.requestTemplate
-  });
-  const operation = compactRoute(model?.operationRoutes?.generate || {});
-  const route = { ...defaults, ...providerVideo, ...modelDirect, ...operation };
-  route.successValues = Array.isArray(route.successValues) ? route.successValues : TERMINAL_SUCCESS;
-  route.failureValues = Array.isArray(route.failureValues) ? route.failureValues : TERMINAL_FAILURE;
-  route.pollIntervalMs = clamp(route.pollIntervalMs, 500, 30000, 1500);
-  route.timeoutMs = clamp(route.timeoutMs, 5000, 3600000, 1200000);
-  return route;
+  const operation=String(model?.operationRoutes?.activeOperation||'generate');
+  return ProviderAdapterContract.resolveRoute(provider,model,nodeType,operation);
 }
+
 function replaceTemplate(value, context) {
   if (typeof value === 'string') return value.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_, path) => { const v = getPath(context, path.trim()); return v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v); });
   if (Array.isArray(value)) return value.map(item => replaceTemplate(item, context));
@@ -555,9 +548,10 @@ async function prepareReferences(task, provider, model, request, env, ctx) {
   for (const item of refs) {
     const ref = clone(item || {}); if (!ref.url) continue;
     if (String(ref.url).startsWith('/media/')) {
-      if (provider.referenceTransport === 'data-url') {
+      const transport=ProviderAdapterContract.normalizeReferenceTransport(provider.referenceTransport,{cloud:true});
+      if (transport === 'data-url') {
         const media = await getLocalMedia(ref.url, request, env, ctx); ref.url = bytesToDataUrl(media.bytes, media.contentType);
-      } else if (provider.referenceTransport === 'upload') {
+      } else if (transport === 'upload') {
         ref.url = await uploadReference(provider, model, ref, request, env, ctx);
       } else {
         const base = String(env?.CANVAS_PUBLIC_BASE_URL || new URL(request.url).origin).replace(/\/+$/, '');
@@ -724,7 +718,10 @@ async function pollTask(task, request, env) {
   const pollPath = String(route.pollPath || '').replace(/\{\{\s*taskId\s*\}\}/g, encodeURIComponent(String(upstream.taskId)));
   if (!pollPath) throw new Error('服务端未配置视频 pollPath');
   const pollUrl = resolveProviderUrl(provider, pollPath, env);
-  const res = await safeProviderFetch(provider, pollUrl, { method: 'GET', headers: buildHeaders(provider, model, null, null), timeoutMs: 30000 }, env);
+  const pollMethod=String(route.pollMethod||'GET').toUpperCase();
+  const pollContext={taskId:String(upstream.taskId),model:model.id,modelId:model.id,prompt:task.payload?.prompt||'',parameters:task.payload?.parameters||{},params:task.payload?.parameters||{}};
+  const pollBody=route.pollBodyTemplate&&typeof route.pollBodyTemplate==='object'?replaceTemplate(route.pollBodyTemplate,pollContext):undefined;
+  const res = await safeProviderFetch(provider, pollUrl, { method: pollMethod, headers: buildHeaders(provider, model, null, ['GET','HEAD'].includes(pollMethod)?null:'application/json'), body:['GET','HEAD'].includes(pollMethod)?undefined:(pollBody===undefined?undefined:JSON.stringify(pollBody)), timeoutMs: 30000 }, env);
   const parsed = await parseJsonResponse(res);
   const statusRaw = firstPath(parsed, [route.statusPath, 'status', 'data.status', 'state', 'data.state', 'task.status', 'result.status']);
   const status = String(statusRaw || '').toLowerCase();
@@ -758,6 +755,27 @@ async function pollTask(task, request, env) {
   return { retryAfterMs: delay };
 }
 
+async function probeProviderConnection(provider,env){
+  const route=String(provider.testPath||'').trim();
+  const target=route?resolveProviderUrl(provider,route,env):validateOutboundUrl(provider.baseUrl,provider,env).toString();
+  const res=await safeProviderFetch(provider,target,{method:'GET',headers:buildHeaders(provider,{},null,null),timeoutMs:15000},env);
+  const preview=(await res.text()).slice(0,500);
+  return {ok:true,reachable:true,endpoint:route||'/',httpStatus:res.status,preview,warning:res.ok?'':`已连接到上游，但返回 HTTP ${res.status}。连接可达不等于鉴权或生成接口可用。`};
+}
+async function probeProviderAuth(provider,env){
+  if(provider.testPath){
+    const url=resolveProviderUrl(provider,provider.testPath,env);
+    const res=await safeProviderFetch(provider,url,{method:'GET',headers:buildHeaders(provider,{},null,null),timeoutMs:15000},env);
+    if(!res.ok)throw new Error(`鉴权测试接口返回 HTTP ${res.status}：${(await res.text()).slice(0,300)}`);
+    return {ok:true,verified:true,endpoint:provider.testPath,mode:'test-path'};
+  }
+  try{
+    const discovered=await discoverModels(provider,env);
+    return {ok:true,verified:true,endpoint:discovered.endpoint,modelCount:discovered.models.length,mode:'model-list'};
+  }catch(error){
+    return {ok:true,verified:false,mode:'unverified',warning:`当前供应商没有可安全用于鉴权验证的模型列表/测试接口。为避免调用图片或视频生成接口产生费用，本次不发送生成请求。${error.message}`};
+  }
+}
 async function handleProviderRoutes(request, env, ctx, pathname) {
   const state = globalThis.__canvasWorkerState;
   if (pathname === '/api/providers' && request.method === 'GET') return json({ providers: (state.providers || []).map(publicProvider) });
@@ -766,22 +784,39 @@ async function handleProviderRoutes(request, env, ctx, pathname) {
     const existing = body.id ? (state.providers || []).find(item => item.id === body.id) : null;
     const saved = await normalizeProviderForSave(body, existing, env);
     const runtime = await runtimeProvider(saved, env);
+    let warning='',autoConfigured=false;
     if (!saved.models.length) {
-      const discovered = await discoverModels(runtime, env); saved.models = discovered.models; saved.authHeader = discovered.auth.header; saved.authScheme = discovered.auth.scheme;
+      try{
+        const discovered = await discoverModels(runtime, env);
+        saved.models = discovered.models; saved.authHeader = discovered.auth.header; saved.authScheme = discovered.auth.scheme;
+        if(saved.protocol==='auto'&&discovered.suggestedProtocol)saved.protocol=discovered.suggestedProtocol;
+        autoConfigured=true;
+      }catch(error){warning=`供应商已保存，但没有发现模型列表：${String(error?.message||error)}`;}
     }
     await persistProvider(saved, env);
-    return json({ provider: publicProvider(saved), modelCount: saved.models.length, autoConfigured: true });
+    return json({ provider: publicProvider(saved), modelCount: saved.models.length, autoConfigured, warning });
   }
   if (['/api/providers/test-config', '/api/providers/test-auth', '/api/providers/diagnose', '/api/providers/discover-models'].includes(pathname) && request.method === 'POST') {
     const body = await request.json();
     const existing = body.id ? (state.providers || []).find(item => item.id === body.id) : null;
     const merged = { ...(existing || {}), ...clone(body) };
+    merged.referenceTransport=ProviderAdapterContract.normalizeReferenceTransport(merged.referenceTransport,{cloud:true});
     const runtime = await runtimeProvider(merged, env, body.apiKey || '');
     validateOutboundUrl(runtime.baseUrl, runtime, env);
-    const discovered = await discoverModels(runtime, env);
-    if (pathname === '/api/providers/discover-models') return json({ ok: true, endpoint: discovered.endpoint, models: discovered.models, count: discovered.models.length, modelCount: discovered.models.length, suggestedProtocol: 'openai-compatible', authHeader: discovered.auth.header, authScheme: discovered.auth.scheme });
-    if (pathname === '/api/providers/diagnose') return json({ ok: true, connection: { ok: true, endpoint: discovered.endpoint }, auth: { ok: true, endpoint: discovered.endpoint, mode: 'model-list' }, models: { ready: discovered.models.length, total: discovered.models.length, pending: 0 }, warnings: [] });
-    return json({ ok: true, endpoint: discovered.endpoint, modelCount: discovered.models.length, mode: 'model-list' });
+    if(pathname==='/api/providers/test-config')return json(await probeProviderConnection(runtime,env));
+    if(pathname==='/api/providers/test-auth')return json(await probeProviderAuth(runtime,env));
+    if(pathname==='/api/providers/discover-models'){
+      const discovered=await discoverModels(runtime,env);
+      return json({ok:true,endpoint:discovered.endpoint,models:discovered.models,count:discovered.models.length,modelCount:discovered.models.length,suggestedProtocol:discovered.suggestedProtocol||'',protocolEvidence:discovered.protocolEvidence||null,authHeader:discovered.auth.header,authScheme:discovered.auth.scheme});
+    }
+    const report={ok:true,connection:{ok:false},auth:{ok:false,verified:false},models:{discoveryOk:false,total:0,ready:0,pending:0},warnings:[]};
+    try{const c=await probeProviderConnection(runtime,env);report.connection=c;if(c.warning)report.warnings.push(c.warning)}catch(e){report.ok=false;report.connection={ok:false,error:String(e?.message||e)}}
+    try{const a=await probeProviderAuth(runtime,env);report.auth=a;if(a.warning)report.warnings.push(a.warning)}catch(e){report.ok=false;report.auth={ok:false,verified:false,error:String(e?.message||e)}}
+    try{const d=await discoverModels(runtime,env);report.models.discoveryOk=true;report.models.discovered=d.models.length;report.models.endpoint=d.endpoint;report.models.suggestedProtocol=d.suggestedProtocol||''}catch(e){report.models.discoveryError=String(e?.message||e);report.warnings.push('模型发现：'+String(e?.message||e))}
+    const configured=(runtime.models||[]).filter(m=>m.enabled!==false);report.models.total=configured.length;
+    for(const m of configured){const key=ProviderAdapterContract.inferAdapterKey(runtime,m),route=ProviderAdapterContract.resolveRoute(runtime,m,m.modality||'');const ready=key!=='auto'&&Boolean(route.createPath);if(ready)report.models.ready++;else{report.models.pending++;report.warnings.push(`模型 ${m.name||m.id} 尚未完成适配`)}}
+    if(!configured.length)report.warnings.push('当前尚未保存模型；供应商仍可保存，之后可拉取或手动添加模型。');
+    return json(report);
   }
   const match = pathname.match(/^\/api\/providers\/([^/]+)$/);
   if (match && request.method === 'DELETE') {
@@ -802,7 +837,7 @@ async function handleTaskRoutes(request, env, ctx, pathname) {
     const model = (provider.models || []).find(item => item.id === String(body.modelId || ''));
     if (!model) return json({ error: '所选模型不存在' }, 404);
     const nodeType = String(body.nodeType || ''); if (!['text', 'script', 'image', 'video', 'audio'].includes(nodeType)) return json({ error: '任务参数不完整' }, 400);
-    const route = routeForTask(provider, model, nodeType); resolveProviderUrl(provider, route.createPath, env); if (nodeType === 'video') resolveProviderUrl(provider, route.pollPath, env);
+    const route = routeForTask(provider, model, nodeType); resolveProviderUrl(provider, route.createPath, env); if (route.responseMode === 'async' && route.pollPath) resolveProviderUrl(provider, route.pollPath, env);
     const now = nowIso();
     const payload = clone(body); delete payload.providerSnapshot; delete payload.modelSnapshot;
     if (payload._upstream) delete payload._upstream;

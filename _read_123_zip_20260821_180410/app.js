@@ -3437,7 +3437,7 @@
   function escapeHtml(s=''){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
   function escapeAttr(s=''){return escapeHtml(String(s)).replace(/`/g,'&#96;')}
 
-  function emptyProviderDraft(){return {id:'',name:'',protocol:'openai-compatible',videoProtocol:'auto',videoProtocolConfig:{pollPath:'/v1/video/generations/{{taskId}}',taskIdPath:'',statusPath:'',progressPath:'',outputPath:'',successValues:['succeeded','completed','success','done','finished'],failureValues:['failed','error','cancelled','canceled'],pollIntervalMs:1500,timeoutMs:1200000},baseUrl:'',apiKey:'',authHeader:'Authorization',authScheme:'Bearer',testPath:'',modelsPath:'',referenceTransport:'auto',publicBaseUrl:'',uploadPath:'',uploadFileField:'file',uploadOutputPath:'data.url',allowPrivateHosts:false,downloadOutputs:true,defaultHeaders:{},models:[]}}
+  function emptyProviderDraft(){return {id:'',name:'',protocol:'auto',videoProtocol:'auto',videoProtocolConfig:{pollPath:'/v1/video/generations/{{taskId}}',taskIdPath:'',statusPath:'',progressPath:'',outputPath:'',successValues:['succeeded','completed','success','done','finished'],failureValues:['failed','error','cancelled','canceled'],pollIntervalMs:1500,timeoutMs:1200000},baseUrl:'',apiKey:'',authHeader:'Authorization',authScheme:'Bearer',testPath:'',modelsPath:'',referenceTransport:'auto',publicBaseUrl:'',uploadPath:'',uploadFileField:'file',uploadOutputPath:'data.url',allowPrivateHosts:false,downloadOutputs:true,defaultHeaders:{},models:[]}}
   function defaultModelRoute(modality='image',protocol='generic-rest'){
     const base={id:'',name:labelForType(modality)+'模型',modality,enabled:true,adapterKey:'auto',operationRoutes:{},createPath:'',method:'POST',responseMode:'async',outputPath:'output.url',taskIdPath:'id',pollPath:'/v1/tasks/{{taskId}}',statusPath:'status',progressPath:'progress',successValues:['succeeded','completed','success'],failureValues:['failed','error','cancelled'],pollIntervalMs:1500,timeoutMs:1200000,requestTemplate:{model:'{{model}}',prompt:'{{prompt}}',references:'{{references}}',images:'{{images}}',videos:'{{videos}}',audios:'{{audios}}',aspect_ratio:'{{aspectRatio}}',duration:'{{duration}}',resolution:'{{resolution}}',parameters:'{{params}}'},capabilities:defaultCapabilities(modality)};
     if(protocol==='openai-compatible'&&modality==='text')return{...base,adapterKey:'openai-chat',name:'文本模型',createPath:'',responseMode:'sync',outputPath:'choices.0.message.content',taskIdPath:'',pollPath:'',statusPath:'',progressPath:'',timeoutMs:120000,requestTemplate:{model:'{{model}}',prompt:'{{prompt}}'}};
@@ -3526,7 +3526,7 @@
         <div class="backend-status"><i class="backend-dot ${backendOnline?'online':''}"></i>${backendOnline?'API 网关已连接':'API 网关未连接'}</div>
       </aside>
       <section class="provider-editor"><div class="provider-editor-head"><div class="provider-editor-title">${d.id?'编辑供应商':'新建供应商'}</div><div class="provider-actions"><button class="provider-action" id="testProviderBtn">测试连接</button><button class="provider-action" id="testAuthBtn">测试鉴权</button><button class="provider-action" id="diagnoseProviderBtn">一键诊断</button><button class="provider-action fetch-models" id="fetchModelsBtn">拉取模型</button>${d.id?'<button class="provider-action danger" id="deleteProviderBtn">删除</button>':''}<button class="provider-action primary" id="saveProviderBtn">连接并自动添加模型</button><button class="provider-action provider-close" id="closeProviderBtn">×</button></div></div>
-      <div class="provider-scroll"><div class="provider-note">只需填写 API Base URL 和 API Key，然后点击「连接并自动添加模型」。系统会自动尝试 /v1/models 和 /models，识别模型类型并完成接口适配。</div>
+      <div class="provider-scroll"><div class="provider-note">只需填写 API Base URL 和 API Key，然后点击「连接并自动添加模型」。系统会在供应商提供模型列表时自动识别；没有模型列表也会保存供应商，不再把连接失败和模型发现失败混为一谈。</div>
         <div class="provider-section"><div class="provider-section-title">供应商连接</div><div class="provider-grid provider-grid-basic">
           <input id="prvName" type="hidden" value="${escapeAttr(d.name||'')}">
           <div class="provider-field full"><label>Base URL</label><input id="prvBaseUrl" value="${escapeAttr(d.baseUrl||'')}" placeholder="https://api.example.com 或 https://api.example.com/v1"></div>
@@ -3548,7 +3548,7 @@
           </div></details>`:''}
         </div></div>
         <details class="provider-advanced"><summary>高级连接设置</summary><div class="provider-grid provider-advanced-grid">
-          <div class="provider-field"><label>协议类型</label><select id="prvProtocol"><option value="generic-rest" ${d.protocol==='generic-rest'?'selected':''}>通用 REST API</option><option value="openai-compatible" ${d.protocol==='openai-compatible'?'selected':''}>OpenAI 兼容</option><option value="comfyui" ${d.protocol==='comfyui'?'selected':''}>ComfyUI API</option></select></div>
+          <div class="provider-field"><label>协议类型</label><select id="prvProtocol"><option value="auto" ${!d.protocol||d.protocol==='auto'?'selected':''}>自动检测（推荐）</option><option value="generic-rest" ${d.protocol==='generic-rest'?'selected':''}>通用 REST API</option><option value="openai-compatible" ${d.protocol==='openai-compatible'?'selected':''}>OpenAI 兼容</option><option value="comfyui" ${d.protocol==='comfyui'?'selected':''}>ComfyUI API</option></select></div>
           <div class="provider-field"><label>模型列表路径</label><input id="prvModelsPath" value="${escapeAttr(d.modelsPath||'')}" placeholder="默认自动尝试 /v1/models、/models"></div>
           <div class="provider-field"><label>鉴权头</label><input id="prvAuthHeader" value="${escapeAttr(d.authHeader||'Authorization')}"></div>
           <div class="provider-field"><label>鉴权前缀</label><input id="prvAuthScheme" value="${escapeAttr(d.authScheme??'Bearer')}" placeholder="Bearer；无前缀可留空"></div>
@@ -3586,7 +3586,7 @@
     $('#deleteProviderBtn',providerModal)?.addEventListener('click',deleteProviderFromModal);
     providerModal.onpointerdown=e=>{if(e.target===providerModal)providerModal.classList.add('hidden')};
   }
-  function protocolName(p){return ({'generic-rest':'通用 REST','openai-compatible':'OpenAI兼容','comfyui':'ComfyUI'})[p]||p}
+  function protocolName(p){return ({auto:'自动检测','generic-rest':'通用 REST','openai-compatible':'OpenAI兼容','comfyui':'ComfyUI'})[p]||p}
 
   async function saveProviderFromModal(){
     const d=readProviderDraftFromDom();
@@ -3614,24 +3614,31 @@
     catch(err){showProviderTest(err.message,true)}
   }
   async function testAuthFromModal(){
-    const d=readProviderDraftFromDom();
-    if(!d.baseUrl.trim()){showProviderTest('请先填写 API Base URL',true);return;}
-    if(!d.apiKey?.trim()&&!d.hasApiKey){showProviderTest('请先填写 API Key',true);return;}
-    showProviderTest('正在使用当前 API Key 发起一次最小鉴权请求…');
-    try{
-      const out=await apiJson('/api/providers/test-auth',{method:'POST',body:JSON.stringify(d)});
-      showProviderTest(`鉴权成功${out.modelId?` · 模型 ${out.modelId}`:''}${out.endpoint?` · ${out.endpoint}`:''}${String(d.apiKey||'').trim()?' · 新密钥已通过验证，点击「保存」后用于正式生成':''}`);
-    }catch(err){showProviderTest(err.message,true)}
-  }
+  const d=readProviderDraftFromDom();
+  if(!d.baseUrl.trim()){showProviderTest('请先填写 API Base URL',true);return;}
+  if(!d.apiKey?.trim()&&!d.hasApiKey){showProviderTest('请先填写 API Key',true);return;}
+  showProviderTest('正在验证鉴权（不会调用可能产生费用的图片/视频生成接口）…');
+  try{
+    const out=await apiJson('/api/providers/test-auth',{method:'POST',body:JSON.stringify(d)});
+    if(out.verified===false){showProviderTest(`连接已建立，但鉴权暂未验证。${out.warning||'当前供应商没有无副作用的鉴权测试接口；可配置测试路径，或在模型配置完成后通过真实生成验证。'}`);return;}
+    showProviderTest(`鉴权已验证${out.modelId?` · 模型 ${out.modelId}`:''}${out.endpoint?` · ${out.endpoint}`:''}${String(d.apiKey||'').trim()?' · 新密钥已通过验证，点击「保存」后用于正式生成':''}`);
+  }catch(err){showProviderTest(err.message,true)}
+}
 
-  async function diagnoseProviderFromModal(){
-    const d=readProviderDraftFromDom();
-    if(!d.baseUrl.trim()){showProviderTest('请先填写 API Base URL',true);return;}
-    showProviderTest('正在检查连接、鉴权、模型与适配器状态…');
-    try{const out=await apiJson('/api/providers/diagnose',{method:'POST',body:JSON.stringify(d)});const lines=[`连接：${out.connection?.ok?'✓':'×'}${out.connection?.endpoint?` ${out.connection.endpoint}`:''}${out.connection?.error?` · ${out.connection.error}`:''}`,`鉴权：${out.auth?.ok?'✓':'×'}${out.auth?.modelId?` ${out.auth.modelId}`:''}${out.auth?.error?` · ${out.auth.error}`:''}`,`模型：${out.models?.ready||0}/${out.models?.total||0} 已就绪${out.models?.pending?` · ${out.models.pending} 个待配置`:''}`];if(out.warnings?.length)lines.push('提示：'+out.warnings.slice(0,4).join('；'));showProviderTest(lines.join('\n'),!out.ok)}catch(err){showProviderTest(err.message,true)}
-  }
+async function diagnoseProviderFromModal(){
+  const d=readProviderDraftFromDom();
+  if(!d.baseUrl.trim()){showProviderTest('请先填写 API Base URL',true);return;}
+  showProviderTest('正在分别检查连接、鉴权、模型发现与适配器状态…');
+  try{
+    const out=await apiJson('/api/providers/diagnose',{method:'POST',body:JSON.stringify(d)});
+    const authText=out.auth?.verified===false?'? 未验证':(out.auth?.ok?'✓':'×');
+    const lines=[`连接：${out.connection?.ok?'✓':'×'}${out.connection?.endpoint?` ${out.connection.endpoint}`:''}${out.connection?.httpStatus?` · HTTP ${out.connection.httpStatus}`:''}${out.connection?.error?` · ${out.connection.error}`:''}`,`鉴权：${authText}${out.auth?.modelId?` ${out.auth.modelId}`:''}${out.auth?.error?` · ${out.auth.error}`:''}${out.auth?.warning?` · ${out.auth.warning}`:''}`,`模型发现：${out.models?.discoveryOk?'✓':'?'}${out.models?.discovered!=null?` ${out.models.discovered} 个`:''}${out.models?.discoveryError?` · ${out.models.discoveryError}`:''}`,`已配置模型：${out.models?.ready||0}/${out.models?.total||0} 已就绪${out.models?.pending?` · ${out.models.pending} 个待配置`:''}`];
+    if(out.warnings?.length)lines.push('提示：'+out.warnings.slice(0,5).join('；'));
+    showProviderTest(lines.join('\n'),!out.connection?.ok||out.auth?.ok===false);
+  }catch(err){showProviderTest(err.message,true)}
+}
 
-  async function fetchModelsFromModal(){
+async function fetchModelsFromModal(){
     const d=readProviderDraftFromDom();
     if(!d.baseUrl.trim()){showProviderTest('请先填写 API Base URL',true);return;}
     showProviderTest('正在连接供应商并拉取全部模型…');

@@ -5,8 +5,27 @@
   const labels={text:'文本',image:'图片',video:'视频',audio:'音频'};
   const adapterLabels={auto:'自动适配','openai-chat':'OpenAI 对话','openai-responses':'OpenAI 响应','openai-image':'OpenAI 图像','openai-audio-speech':'OpenAI 语音','generic-sync':'通用同步接口','generic-async':'通用异步任务','standard-video-async-v1':'标准异步视频协议 v1','comfyui-workflow':'ComfyUI 工作流'};
   function providerHasApiKey(p){return Boolean(String(p?.apiKey||p?.apiKeyEncrypted||'').trim())||p?.hasApiKey===true}
-  function resolvedAdapter(p,m){const r=m.adapterResolved||{};if(r.key)return r;const k=m.adapterKey&&m.adapterKey!=='auto'?m.adapterKey:(p.protocol==='comfyui'?'comfyui-workflow':m.modality==='text'?'openai-chat':m.modality==='image'?'openai-image':m.modality==='audio'?'openai-audio-speech':m.modality==='video'?'standard-video-async-v1':'auto');return{key:k,label:adapterLabels[k]||'自动适配',ready:Boolean(m.id)&&!['generic-sync','generic-async'].includes(k)}}
-  const defaultModel=()=>({id:'',name:'新模型',modality:'text',enabled:true,adapterKey:'auto',operationRoutes:{},createPath:'',method:'POST',responseMode:'sync',outputPath:'',taskIdPath:'',pollPath:'',statusPath:'',progressPath:'',successValues:['completed','succeeded','success'],failureValues:['failed','error','canceled'],pollIntervalMs:1500,timeoutMs:1200000,requestTemplate:{},capabilities:{},pricing:{currency:'USD',perRequest:0,perImage:0,perSecond:0,perMillionInputTokens:0,perMillionOutputTokens:0}});
+  function resolvedAdapter(p,m){
+  const r=m.adapterResolved||{};if(r.key)return r;
+  let k=String(m.adapterKey||'auto');
+  if(k==='auto'){
+    if(p.protocol==='comfyui')k='comfyui-workflow';
+    else if(p.protocol==='openai-compatible')k=m.modality==='text'?'openai-chat':m.modality==='image'?'openai-image':m.modality==='audio'?'openai-audio-speech':(p.videoProtocol==='standard-video-async-v1'?'standard-video-async-v1':'auto');
+    else {
+      const path=String(m.createPath||m.operationRoutes?.generate?.createPath||'').toLowerCase();
+      if(/\/responses(?:$|\?)/.test(path))k='openai-responses';
+      else if(/\/chat\/completions(?:$|\?)/.test(path))k='openai-chat';
+      else if(/\/images\/generations(?:$|\?)/.test(path))k='openai-image';
+      else if(m.modality==='video'&&p.videoProtocol==='standard-video-async-v1')k='standard-video-async-v1';
+      else if(path)k=(m.responseMode==='async'||m.operationRoutes?.generate?.responseMode==='async')?'generic-async':'generic-sync';
+      else k='auto';
+    }
+  }
+  const ready=Boolean(m.id)&&k!=='auto'&&(!['generic-sync','generic-async'].includes(k)||Boolean(String(m.createPath||m.operationRoutes?.generate?.createPath||'').trim()));
+  return{key:k,label:adapterLabels[k]||'自动适配',ready};
+}
+
+const defaultModel=()=>({id:'',name:'新模型',modality:'text',enabled:true,adapterKey:'auto',operationRoutes:{},createPath:'',method:'POST',responseMode:'sync',outputPath:'',taskIdPath:'',pollPath:'',statusPath:'',progressPath:'',successValues:['completed','succeeded','success'],failureValues:['failed','error','canceled'],pollIntervalMs:1500,timeoutMs:1200000,requestTemplate:{},capabilities:{},pricing:{currency:'USD',perRequest:0,perImage:0,perSecond:0,perMillionInputTokens:0,perMillionOutputTokens:0}});
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const attr=s=>esc(s).replace(/`/g,'&#96;');
   async function api(path,opt={}){const res=await fetch(path,{headers:{'Content-Type':'application/json',...(opt.headers||{})},...opt});let data={};try{data=await res.json()}catch{}if(!res.ok)throw new Error(data.error||`HTTP ${res.status}`);return data}

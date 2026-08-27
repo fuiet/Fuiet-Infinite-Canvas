@@ -8,6 +8,8 @@ const { promisify } = require('util');
 const dns = require('dns').promises;
 const net = require('net');
 const { CanvasStore } = require('./store');
+require('./provider-adapter-contract.js');
+const ProviderAdapterContract = globalThis.CanvasProviderAdapters;
 const execFileAsync = promisify(execFile);
 
 const ROOT = __dirname;
@@ -372,8 +374,12 @@ function normalizeVideoProtocolConfig(input={}, existing={}) {
   const old=(existing&&typeof existing==='object')?existing:{};
   const arr=(v,fallback)=>Array.isArray(v)&&v.length?v.map(String).map(x=>x.trim()).filter(Boolean):fallback;
   return {
-    // 创建接口是协议固定项：POST /v1/video/generations。
+    createPath:String(raw.createPath ?? old.createPath ?? '/v1/video/generations').trim() || '/v1/video/generations',
+    createMethod:String(raw.createMethod ?? old.createMethod ?? raw.method ?? old.method ?? 'POST').trim().toUpperCase() || 'POST',
+    requestTemplate:(raw.requestTemplate&&typeof raw.requestTemplate==='object')?raw.requestTemplate:((old.requestTemplate&&typeof old.requestTemplate==='object')?old.requestTemplate:{}),
     pollPath:String(raw.pollPath ?? old.pollPath ?? '/v1/video/generations/{{taskId}}').trim() || '/v1/video/generations/{{taskId}}',
+    pollMethod:String(raw.pollMethod ?? old.pollMethod ?? 'GET').trim().toUpperCase() || 'GET',
+    pollBodyTemplate:(raw.pollBodyTemplate&&typeof raw.pollBodyTemplate==='object')?raw.pollBodyTemplate:((old.pollBodyTemplate&&typeof old.pollBodyTemplate==='object')?old.pollBodyTemplate:null),
     taskIdPath:String(raw.taskIdPath ?? old.taskIdPath ?? '').trim(),
     statusPath:String(raw.statusPath ?? old.statusPath ?? '').trim(),
     progressPath:String(raw.progressPath ?? old.progressPath ?? '').trim(),
@@ -381,7 +387,8 @@ function normalizeVideoProtocolConfig(input={}, existing={}) {
     successValues:arr(raw.successValues ?? old.successValues,['succeeded','completed','success','done','finished']),
     failureValues:arr(raw.failureValues ?? old.failureValues,['failed','error','cancelled','canceled']),
     pollIntervalMs:Math.max(500,Number(raw.pollIntervalMs ?? old.pollIntervalMs ?? 1500)),
-    timeoutMs:Math.max(5000,Number(raw.timeoutMs ?? old.timeoutMs ?? 20*60*1000))
+    timeoutMs:Math.max(5000,Number(raw.timeoutMs ?? old.timeoutMs ?? 20*60*1000)),
+    allowOutputWithoutTerminalStatus:raw.allowOutputWithoutTerminalStatus === true || old.allowOutputWithoutTerminalStatus === true
   };
 }
 
@@ -390,7 +397,7 @@ function normalizeProvider(input, existing) {
   const p = {
     id: input.id || existing?.id || uid('prv_'),
     name: String(input.name || existing?.name || '未命名供应商').trim(),
-    protocol: ['generic-rest', 'openai-compatible', 'comfyui'].includes(input.protocol) ? input.protocol : (existing?.protocol || 'generic-rest'),
+    protocol: ['auto','generic-rest', 'openai-compatible', 'comfyui'].includes(input.protocol) ? input.protocol : (existing?.protocol || 'auto'),
     // 视频协议与基础 HTTP / OpenAI 连接协议解耦。一个供应商下的所有视频模型可继承同一协议。
     videoProtocol: ['auto','standard-video-async-v1'].includes(input.videoProtocol) ? input.videoProtocol : (existing?.videoProtocol || 'auto'),
     videoProtocolConfig: normalizeVideoProtocolConfig(input.videoProtocolConfig, existing?.videoProtocolConfig),
@@ -400,7 +407,7 @@ function normalizeProvider(input, existing) {
     defaultHeaders: typeof input.defaultHeaders === 'object' && input.defaultHeaders ? input.defaultHeaders : (existing?.defaultHeaders || {}),
     testPath: String(input.testPath ?? existing?.testPath ?? ''),
     modelsPath: String(input.modelsPath ?? existing?.modelsPath ?? ''),
-    referenceTransport: ['auto','base64','public-url','upload-endpoint'].includes(input.referenceTransport) ? input.referenceTransport : (existing?.referenceTransport || 'auto'),
+    referenceTransport: ProviderAdapterContract.normalizeReferenceTransport(input.referenceTransport ?? existing?.referenceTransport ?? 'auto',{cloud:false}),
     publicBaseUrl: String(input.publicBaseUrl ?? existing?.publicBaseUrl ?? '').replace(/\/+$/, ''),
     uploadPath: String(input.uploadPath ?? existing?.uploadPath ?? ''),
     uploadFileField: String(input.uploadFileField ?? existing?.uploadFileField ?? 'file'),
@@ -415,11 +422,6 @@ function normalizeProvider(input, existing) {
   if (typeof input.apiKey === 'string' && input.apiKey.trim()) {
     const normalizedKey = normalizeApiKeyValue(input.apiKey, p.authScheme, p.authHeader);
     if (normalizedKey) p.apiKeyEncrypted = encryptSecret(normalizedKey);
-  }
-  const hasVideoModels = (p.models || []).some(m => String(m?.modality || '').trim() === 'video');
-  if (p.protocol !== 'comfyui' && hasVideoModels && providerHasApiKey(p) && p.videoProtocol === 'auto') {
-    p.videoProtocol = 'standard-video-async-v1';
-    p.videoProtocolConfig = normalizeVideoProtocolConfig(p.videoProtocolConfig, existing?.videoProtocolConfig);
   }
   p.models=(p.models||[]).map(m=>({...m,adapterKey:m.adapterKey||'auto'}));
   return p;
@@ -500,6 +502,8 @@ function normalizeModel(m={}) {
     outputPath: String(m.outputPath || '').trim(),
     taskIdPath: String(m.taskIdPath || '').trim(),
     pollPath: String(m.pollPath || '').trim(),
+    pollMethod: String(m.pollMethod || 'GET').trim().toUpperCase(),
+    pollBodyTemplate: (m.pollBodyTemplate&&typeof m.pollBodyTemplate==='object')?m.pollBodyTemplate:null,
     statusPath: String(m.statusPath || '').trim(),
     progressPath: String(m.progressPath || '').trim(),
     successValues: Array.isArray(m.successValues) ? m.successValues : ['succeeded','completed','success'],
@@ -523,21 +527,9 @@ const ADAPTER_CATALOG={
   'comfyui-workflow':{label:'ComfyUI 工作流',modalities:['image','video','audio','text','script']}
 };
 function inferAdapterKey(provider,model){
-  const explicit=String(model?.adapterKey||'auto');if(explicit&&explicit!=='auto')return explicit;
-  if(provider?.protocol==='comfyui')return 'comfyui-workflow';
-  const mod=model?.modality||'image';
-  if(mod==='video'&&(provider?.videoProtocol==='standard-video-async-v1'||(providerHasApiKey(provider)&&provider?.videoProtocol!=='auto')))return 'standard-video-async-v1';
-  if(provider?.protocol==='openai-compatible'){
-    if(mod==='text'||mod==='script')return 'openai-chat';
-    if(mod==='image')return 'openai-image';
-    if(mod==='audio')return 'openai-audio-speech';
-  }
-  const path=String(model?.createPath||'').toLowerCase();
-  if(/\/responses(?:$|\?)/.test(path))return 'openai-responses';
-  if(/\/chat\/completions(?:$|\?)/.test(path))return 'openai-chat';
-  if(/\/images\/generations(?:$|\?)/.test(path))return 'openai-image';
-  return model?.responseMode==='async'?'generic-async':'generic-sync';
+  return ProviderAdapterContract.inferAdapterKey(provider,model);
 }
+
 function adapterInfo(provider,model){const key=inferAdapterKey(provider,model);return {key,label:ADAPTER_CATALOG[key]?.label||key,ready:adapterReady(provider,model,key)};}
 function adapterReady(provider,model,key=inferAdapterKey(provider,model)){
   if(['openai-chat','openai-responses','openai-image','openai-audio-speech','comfyui-workflow'].includes(key))return true;
@@ -666,9 +658,9 @@ async function prepareReferences(provider,model,references=[]){
     const type=ref.type||ref.kind||'image';if(counts[type]!=null&&counts[type]>=limits[type])continue;if(out.length>=limits.all)break;
     let url=String(ref.url||'');
     if(url.startsWith('/media/')){
-      const file=mediaPathFromUrl(url);const transport=provider.referenceTransport||'auto';
-      if(transport==='upload-endpoint')url=await uploadReferenceToProvider(provider,file);
-      else if(transport==='public-url'||(transport==='auto'&&provider.publicBaseUrl)) {
+      const file=mediaPathFromUrl(url);const transport=ProviderAdapterContract.normalizeReferenceTransport(provider.referenceTransport,{cloud:false});
+      if(transport==='upload')url=await uploadReferenceToProvider(provider,file);
+      else if(transport==='url'||(transport==='auto'&&provider.publicBaseUrl)) {
         if(!provider.publicBaseUrl)throw new Error('Public URL 模式需要配置 Public Base URL');
         url=provider.publicBaseUrl.replace(/\/$/,'')+url;
       } else url=fileToDataUrl(file);
@@ -853,7 +845,10 @@ async function executeGeneric(task, provider, model, payload) {
     checks++;
     const pollCtx = { ...ctx, taskId: upstreamTaskId };
     const pollPath=opConfig.pollPath||model.pollPath||'/v1/tasks/{{taskId}}';const pollUrl = joinUrl(provider.baseUrl, renderPathTemplate(pollPath, pollCtx));
-    const polled = await fetchJson(pollUrl, { method:'GET', headers:providerHeaders(provider), timeoutMs:60000, provider });
+    const pollMethod=String(opConfig.pollMethod||model.pollMethod||'GET').toUpperCase();
+    const pollTemplate=opConfig.pollBodyTemplate??model.pollBodyTemplate;
+    const pollBody=pollTemplate&&typeof pollTemplate==='object'?renderTemplate(pollTemplate,pollCtx):undefined;
+    const polled = await fetchJson(pollUrl, { method:pollMethod, headers:providerHeaders(provider), body:['GET','HEAD'].includes(pollMethod)?undefined:(pollBody===undefined?undefined:JSON.stringify(pollBody)), timeoutMs:60000, provider });
     const statusPath=opConfig.statusPath||model.statusPath;const statusRaw = statusPath ? deepGet(polled, statusPath) : polled.status;
     const status = String(statusRaw ?? '').toLowerCase();
     const progressPath=opConfig.progressPath||model.progressPath;const progressRaw = progressPath ? Number(deepGet(polled, progressPath)) : NaN;
@@ -959,18 +954,20 @@ function standardVideoOutput(polled,config={}){
 async function executeStandardVideoAsync(task,provider,model,payload){
   if(task.nodeType!=='video')throw new Error('标准异步视频协议只能用于视频模型');
   const config=normalizeVideoProtocolConfig(provider.videoProtocolConfig,provider.videoProtocolConfig);
-  const createPath='/v1/video/generations';
+  const createPath=String(config.createPath||'/v1/video/generations');
   const createUrl=joinUrl(provider.baseUrl,createPath);
-  const body=standardVideoBody(model,payload);
+  const ctx={model:model.id,modelId:model.id,prompt:payload.prompt||'',parameters:payload.parameters||{},params:payload.parameters||{},references:payload.references||[]};
+  const body=config.requestTemplate&&Object.keys(config.requestTemplate).length?renderTemplate(config.requestTemplate,ctx):standardVideoBody(model,payload);
   updateTask(task,{progress:8});
   let taskId='';
   const resume=payload._upstream&&payload._upstream.protocol==='standard-video-async-v1'&&payload._upstream.modelId===model.id?payload._upstream:null;
   if(resume?.id){taskId=String(resume.id);taskLog(task,`恢复标准视频任务：${taskId}`)}
   else{
-    taskLog(task,`标准异步视频：POST ${createPath}`);
-    const created=await fetchJson(createUrl,{method:'POST',headers:providerHeaders(provider),body:JSON.stringify(body),timeoutMs:Math.min(config.timeoutMs,120000),provider});
+    const createMethod=String(config.createMethod||'POST').toUpperCase();
+    taskLog(task,`标准异步视频：${createMethod} ${createPath}`);
+    const created=await fetchJson(createUrl,{method:createMethod,headers:providerHeaders(provider),body:['GET','HEAD'].includes(createMethod)?undefined:JSON.stringify(body),timeoutMs:Math.min(config.timeoutMs,120000),provider});
     taskId=standardVideoTaskId(created,config);
-    if(!taskId)throw new Error('视频任务已提交，但响应中未找到任务 ID。标准协议会自动识别 id / task_id / data.id / video_task_*；如供应商字段不同，请在供应商「视频协议高级设置」填写任务 ID 字段。');
+    if(!taskId)throw new Error('视频任务已提交，但响应中未找到任务 ID。可在供应商/模型高级配置中设置 taskIdPath。');
     payload._upstream={protocol:'standard-video-async-v1',modelId:model.id,id:String(taskId),createdAt:new Date().toISOString()};
     task.payload=payload;updateTask(task,{payload,progress:20});taskLog(task,`已持久化视频任务 ID：${taskId}`);
   }
@@ -978,15 +975,18 @@ async function executeStandardVideoAsync(task,provider,model,payload){
   const success=(config.successValues||[]).map(x=>String(x).toLowerCase()),failure=(config.failureValues||[]).map(x=>String(x).toLowerCase());
   while(Date.now()-started<config.timeoutMs){
     assertTaskActive(task);await new Promise(r=>setTimeout(r,config.pollIntervalMs));checks++;
-    const pollPath=renderPathTemplate(config.pollPath||'/v1/video/generations/{{taskId}}',{taskId});
-    const polled=await fetchJson(joinUrl(provider.baseUrl,pollPath),{method:'GET',headers:providerHeaders(provider),timeoutMs:60000,provider});
+    const pollCtx={...ctx,taskId};
+    const pollPath=renderPathTemplate(config.pollPath||'/v1/video/generations/{{taskId}}',pollCtx);
+    const pollMethod=String(config.pollMethod||'GET').toUpperCase();
+    const pollBody=config.pollBodyTemplate&&typeof config.pollBodyTemplate==='object'?renderTemplate(config.pollBodyTemplate,pollCtx):undefined;
+    const polled=await fetchJson(joinUrl(provider.baseUrl,pollPath),{method:pollMethod,headers:providerHeaders(provider),body:['GET','HEAD'].includes(pollMethod)?undefined:(pollBody===undefined?undefined:JSON.stringify(pollBody)),timeoutMs:60000,provider});
     const statusRaw=standardVideoStatus(polled,config),status=String(statusRaw??'').toLowerCase();
     const progressRaw=Number(standardVideoProgress(polled,config));
     updateTask(task,{status:'polling',progress:Number.isFinite(progressRaw)?Math.max(20,Math.min(96,progressRaw)):Math.min(94,20+checks*4)});
     if(failure.includes(status))throw new Error(`上游视频任务失败：${status||'unknown'}`);
     const output=standardVideoOutput(polled,config);
-    if(success.includes(status)||(!status&&output!=null)){
-      if(output==null)throw new Error(`视频任务状态为 ${status||'成功'}，但没有解析到视频结果 URL。请在供应商「视频协议高级设置」填写结果字段。`);
+    if(success.includes(status)||(config.allowOutputWithoutTerminalStatus===true&&!status&&output!=null)){
+      if(output==null)throw new Error(`视频任务状态为 ${status||'成功'}，但没有解析到视频结果 URL。请配置 outputPath。`);
       return normalizeOutput(output,'video',provider);
     }
   }
@@ -1141,9 +1141,7 @@ function normalizeDiscoveredModels(data) {
 }
 
 function detectModelListProtocol(data,route=''){
-  const first=Array.isArray(data?.data)?data.data[0]:null;
-  const openaiShape=(data?.object==='list'&&Array.isArray(data?.data)) || (first&&first.object==='model') || String(route).replace(/\/$/,'')==='/v1/models';
-  return openaiShape?'openai-compatible':'';
+  return ProviderAdapterContract.detectModelListProtocol(data,route).protocol;
 }
 
 async function fetchModelsFromProvider(provider) {
@@ -1167,60 +1165,45 @@ async function testProviderConfig(input) {
   const existing = input.id ? loadProvidersRaw().find(p => p.id === input.id) : null;
   const provider = normalizeProvider(input, existing || null);
   if (!provider.baseUrl) throw new Error('Base URL 不能为空');
-  // Since normalizeProvider encrypts input.apiKey, this works for unsaved config.
-  if (provider.testPath) {
-    const url = joinUrl(provider.baseUrl, provider.testPath);
-    const data = await fetchJson(url, { method:'GET', headers:providerHeaders(provider), timeoutMs:15000, provider });
-    return { ok:true, endpoint:provider.testPath, preview:JSON.stringify(data).slice(0,500) };
-  }
-  if (provider.protocol === 'comfyui') {
-    const route = '/system_stats';
-    const data = await fetchJson(joinUrl(provider.baseUrl, route), { method:'GET', headers:providerHeaders(provider), timeoutMs:15000, provider });
-    return { ok:true, endpoint:route, preview:JSON.stringify(data).slice(0,500) };
-  }
-  try {
-    const discovered = await fetchModelsFromProvider(provider);
-    return { ok:true, endpoint:discovered.endpoint, modelCount:discovered.models.length, preview:`已识别 ${discovered.models.length} 个模型` };
-  } catch (modelErr) {
-    // Generic providers may expose no model-list endpoint but still answer on their root.
-    if (provider.protocol === 'generic-rest') {
-      const data = await fetchJson(provider.baseUrl, { method:'GET', headers:providerHeaders(provider), timeoutMs:15000, provider });
-      return { ok:true, endpoint:'/', preview:JSON.stringify(data).slice(0,500), warning:modelErr.message };
-    }
-    throw modelErr;
-  }
+  providerHeaders(provider);
+  const route = provider.testPath || (provider.protocol === 'comfyui' ? '/system_stats' : '');
+  const target = route ? joinUrl(provider.baseUrl, route) : provider.baseUrl;
+  const res = await fetchSafe(target,{method:'GET',headers:providerHeaders(provider),timeoutMs:15000},provider);
+  const raw=await res.text();
+  return {
+    ok:true, reachable:true, endpoint:route||'/', httpStatus:res.status,
+    preview:raw.slice(0,500),
+    warning:res.ok?'':`已连接到上游，但返回 HTTP ${res.status}。连接可达不等于鉴权或生成接口可用，请继续执行「测试鉴权」。`
+  };
 }
 
 async function testProviderAuth(input) {
   const existing = input.id ? loadProvidersRaw().find(p => p.id === input.id) : null;
   const provider = normalizeProvider(input, existing || null);
   if (!provider.baseUrl) throw new Error('Base URL 不能为空');
-  // Fail locally if an encrypted key exists but cannot be decrypted.
   providerHeaders(provider);
-  const models = Array.isArray(provider.models) ? provider.models.filter(m=>m.enabled!==false) : [];
-  const textModel = models.find(m=>m.modality==='text');
-  if (textModel) {
-    const route = String(textModel.createPath || '').trim() || '/v1/chat/completions';
-    const url = joinUrl(provider.baseUrl, route);
-    const body = /\/chat\/completions(?:$|\?)/i.test(route)
-      ? {model:textModel.id,messages:[{role:'user',content:'只回复 OK'}]}
-      : renderTemplate(textModel.requestTemplate || {model:'{{model}}',prompt:'{{prompt}}'}, {model:textModel.id,prompt:'只回复 OK',references:[],images:[],videos:[],audios:[],texts:[],params:{}});
-    await fetchJson(url,{method:textModel.method||'POST',headers:providerHeaders(provider),body:JSON.stringify(body),timeoutMs:45000,provider});
-    return {ok:true,endpoint:route,modelId:textModel.id,mode:'model-request'};
+  if(provider.testPath){
+    const data=await fetchJson(joinUrl(provider.baseUrl,provider.testPath),{method:'GET',headers:providerHeaders(provider),timeoutMs:15000,provider});
+    return {ok:true,verified:true,endpoint:provider.testPath,mode:'test-path',preview:JSON.stringify(data).slice(0,300)};
   }
-  // If there is no text model, verify the exact Authorization header against the model-list endpoint.
-  const discovered = await fetchModelsFromProvider(provider);
-  return {ok:true,endpoint:discovered.endpoint,modelCount:discovered.models.length,mode:'model-list'};
+  try{
+    const discovered=await fetchModelsFromProvider(provider);
+    return {ok:true,verified:true,endpoint:discovered.endpoint,modelCount:discovered.models.length,mode:'model-list'};
+  }catch(error){
+    return {ok:true,verified:false,mode:'unverified',warning:`当前供应商没有可安全用于鉴权验证的模型列表/测试接口。为避免调用图片或视频生成接口产生费用，本次不发送生成请求。${error.message}`};
+  }
 }
 
 async function diagnoseProvider(input){
   const existing=input.id?loadProvidersRaw().find(p=>p.id===input.id):null;
   const provider=normalizeProvider(input,existing||null);
-  const report={ok:true,connection:{ok:false},auth:{ok:false},models:{total:0,ready:0,pending:0,byType:{text:0,image:0,video:0,audio:0}},warnings:[]};
-  try{const r=await testProviderConfig(input);report.connection={ok:true,endpoint:r.endpoint||'',modelCount:r.modelCount||0,warning:r.warning||''};if(r.warning)report.warnings.push(r.warning)}catch(e){report.ok=false;report.connection={ok:false,error:e.message}}
-  try{const r=await testProviderAuth(input);report.auth={ok:true,endpoint:r.endpoint||'',modelId:r.modelId||'',mode:r.mode||''}}catch(e){report.ok=false;report.auth={ok:false,error:e.message}}
-  const models=(provider.models||[]).filter(m=>m.enabled!==false);report.models.total=models.length;for(const m of models){const info=adapterInfo(provider,m);report.models.byType[m.modality]=(report.models.byType[m.modality]||0)+1;if(info.ready)report.models.ready++;else{report.models.pending++;report.warnings.push(`模型 ${m.name||m.id} 尚未完成适配`)}}
-  if(!models.length)report.warnings.push('还没有选择要使用的模型');
+  const report={ok:true,connection:{ok:false},auth:{ok:false,verified:false},models:{discoveryOk:false,total:0,ready:0,pending:0,byType:{text:0,image:0,video:0,audio:0}},warnings:[]};
+  try{const r=await testProviderConfig(input);report.connection={ok:true,endpoint:r.endpoint||'',httpStatus:r.httpStatus||0,warning:r.warning||''};if(r.warning)report.warnings.push(r.warning)}catch(e){report.ok=false;report.connection={ok:false,error:e.message}}
+  try{const r=await testProviderAuth(input);report.auth={ok:true,verified:r.verified!==false,endpoint:r.endpoint||'',modelId:r.modelId||'',mode:r.mode||'',warning:r.warning||''};if(r.warning)report.warnings.push(r.warning)}catch(e){report.ok=false;report.auth={ok:false,verified:false,error:e.message}}
+  try{const d=await fetchModelsFromProvider(provider);report.models.discoveryOk=true;report.models.discovered=d.models.length;report.models.endpoint=d.endpoint||'';report.models.suggestedProtocol=d.suggestedProtocol||''}catch(e){report.models.discoveryError=e.message;report.warnings.push('模型发现：'+e.message)}
+  const models=(provider.models||[]).filter(m=>m.enabled!==false);report.models.total=models.length;
+  for(const m of models){const info=adapterInfo(provider,m);report.models.byType[m.modality]=(report.models.byType[m.modality]||0)+1;if(info.ready)report.models.ready++;else{report.models.pending++;report.warnings.push(`模型 ${m.name||m.id} 尚未完成适配`)}}
+  if(!models.length)report.warnings.push('当前尚未保存模型；供应商仍可保存，之后可拉取或手动添加模型。');
   return report;
 }
 
