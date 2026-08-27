@@ -98,6 +98,7 @@ function isPrivateIp(ip){
 async function validateOutboundUrl(urlText,provider={}){
   let u;try{u=new URL(String(urlText))}catch{throw new Error('供应商 URL 无效')}
   if(!['http:','https:'].includes(u.protocol))throw new Error('仅允许 HTTP/HTTPS 供应商');
+  if(u.username||u.password)throw new Error('上游 URL 不允许包含用户名或密码');
   const host=u.hostname.toLowerCase();
   if(provider.allowPrivateHosts)return u.toString();
   if(host==='localhost'||host.endsWith('.localhost'))throw new Error('安全策略阻止访问本机地址；如确需连接本地 ComfyUI，请在供应商高级设置开启「允许私有网络」');
@@ -105,14 +106,22 @@ async function validateOutboundUrl(urlText,provider={}){
   if(!ips.length||ips.some(x=>isPrivateIp(x.address)))throw new Error('安全策略阻止访问私有/保留网络地址');
   return u.toString();
 }
-async function fetchSafe(url,options={},provider={}){
+async function fetchSafe(url,options={},provider={},policy={}){
+  const sameOrigin=policy.sameOrigin!==false&&Boolean(provider?.baseUrl);
+  let baseOrigin='';
+  if(sameOrigin){
+    const base=await validateOutboundUrl(provider.baseUrl,provider);baseOrigin=new URL(base).origin;
+  }
   let current=await validateOutboundUrl(url,provider);
+  if(sameOrigin&&new URL(current).origin!==baseOrigin)throw new Error('上游请求必须与 API Base URL 同源');
   for(let i=0;i<4;i++){
     const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),options.timeoutMs||60000);
     try{
       const res=await fetch(current,{...options,signal:controller.signal,redirect:'manual',timeoutMs:undefined});
       if([301,302,303,307,308].includes(res.status)&&res.headers.get('location')){
-        const next=new URL(res.headers.get('location'),current).toString();current=await validateOutboundUrl(next,provider);continue;
+        const next=new URL(res.headers.get('location'),current).toString();const validated=await validateOutboundUrl(next,provider);
+        if(sameOrigin&&new URL(validated).origin!==baseOrigin)throw new Error('上游重定向到不同域名，已阻止以避免认证信息泄露');
+        current=validated;continue;
       }
       return res;
     }finally{clearTimeout(timeout)}
@@ -354,11 +363,28 @@ function normalizeApiKeyValue(value, authScheme='Bearer', authHeader='Authorizat
   if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) key = key.slice(1,-1).trim();
   return key;
 }
+const SENSITIVE_HEADER_NAMES = new Set([
+  'authorization','proxy-authorization','x-api-key','api-key','apikey','cookie','set-cookie',
+  'x-auth-token','x-access-token','x-secret-key','cf-access-client-secret'
+]);
+function isSensitiveHeaderName(name){
+  const key=String(name||'').trim().toLowerCase();
+  return SENSITIVE_HEADER_NAMES.has(key)||/(^|[-_])(authorization|secret|token)([-_]|$)/i.test(key);
+}
+function sanitizeHeaderObject(headers){
+  const out={};
+  if(!headers||typeof headers!=='object'||Array.isArray(headers))return out;
+  for(const [key,value] of Object.entries(headers))if(!isSensitiveHeaderName(key))out[key]=value;
+  return out;
+}
 function publicProvider(p) {
-  const { apiKeyEncrypted, ...rest } = p;
+  const { apiKeyEncrypted, apiKey, ...rest } = p;
   const decrypted = apiKeyEncrypted ? decryptSecret(apiKeyEncrypted) : '';
+  const models=Array.isArray(rest.models)?rest.models.map(m=>({...m,extraHeaders:sanitizeHeaderObject(m?.extraHeaders)})):rest.models;
   return {
     ...rest,
+    defaultHeaders:sanitizeHeaderObject(rest.defaultHeaders),
+    models,
     hasApiKey: Boolean(apiKeyEncrypted),
     apiKeyReadable: Boolean(!apiKeyEncrypted || decrypted),
     apiKeyHint: decrypted ? `••••${decrypted.slice(-4)}` : ''
@@ -404,7 +430,7 @@ function normalizeProvider(input, existing) {
     baseUrl: String(input.baseUrl || existing?.baseUrl || '').replace(/\/+$/, ''),
     authHeader: String(input.authHeader || existing?.authHeader || 'Authorization'),
     authScheme: String(input.authScheme ?? existing?.authScheme ?? 'Bearer'),
-    defaultHeaders: typeof input.defaultHeaders === 'object' && input.defaultHeaders ? input.defaultHeaders : (existing?.defaultHeaders || {}),
+    defaultHeaders: sanitizeHeaderObject(typeof input.defaultHeaders === 'object' && input.defaultHeaders ? input.defaultHeaders : (existing?.defaultHeaders || {})),
     testPath: String(input.testPath ?? existing?.testPath ?? ''),
     modelsPath: String(input.modelsPath ?? existing?.modelsPath ?? ''),
     referenceTransport: ProviderAdapterContract.normalizeReferenceTransport(input.referenceTransport ?? existing?.referenceTransport ?? 'auto',{cloud:false}),
@@ -608,7 +634,7 @@ function normalizeVideoRequestBody(body) {
 }
 
 function providerHeaders(provider, extra={}) {
-  const headers = { 'Content-Type': 'application/json', ...(provider.defaultHeaders || {}), ...extra };
+  const headers = { 'Content-Type': 'application/json', ...sanitizeHeaderObject(provider.defaultHeaders || {}), ...sanitizeHeaderObject(extra) };
   const encrypted = String(provider.apiKeyEncrypted || '');
   let key = encrypted ? decryptSecret(encrypted) : '';
   if (encrypted && !key) {
@@ -674,7 +700,7 @@ async function materializeRemoteOutput(output,provider){
   const value=String(output.value||'');if(value.startsWith('/media/')||value.startsWith('data:'))return output;
   if(!/^https?:\/\//i.test(value))return output;
   try{
-    const res=await fetchSafe(value,{method:'GET',headers:{},timeoutMs:120000},provider);if(!res.ok)return output;
+    const res=await fetchSafe(value,{method:'GET',headers:{},timeoutMs:120000},provider,{sameOrigin:false});if(!res.ok)return output;
     const len=Number(res.headers.get('content-length')||0);if(len>MAX_UPLOAD_BYTES)return output;
     const buf=Buffer.from(await res.arrayBuffer());if(buf.length>MAX_UPLOAD_BYTES)return output;
     const ct=String(res.headers.get('content-type')||'').split(';')[0];const ext=safeExt(new URL(value).pathname,ct);const file=outFile(ext);fs.writeFileSync(file,buf);return {...output,sourceUrl:value,value:mediaUrl(file)};
