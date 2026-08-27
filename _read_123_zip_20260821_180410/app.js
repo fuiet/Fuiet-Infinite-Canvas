@@ -1292,6 +1292,25 @@
     const source=state.nodes.find(n=>n.id===sourceId),target=state.nodes.find(n=>n.id===targetId),check=edgeCompatibility(source,target);if(!check.ok){cleanupConnectionDrag(false);render();showToast(check.reason);return false}
     snapshot('创建连线');const edge=createEdge(sourceId,targetId,{type:'asset',role:check.role,silent:true});cleanupConnectionDrag(false);saveState();render();showToast(`已连接 · ${edgeRoleLabel(edge.role)}`);return true;
   }
+  function finishConnectionPointerUp(e){
+    if(!connectingFrom)return false;
+    if(connectingPointerId!=null&&e.pointerId!==connectingPointerId)return false;
+    const clientX=Number(e.clientX),clientY=Number(e.clientY),from=connectingFrom;
+    const target=findConnectionTarget(clientX,clientY);
+    if(target){completeConnection(target.id);return true}
+    const vr=viewport.getBoundingClientRect();
+    const moved=connectingStartScreen?Math.hypot(clientX-connectingStartScreen.x,clientY-connectingStartScreen.y):999;
+    const onCanvas=clientX>=vr.left&&clientX<=vr.right&&clientY>=vr.top&&clientY<=vr.bottom;
+    const hit=document.elementFromPoint(clientX,clientY);
+    const shouldQuickAdd=onCanvas&&moved>10&&!hit?.closest?.('.node');
+    const dropPoint=shouldQuickAdd?screenToWorld(clientX,clientY):null;
+    cleanupConnectionDrag(true);
+    if(shouldQuickAdd){
+      window.__quickAddOpenedAt=Date.now();
+      requestAnimationFrame(()=>showQuickAdd(clientX,clientY,dropPoint,from));
+    }
+    return true;
+  }
 
   function edgePathData(e){const a=state.nodes.find(n=>n.id===e.source),b=state.nodes.find(n=>n.id===e.target);if(!a||!b)return null;const ga=collapsedGroupForNode(e.source),gb=collapsedGroupForNode(e.target);if(ga&&gb&&ga.id===gb.id)return null;const from=nodePortWorldPoint(e.source,'out'),to=nodePortWorldPoint(e.target,'in'),x1=from.x,y1=from.y,x2=to.x,y2=to.y,c=Math.max(80,Math.abs(x2-x1)*.45);return{x1,y1,x2,y2,d:`M ${x1} ${y1} C ${x1+c} ${y1}, ${x2-c} ${y2}, ${x2} ${y2}`}}
   function edgeWorkflowClass(e){const st=workflowNodeStatus(e.target).status;if(st==='running')return ' wf-running';if(st==='failed')return ' wf-failed';if(['succeeded','cached','frozen'].includes(st))return ' wf-succeeded';if(st==='skipped')return ' wf-skipped';return ''}
@@ -2778,20 +2797,20 @@
     if(connectingPointerId!=null&&e.pointerId!==connectingPointerId)return;
     e.preventDefault();autoPanForPointer(e.clientX,e.clientY);drawTempEdge(e.clientX,e.clientY);
   },{passive:false});
+  // Blank connection releases must not rely only on bubble-phase pointerup.
+  window.addEventListener('pointerup',e=>{
+    if(!connectingFrom)return;
+    if(connectingPointerId!=null&&e.pointerId!==connectingPointerId)return;
+    const release={pointerId:e.pointerId,clientX:e.clientX,clientY:e.clientY};
+    queueMicrotask(()=>{if(connectingFrom)finishConnectionPointerUp(release)});
+  },true);
+
   window.addEventListener('pointerup',e=>{
     if(resizingNode&&(resizingNode.pointerId==null||e.pointerId===resizingNode.pointerId)){finishNodeResize();return;}
     if(groupDragging&&(groupDragging.pointerId==null||e.pointerId===groupDragging.pointerId)){finishGroupDrag();return;}
     if(dragging&&(dragging.pointerId==null||e.pointerId===dragging.pointerId)){finishNodeDrag();return;}
     if(edgeReconnect&&(edgeReconnect.pointerId==null||e.pointerId===edgeReconnect.pointerId)){const target=findReconnectTarget(e.clientX,e.clientY,edgeReconnect.end);if(target){completeEdgeReconnect(target.id);return}cleanupEdgeReconnect();return;}
-    if(!connectingFrom)return;
-    if(connectingPointerId!=null&&e.pointerId!==connectingPointerId)return;
-    const from=connectingFrom;const target=findConnectionTarget(e.clientX,e.clientY);
-    if(target){completeConnection(target.id);return;}
-    const vr=viewport.getBoundingClientRect();const moved=connectingStartScreen?Math.hypot(e.clientX-connectingStartScreen.x,e.clientY-connectingStartScreen.y):999;
-    const onCanvas=e.clientX>=vr.left&&e.clientX<=vr.right&&e.clientY>=vr.top&&e.clientY<=vr.bottom;
-    if(onCanvas&&moved>10&&!document.elementFromPoint(e.clientX,e.clientY)?.closest?.('.node')){
-      cleanupConnectionDrag(false);window.__quickAddOpenedAt=Date.now();showQuickAdd(e.clientX,e.clientY,screenToWorld(e.clientX,e.clientY),from);
-    }else cleanupConnectionDrag();
+    if(finishConnectionPointerUp(e))return;
   });
   window.addEventListener('pointercancel',e=>{
     if(groupDragging&&(groupDragging.pointerId==null||e.pointerId===groupDragging.pointerId))finishGroupDrag();
