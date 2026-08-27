@@ -15,15 +15,19 @@ CANVAS_CLAIM_UNOWNED = "0"
 CANVAS_ALLOW_UNAUTHENTICATED_OWNER = "0"
 CANVAS_AUTO_SINGLE_SUPABASE_OWNER = "0"
 
-# Configure secrets / environment values in Cloudflare Pages/Workers settings, not in Git:
-# PROVIDER_SECRET_KEY                 # still required to encrypt provider API keys
-# SUPABASE_URL                       # optional while developing the web preview
-# SUPABASE_SERVICE_ROLE_KEY          # optional while developing the web preview
+# Optional environment values while developing the web preview:
+# PROVIDER_SECRET_KEY                 # optional in desktop mode; if absent, the app supplies its desktop fallback internally
+# SUPABASE_URL
+# SUPABASE_SERVICE_ROLE_KEY
 # CANVAS_PUBLIC_BASE_URL=https://fuiet-infinite-canvas.pages.dev
 #
 # CANVAS_ADMIN_PASSWORD, CANVAS_OWNER_ID and SUPABASE_ANON_KEY are not required in
 # desktop/single-user mode. Even if old values remain in Cloudflare, the desktop-mode
 # entry point ignores them for normal application/provider API access.
+#
+# The built-in desktop provider secret exists only so provider API keys are not stored
+# as plaintext and users do not need to configure a server secret. A future packaged
+# desktop build can replace it with a per-device secret/keychain without changing the API.
 #
 # If a future hosted multi-user edition is built, set CANVAS_DESKTOP_SINGLE_USER=0,
 # CANVAS_ENFORCE_OWNER=1 and configure a real authentication/owner strategy there.
