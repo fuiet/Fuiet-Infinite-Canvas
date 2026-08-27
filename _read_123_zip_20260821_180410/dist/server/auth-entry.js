@@ -2,6 +2,7 @@ import finalWorker from './final-entry.js';
 
 const COOKIE_NAME = 'canvas_admin_session_v2';
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+const DESKTOP_PROVIDER_SECRET = 'canvas-desktop-single-user-provider-key-v1';
 
 function json(body, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(body), {
@@ -22,6 +23,10 @@ function desktopSingleUser(env) {
 function desktopEnv(env) {
   return {
     ...env,
+    // Desktop/single-user builds must work out of the box without asking users
+    // to configure server secrets. Keep an explicitly configured secret when
+    // present; otherwise use the desktop-only fallback for provider-key encryption.
+    PROVIDER_SECRET_KEY: String(env?.PROVIDER_SECRET_KEY || '').trim() || DESKTOP_PROVIDER_SECRET,
     CANVAS_ADMIN_PASSWORD: '',
     CANVAS_ENFORCE_OWNER: '0',
     CANVAS_OWNER_ID: '',
