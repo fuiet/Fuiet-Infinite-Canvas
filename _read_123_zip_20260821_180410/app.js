@@ -2924,7 +2924,7 @@
   ]}
   function runPaletteNode(type,p,fromNodeId){const created=addNode(type,p,true);if(created&&['image','video','audio','script'].includes(created.type))expandedNodeId=created.id;else if(created?.type==='text')expandedNodeId=null;if(fromNodeId&&created){const edge=createEdge(fromNodeId,created.id,{type:'asset',silent:true});if(!edge)showToast('这个节点组合无法连接')}saveState();render();return created}
   function showCommandPalette(x,y,p,{fromNodeId=null,initialQuery=''}={}){
-    const source=!fullMenu&&fromNodeId&&state.nodes.find(n=>n.id===fromNodeId),allowed=new Set(compatibleDownstreamTypes(source));let active=0,rows=[];
+    const source=fromNodeId&&state.nodes.find(n=>n.id===fromNodeId),allowed=new Set(compatibleDownstreamTypes(source));let active=0,rows=[];
     setDockModeMenuOpen(false);
     contextMenu.style.left=Math.max(8,Math.min(x,window.innerWidth-360))+'px';contextMenu.style.top=Math.max(8,Math.min(y,window.innerHeight-430))+'px';contextMenu.classList.add('quick-add-menu','command-palette');contextMenu.classList.remove('hidden');contextMenu.innerHTML=`<div class="command-palette-head"><b>${source?`从「${escapeHtml(source.title||labelForType(source.type))}」继续`:'Command Palette'}</b><span>${source?'仅显示兼容节点':'Tab / ⌘K'}</span></div><input id="commandPaletteInput" class="command-palette-input" placeholder="搜索节点或命令…" value="${escapeAttr(initialQuery)}"><div class="command-palette-results" id="commandPaletteResults"></div>${!source?'<div class="command-palette-foot">提示：拖动节点输出端口到空白处，也会打开这个面板并自动过滤兼容节点。</div>':''}`;
     const input=$('#commandPaletteInput',contextMenu),results=$('#commandPaletteResults',contextMenu);
@@ -2934,7 +2934,7 @@
     input?.addEventListener('input',()=>{active=0;drawResults()});input?.addEventListener('keydown',e=>{if(e.key==='ArrowDown'){e.preventDefault();active=Math.min(rows.length-1,active+1);drawResults()}else if(e.key==='ArrowUp'){e.preventDefault();active=Math.max(0,active-1);drawResults()}else if(e.key==='Enter'){e.preventDefault();execute(rows[active])}else if(e.key==='Escape'){e.preventDefault();hideMenus()}});drawResults();requestAnimationFrame(()=>input?.focus());
   }
   function showQuickAdd(x,y,p,fromNodeId=null,{preferAboveToolbar=false,fullMenu=false}={}){
-    const source=fromNodeId&&state.nodes.find(n=>n.id===fromNodeId),allowed=new Set(compatibleDownstreamTypes(source));
+    const source=(!fullMenu&&fromNodeId)?state.nodes.find(n=>n.id===fromNodeId):null,allowed=new Set(compatibleDownstreamTypes(source));
     setDockModeMenuOpen(false);
     const nodeItems=NODE_PALETTE_ITEMS.filter(it=>!source||allowed.has(it.baseType||it.type));
     const resourceItems=source?[]:[
