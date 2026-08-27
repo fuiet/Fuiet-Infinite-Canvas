@@ -1,5 +1,5 @@
-/* Canvas Studio · Bottom interaction stability v2
- * Gives the persistent bottom dock one deterministic owner per action and
+/* Canvas Studio · Bottom interaction stability v3
+ * Gives the persistent bottom dock one deterministic activation path and
  * hardens connection pointer cleanup.
  */
 (()=>{
@@ -10,17 +10,13 @@ const viewport=document.querySelector('#canvasViewport');
 if(!dock||!viewport)return;
 
 /*
- * Why this exists:
- * - app.js installs direct button.onclick handlers.
- * - bottom-dock-v3 installs a delegated dock click handler.
- * - bottom-dock-v4 only redraws icons/styles.
- * When both app.js and v3 handle the same trusted click, panels can open and
- * immediately be replaced/closed. Clone every dock button once to remove old
- * button-local listeners, then explicitly choose exactly one owner.
+ * app.js installs button.onclick handlers while bottom-dock-v3 installs a
+ * capture-phase delegated click handler. Clone every button once to remove any
+ * late button-local listeners, preserve the app handler, then route every real
+ * user activation through one document-level dispatcher.
  */
-const APP_ONLY_ACTIONS=new Set(['add','mode','layout','workflow','asset','help']);
-const V3_ONLY_ACTIONS=new Set(['shortcuts']);
-const HISTORY_ACTION='history';
+const APP_ACTIONS=new Set(['add','mode','layout','workflow','asset','help']);
+const V3_ACTIONS=new Set(['history','shortcuts']);
 
 function replaceDockButton(action){
   const old=dock.querySelector(`[data-dock-action="${action}"]`);
@@ -29,51 +25,123 @@ function replaceDockButton(action){
   const next=old.cloneNode(true);
   old.replaceWith(next);
 
-  if(APP_ONLY_ACTIONS.has(action)){
+  if(APP_ACTIONS.has(action)){
     next.onclick=e=>{
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
+      e?.preventDefault?.();
+      e?.stopPropagation?.();
+      e?.stopImmediatePropagation?.();
       if(appHandler)appHandler.call(next,e);
     };
-    return next;
-  }
-
-  if(action===HISTORY_ACTION){
+  }else if(action==='history'){
     /*
-     * Trusted user click belongs to bottom-dock-v3 so it can open the upgraded
-     * history modal. v3 then performs one synthetic btn.click() while
-     * bypassHistoryClick=true; that synthetic click must reach app.js exactly
-     * once so the underlying history drawer is rendered before decoration.
+     * bottom-dock-v3 opens the upgraded history UI, then performs one internal
+     * untrusted click with bypassHistoryClick=true so app.js renders the base
+     * history drawer. Only that internal click is allowed to call app.js.
      */
     next.onclick=e=>{
-      if(e.isTrusted)return;
+      if(e?.isTrusted)return;
       if(appHandler)appHandler.call(next,e);
     };
-    return next;
-  }
-
-  if(V3_ONLY_ACTIONS.has(action)){
-    /* No button-local handler: the trusted click bubbles to v3 exactly once. */
+  }else{
     next.onclick=null;
-    return next;
   }
-
   return next;
 }
 
 ['add','mode','layout','workflow','asset','history','shortcuts','help'].forEach(replaceDockButton);
 
+function quietEvent(){
+  return {
+    preventDefault(){},
+    stopPropagation(){},
+    stopImmediatePropagation(){},
+    isTrusted:false,
+    target:null,
+    currentTarget:null
+  };
+}
+
+function invokeAppAction(action){
+  const btn=dock.querySelector(`[data-dock-action="${action}"]`);
+  if(!btn||typeof btn.onclick!=='function')return false;
+  try{btn.onclick.call(btn,quietEvent());return true}catch(err){console.error('[bottom-dock] action failed',action,err);return false}
+}
+
+function invokeV3Action(action){
+  const btn=dock.querySelector(`[data-dock-action="${action}"]`);
+  if(!btn)return false;
+  /* Untrusted programmatic clicks bypass this central user dispatcher and are
+   * intentionally consumed by bottom-dock-v3's existing capture handler. */
+  queueMicrotask(()=>btn.click());
+  return true;
+}
+
+function activate(action){
+  if(APP_ACTIONS.has(action))return invokeAppAction(action);
+  if(V3_ACTIONS.has(action))return invokeV3Action(action);
+  return false;
+}
+
 /*
- * Keep all dock pointer gestures out of canvas selection / pan handling.
- * This also prevents a pointerdown on an icon from changing canvas state before
- * the corresponding click handler runs.
+ * Pointer-up is the primary mouse/touch activation. It is more deterministic
+ * than relying on a later synthetic click, which can be dropped when overlays,
+ * focus changes or DOM replacement happen between pointerdown and click.
+ * The subsequent trusted click is swallowed so every physical press executes
+ * exactly once. Keyboard-generated trusted clicks still work as a fallback.
  */
-dock.addEventListener('pointerdown',e=>{
-  if(e.target.closest('[data-dock-action]'))e.stopPropagation();
+let press=null;
+let suppressClick={action:'',until:0};
+let lastActivation={action:'',at:0};
+
+function dockButtonFromEvent(e){
+  const btn=e.target?.closest?.('#bottomDock [data-dock-action]');
+  return btn&&dock.contains(btn)?btn:null;
+}
+function runUserActivation(btn,e){
+  const action=btn?.dataset?.dockAction;if(!action)return;
+  const now=performance.now();
+  if(lastActivation.action===action&&now-lastActivation.at<70)return;
+  lastActivation={action,at:now};
+  e?.preventDefault?.();
+  e?.stopPropagation?.();
+  e?.stopImmediatePropagation?.();
+  activate(action);
+}
+
+document.addEventListener('pointerdown',e=>{
+  if(!e.isTrusted||e.button!==0)return;
+  const btn=dockButtonFromEvent(e);if(!btn)return;
+  press={pointerId:e.pointerId,action:btn.dataset.dockAction,btn,x:e.clientX,y:e.clientY};
+  e.stopPropagation();
+  e.stopImmediatePropagation();
 },true);
-dock.addEventListener('pointerup',e=>{
-  if(e.target.closest('[data-dock-action]'))e.stopPropagation();
+
+document.addEventListener('pointerup',e=>{
+  if(!e.isTrusted||!press||e.pointerId!==press.pointerId)return;
+  const p=press;press=null;
+  const btn=dockButtonFromEvent(e);
+  const moved=Math.hypot(e.clientX-p.x,e.clientY-p.y);
+  if(!btn||btn!==p.btn||moved>12)return;
+  suppressClick={action:p.action,until:performance.now()+420};
+  runUserActivation(btn,e);
+},true);
+
+document.addEventListener('pointercancel',e=>{
+  if(press&&(press.pointerId==null||press.pointerId===e.pointerId))press=null;
+},true);
+
+/* Central click fallback for keyboard activation and browsers that do not expose
+ * pointer events in the expected sequence. Synthetic internal clicks are left
+ * alone so bottom-dock-v3 can run its controlled history/shortcut flow. */
+document.addEventListener('click',e=>{
+  if(!e.isTrusted)return;
+  const btn=dockButtonFromEvent(e);if(!btn)return;
+  const action=btn.dataset.dockAction;
+  e.preventDefault();
+  e.stopPropagation();
+  e.stopImmediatePropagation();
+  if(suppressClick.action===action&&performance.now()<suppressClick.until)return;
+  runUserActivation(btn,e);
 },true);
 
 /*
@@ -151,10 +219,11 @@ window.addEventListener('pointercancel',()=>{
   connectionMoveFrameOpen=true;
 },true);
 window.addEventListener('blur',()=>{
+  press=null;
   if(connectionActive())dispatchConnectionCancel();
 },{capture:true});
 document.addEventListener('visibilitychange',()=>{
-  if(document.hidden&&connectionActive())dispatchConnectionCancel();
+  if(document.hidden){press=null;if(connectionActive())dispatchConnectionCancel()}
 });
 document.addEventListener('lostpointercapture',()=>{
   if(connectionActive())dispatchConnectionCancel();
