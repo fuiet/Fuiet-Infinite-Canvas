@@ -120,11 +120,15 @@ function placePopup(pop,anchor){
 }
 function openPresetMenu(cat,anchor){
   closeFloating();const meta=PRESETS[cat];if(!meta)return;
-  const pop=document.createElement('div');pop.className='image-generator-popover image-preset-popover';
+  const pop=document.createElement('div');pop.className='image-generator-popover image-preset-popover';pop.dataset.presetCat=cat;
   pop.innerHTML=`<div class="image-pop-title">${esc(meta.label)}</div><div class="image-preset-options">${meta.items.map((it,i)=>`<button type="button" data-preset-index="${i}"><b>${esc(it[0])}</b><span>${esc(it[1])}</span></button>`).join('')}</div>`;
   pop.addEventListener('pointerdown',e=>e.stopPropagation());
   pop.querySelectorAll('[data-preset-index]').forEach(b=>b.onclick=()=>{setPreset(cat,meta.items[Number(b.dataset.presetIndex)]);closeFloating()});
   placePopup(pop,anchor);
+}
+function togglePresetMenu(cat,anchor){
+  if(floating?.classList.contains('image-preset-popover')&&floating.dataset.presetCat===cat){closeFloating();return}
+  openPresetMenu(cat,anchor);
 }
 function settingButtons(values,current,attr){
   return values.map(x=>`<button type="button" data-${attr}="${esc(x.value)}" class="${String(x.value)===String(current)?'active':''}">${esc(x.label)}</button>`).join('');
@@ -146,6 +150,10 @@ function openSettings(anchor){
   pop.querySelectorAll('[data-count-value]').forEach(b=>b.onclick=()=>{setNativeSelect('countSelect',b.dataset.countValue);openSettings(anchor)});
   placePopup(pop,anchor);
 }
+function toggleSettings(anchor){
+  if(floating?.classList.contains('image-settings-popover')){closeFloating();return}
+  openSettings(anchor);
+}
 function normalizeReferenceRow(root){
   const top=root.querySelector('.image-gen-top');if(!top)return;
   const image=top.querySelector('[data-image-ref-slot="image_reference"]');
@@ -163,7 +171,7 @@ function buildPresetRow(root){
   const row=document.createElement('div');row.className='image-preset-row';
   row.innerHTML=Object.entries(PRESETS).map(([key,v])=>`<button type="button" data-image-preset-cat="${key}"><span class="image-preset-dot"></span><span class="image-preset-label">${esc(v.label)}</span><i>⌄</i></button>`).join('');
   root.querySelector('.image-gen-top')?.after(row);
-  row.querySelectorAll('[data-image-preset-cat]').forEach(b=>b.onclick=e=>{e.preventDefault();e.stopPropagation();openPresetMenu(b.dataset.imagePresetCat,b)});
+  row.querySelectorAll('[data-image-preset-cat]').forEach(b=>b.onclick=e=>{e.preventDefault();e.stopPropagation();togglePresetMenu(b.dataset.imagePresetCat,b)});
   syncPresetButtons();
 }
 function buildSettingsControl(root){
@@ -171,7 +179,7 @@ function buildSettingsControl(root){
   const model=controls.querySelector('#modelPickerBtn');
   const summary=document.createElement('button');summary.type='button';summary.id='imageSettingsSummary';summary.className='image-settings-summary';summary.innerHTML='<span class="image-settings-icon">▭</span><b id="imageSettingsSummaryText"></b><i>⌄</i>';
   if(model)model.after(summary);else controls.prepend(summary);
-  summary.onclick=e=>{e.preventDefault();e.stopPropagation();openSettings(summary)};
+  summary.onclick=e=>{e.preventDefault();e.stopPropagation();toggleSettings(summary)};
   ['ratioSelect','resolutionSelect','countSelect'].forEach(id=>nativeSelect(id)?.classList.add('image-native-setting'));
   syncSummary();
 }
