@@ -1,0 +1,601 @@
+name: Apply provider API v2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-provider-api-v2.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Patch provider runtime
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re, json
+
+          root=Path('_read_123_zip_20260821_180410')
+
+          def read(rel): return (root/rel).read_text()
+          def write(rel,text): (root/rel).write_text(text)
+          def replace_once(rel,old,new):
+              p=root/rel; s=p.read_text()
+              if old not in s: raise SystemExit(f'missing exact snippet in {rel}: {old[:100]!r}')
+              if s.count(old)!=1: raise SystemExit(f'expected one occurrence in {rel}, found {s.count(old)}')
+              p.write_text(s.replace(old,new,1))
+          def replace_block(rel,start,end,new_block):
+              p=root/rel; s=p.read_text(); a=s.find(start)
+              if a<0: raise SystemExit(f'missing start marker in {rel}: {start}')
+              b=s.find(end,a+len(start))
+              if b<0: raise SystemExit(f'missing end marker in {rel}: {end}')
+              p.write_text(s[:a]+new_block.rstrip()+"\n\n"+s[b:])
+
+          contract=r'''/* Shared provider adapter contract.
+           * Loaded as a side-effect by both Node (require) and Cloudflare Worker (import).
+           * Keep this file free of Node-only and Worker-only APIs.
+           */
+          (()=>{
+          'use strict';
+          const SUCCESS=['completed','succeeded','success','done','finished'];
+          const FAILURE=['failed','error','canceled','cancelled'];
+          const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
+          const compact=o=>{const out={};for(const [k,v] of Object.entries(o||{}))if(v!==undefined&&v!==null&&v!=='')out[k]=v;return out};
+          const clamp=(v,min,max,fallback)=>{const n=Number(v);return Number.isFinite(n)?Math.max(min,Math.min(max,n)):fallback};
+          function normalizeReferenceTransport(value,{cloud=false}={}){
+            let v=String(value||'auto').trim().toLowerCase();
+            if(v==='base64')v='data-url';
+            if(v==='public-url')v='url';
+            if(v==='upload-endpoint')v='upload';
+            if(!v||v==='auto')return cloud?'data-url':'auto';
+            return ['data-url','url','upload'].includes(v)?v:(cloud?'data-url':'auto');
+          }
+          function inferAdapterKey(provider={},model={}){
+            const explicit=String(model.adapterKey||'auto').trim();
+            if(explicit&&explicit!=='auto')return explicit;
+            if(provider.protocol==='comfyui')return 'comfyui-workflow';
+            const mod=String(model.modality||'image');
+            if(provider.protocol==='openai-compatible'){
+              if(mod==='text'||mod==='script')return 'openai-chat';
+              if(mod==='image')return 'openai-image';
+              if(mod==='audio')return 'openai-audio-speech';
+            }
+            const route=String(model.createPath||model.operationRoutes?.generate?.createPath||'').toLowerCase();
+            if(/\/responses(?:$|\?)/.test(route))return 'openai-responses';
+            if(/\/chat\/completions(?:$|\?)/.test(route))return 'openai-chat';
+            if(/\/images\/generations(?:$|\?)/.test(route))return 'openai-image';
+            if(/\/audio\/speech(?:$|\?)/.test(route))return 'openai-audio-speech';
+            if(mod==='video'&&provider.videoProtocol==='standard-video-async-v1')return 'standard-video-async-v1';
+            if(route)return (model.responseMode==='async'||model.operationRoutes?.generate?.responseMode==='async')?'generic-async':'generic-sync';
+            return 'auto';
+          }
+          function adapterDefaults(key,nodeType){
+            if(key==='openai-chat')return{createPath:'/v1/chat/completions',method:'POST',responseMode:'sync',outputPath:'choices.0.message.content'};
+            if(key==='openai-responses')return{createPath:'/v1/responses',method:'POST',responseMode:'sync',outputPath:'output.0.content.0.text'};
+            if(key==='openai-image')return{createPath:'/v1/images/generations',method:'POST',responseMode:'sync',outputPath:'data.0.url'};
+            if(key==='openai-audio-speech')return{createPath:'/v1/audio/speech',method:'POST',responseMode:'sync',outputPath:''};
+            if(key==='comfyui-workflow')return{createPath:'/prompt',method:'POST',responseMode:'async',taskIdPath:'prompt_id',pollPath:'/history/{{taskId}}',pollMethod:'GET'};
+            if(key==='standard-video-async-v1')return{createPath:'/v1/video/generations',method:'POST',responseMode:'async',taskIdPath:'',pollPath:'/v1/video/generations/{{taskId}}',pollMethod:'GET',statusPath:'',progressPath:'',outputPath:'',successValues:SUCCESS,failureValues:FAILURE,pollIntervalMs:1500,timeoutMs:1200000};
+            if(key==='generic-async')return{createPath:'',method:'POST',responseMode:'async',pollMethod:'GET',successValues:SUCCESS,failureValues:FAILURE,pollIntervalMs:1500,timeoutMs:1200000};
+            if(key==='generic-sync')return{createPath:'',method:'POST',responseMode:'sync'};
+            return{createPath:'',method:'POST',responseMode:nodeType==='video'?'async':'sync',pollMethod:'GET',successValues:SUCCESS,failureValues:FAILURE,pollIntervalMs:1500,timeoutMs:1200000};
+          }
+          function resolveRoute(provider={},model={},nodeType='',operation='generate'){
+            const adapterKey=inferAdapterKey(provider,model);
+            const defaults=adapterDefaults(adapterKey,nodeType);
+            const providerVideo=nodeType==='video'?compact(provider.videoProtocolConfig||{}):{};
+            const direct=compact({
+              createPath:model.createPath,method:model.method,responseMode:model.responseMode,outputPath:model.outputPath,
+              taskIdPath:model.taskIdPath,pollPath:model.pollPath,pollMethod:model.pollMethod,pollBodyTemplate:model.pollBodyTemplate,
+              statusPath:model.statusPath,progressPath:model.progressPath,successValues:model.successValues,failureValues:model.failureValues,
+              pollIntervalMs:model.pollIntervalMs,timeoutMs:model.timeoutMs,requestTemplate:model.requestTemplate,
+              allowOutputWithoutTerminalStatus:model.allowOutputWithoutTerminalStatus
+            });
+            const op=compact(model.operationRoutes?.[operation]||model.operationRoutes?.generate||{});
+            const route={...defaults,...providerVideo,...direct,...op,adapterKey};
+            route.method=String(route.method||'POST').toUpperCase();
+            route.pollMethod=String(route.pollMethod||'GET').toUpperCase();
+            route.successValues=Array.isArray(route.successValues)&&route.successValues.length?route.successValues:SUCCESS;
+            route.failureValues=Array.isArray(route.failureValues)&&route.failureValues.length?route.failureValues:FAILURE;
+            route.pollIntervalMs=clamp(route.pollIntervalMs,500,30000,1500);
+            route.timeoutMs=clamp(route.timeoutMs,5000,3600000,1200000);
+            return route;
+          }
+          function detectModelListProtocol(data,endpoint=''){
+            const list=Array.isArray(data?.data)?data.data:null;
+            if(!list)return{protocol:'',confidence:0,reason:'response-not-openai-list'};
+            const objects=list.filter(x=>x&&typeof x==='object');
+            const withIds=objects.filter(x=>typeof x.id==='string'&&x.id.trim()).length;
+            const modelObjects=objects.filter(x=>String(x.object||'').toLowerCase()==='model').length;
+            if(data?.object==='list'&&withIds===objects.length&&objects.length>0)return{protocol:'openai-compatible',confidence:.99,reason:'object=list + data[id]'};
+            if(objects.length>0&&modelObjects/objects.length>=.8&&withIds/objects.length>=.8)return{protocol:'openai-compatible',confidence:.96,reason:'data[].object=model'};
+            return{protocol:'',confidence:0,reason:`generic-model-list:${endpoint||'unknown'}`};
+          }
+          globalThis.CanvasProviderAdapters=Object.freeze({SUCCESS,FAILURE,normalizeReferenceTransport,inferAdapterKey,adapterDefaults,resolveRoute,detectModelListProtocol});
+          })();
+          '''
+          write('provider-adapter-contract.js',contract)
+
+          # ---------- Node server ----------
+          replace_once('server.js',
+            "const { CanvasStore } = require('./store');\nconst execFileAsync = promisify(execFile);",
+            "const { CanvasStore } = require('./store');\nrequire('./provider-adapter-contract.js');\nconst ProviderAdapterContract = globalThis.CanvasProviderAdapters;\nconst execFileAsync = promisify(execFile);")
+
+          new_video_cfg=r'''function normalizeVideoProtocolConfig(input={}, existing={}) {
+            const raw=(input&&typeof input==='object')?input:{};
+            const old=(existing&&typeof existing==='object')?existing:{};
+            const arr=(v,fallback)=>Array.isArray(v)&&v.length?v.map(String).map(x=>x.trim()).filter(Boolean):fallback;
+            return {
+              createPath:String(raw.createPath ?? old.createPath ?? '/v1/video/generations').trim() || '/v1/video/generations',
+              createMethod:String(raw.createMethod ?? old.createMethod ?? raw.method ?? old.method ?? 'POST').trim().toUpperCase() || 'POST',
+              requestTemplate:(raw.requestTemplate&&typeof raw.requestTemplate==='object')?raw.requestTemplate:((old.requestTemplate&&typeof old.requestTemplate==='object')?old.requestTemplate:{}),
+              pollPath:String(raw.pollPath ?? old.pollPath ?? '/v1/video/generations/{{taskId}}').trim() || '/v1/video/generations/{{taskId}}',
+              pollMethod:String(raw.pollMethod ?? old.pollMethod ?? 'GET').trim().toUpperCase() || 'GET',
+              pollBodyTemplate:(raw.pollBodyTemplate&&typeof raw.pollBodyTemplate==='object')?raw.pollBodyTemplate:((old.pollBodyTemplate&&typeof old.pollBodyTemplate==='object')?old.pollBodyTemplate:null),
+              taskIdPath:String(raw.taskIdPath ?? old.taskIdPath ?? '').trim(),
+              statusPath:String(raw.statusPath ?? old.statusPath ?? '').trim(),
+              progressPath:String(raw.progressPath ?? old.progressPath ?? '').trim(),
+              outputPath:String(raw.outputPath ?? old.outputPath ?? '').trim(),
+              successValues:arr(raw.successValues ?? old.successValues,['succeeded','completed','success','done','finished']),
+              failureValues:arr(raw.failureValues ?? old.failureValues,['failed','error','cancelled','canceled']),
+              pollIntervalMs:Math.max(500,Number(raw.pollIntervalMs ?? old.pollIntervalMs ?? 1500)),
+              timeoutMs:Math.max(5000,Number(raw.timeoutMs ?? old.timeoutMs ?? 20*60*1000)),
+              allowOutputWithoutTerminalStatus:raw.allowOutputWithoutTerminalStatus === true || old.allowOutputWithoutTerminalStatus === true
+            };
+          }'''
+          replace_block('server.js','function normalizeVideoProtocolConfig(input={}, existing={}) {','function normalizeProvider(input, existing) {',new_video_cfg)
+
+          s=read('server.js')
+          s=s.replace("protocol: ['generic-rest', 'openai-compatible', 'comfyui'].includes(input.protocol) ? input.protocol : (existing?.protocol || 'generic-rest'),","protocol: ['auto','generic-rest', 'openai-compatible', 'comfyui'].includes(input.protocol) ? input.protocol : (existing?.protocol || 'auto'),")
+          s=s.replace("referenceTransport: ['auto','base64','public-url','upload-endpoint'].includes(input.referenceTransport) ? input.referenceTransport : (existing?.referenceTransport || 'auto'),","referenceTransport: ProviderAdapterContract.normalizeReferenceTransport(input.referenceTransport ?? existing?.referenceTransport ?? 'auto',{cloud:false}),")
+          # Stop auto-promoting every video vendor into one invented standard protocol.
+          s=re.sub(r"\n  const hasVideoModels = \(p\.models \|\| \[\]\)\.some\(m => String\(m\?\.modality \|\| ''\)\.trim\(\) === 'video'\);\n  if \(p\.protocol !== 'comfyui' && hasVideoModels && providerHasApiKey\(p\) && p\.videoProtocol === 'auto'\) \{\n    p\.videoProtocol = 'standard-video-async-v1';\n    p\.videoProtocolConfig = normalizeVideoProtocolConfig\(p\.videoProtocolConfig, existing\?\.videoProtocolConfig\);\n  \}","",s,count=1)
+          write('server.js',s)
+
+          new_infer=r'''function inferAdapterKey(provider,model){
+            return ProviderAdapterContract.inferAdapterKey(provider,model);
+          }'''
+          replace_block('server.js','function inferAdapterKey(provider,model){','function adapterInfo(provider,model)',new_infer)
+
+          # Canonical reference transport aliases while preserving Node's convenient auto behavior.
+          old="const file=mediaPathFromUrl(url);const transport=provider.referenceTransport||'auto';\n      if(transport==='upload-endpoint')url=await uploadReferenceToProvider(provider,file);\n      else if(transport==='public-url'||(transport==='auto'&&provider.publicBaseUrl)) {"
+          new="const file=mediaPathFromUrl(url);const transport=ProviderAdapterContract.normalizeReferenceTransport(provider.referenceTransport,{cloud:false});\n      if(transport==='upload')url=await uploadReferenceToProvider(provider,file);\n      else if(transport==='url'||(transport==='auto'&&provider.publicBaseUrl)) {"
+          if old not in read('server.js'): raise SystemExit('Node reference transport snippet not found')
+          replace_once('server.js',old,new)
+
+          new_detect=r'''function detectModelListProtocol(data,route=''){
+            return ProviderAdapterContract.detectModelListProtocol(data,route).protocol;
+          }'''
+          replace_block('server.js','function detectModelListProtocol(data,route=\'\'){','async function fetchModelsFromProvider(provider) {',new_detect)
+
+          new_test_config=r'''async function testProviderConfig(input) {
+            const existing = input.id ? loadProvidersRaw().find(p => p.id === input.id) : null;
+            const provider = normalizeProvider(input, existing || null);
+            if (!provider.baseUrl) throw new Error('Base URL 不能为空');
+            providerHeaders(provider);
+            const route = provider.testPath || (provider.protocol === 'comfyui' ? '/system_stats' : '');
+            const target = route ? joinUrl(provider.baseUrl, route) : provider.baseUrl;
+            const res = await fetchSafe(target,{method:'GET',headers:providerHeaders(provider),timeoutMs:15000},provider);
+            const raw=await res.text();
+            return {
+              ok:true, reachable:true, endpoint:route||'/', httpStatus:res.status,
+              preview:raw.slice(0,500),
+              warning:res.ok?'':`已连接到上游，但返回 HTTP ${res.status}。连接可达不等于鉴权或生成接口可用，请继续执行「测试鉴权」。`
+            };
+          }'''
+          replace_block('server.js','async function testProviderConfig(input) {','async function testProviderAuth(input) {',new_test_config)
+
+          new_test_auth=r'''async function testProviderAuth(input) {
+            const existing = input.id ? loadProvidersRaw().find(p => p.id === input.id) : null;
+            const provider = normalizeProvider(input, existing || null);
+            if (!provider.baseUrl) throw new Error('Base URL 不能为空');
+            providerHeaders(provider);
+            if(provider.testPath){
+              const data=await fetchJson(joinUrl(provider.baseUrl,provider.testPath),{method:'GET',headers:providerHeaders(provider),timeoutMs:15000,provider});
+              return {ok:true,verified:true,endpoint:provider.testPath,mode:'test-path',preview:JSON.stringify(data).slice(0,300)};
+            }
+            try{
+              const discovered=await fetchModelsFromProvider(provider);
+              return {ok:true,verified:true,endpoint:discovered.endpoint,modelCount:discovered.models.length,mode:'model-list'};
+            }catch(error){
+              return {ok:true,verified:false,mode:'unverified',warning:`当前供应商没有可安全用于鉴权验证的模型列表/测试接口。为避免调用图片或视频生成接口产生费用，本次不发送生成请求。${error.message}`};
+            }
+          }'''
+          replace_block('server.js','async function testProviderAuth(input) {','async function diagnoseProvider(input){',new_test_auth)
+
+          new_diagnose=r'''async function diagnoseProvider(input){
+            const existing=input.id?loadProvidersRaw().find(p=>p.id===input.id):null;
+            const provider=normalizeProvider(input,existing||null);
+            const report={ok:true,connection:{ok:false},auth:{ok:false,verified:false},models:{discoveryOk:false,total:0,ready:0,pending:0,byType:{text:0,image:0,video:0,audio:0}},warnings:[]};
+            try{const r=await testProviderConfig(input);report.connection={ok:true,endpoint:r.endpoint||'',httpStatus:r.httpStatus||0,warning:r.warning||''};if(r.warning)report.warnings.push(r.warning)}catch(e){report.ok=false;report.connection={ok:false,error:e.message}}
+            try{const r=await testProviderAuth(input);report.auth={ok:true,verified:r.verified!==false,endpoint:r.endpoint||'',modelId:r.modelId||'',mode:r.mode||'',warning:r.warning||''};if(r.warning)report.warnings.push(r.warning)}catch(e){report.ok=false;report.auth={ok:false,verified:false,error:e.message}}
+            try{const d=await fetchModelsFromProvider(provider);report.models.discoveryOk=true;report.models.discovered=d.models.length;report.models.endpoint=d.endpoint||'';report.models.suggestedProtocol=d.suggestedProtocol||''}catch(e){report.models.discoveryError=e.message;report.warnings.push('模型发现：'+e.message)}
+            const models=(provider.models||[]).filter(m=>m.enabled!==false);report.models.total=models.length;
+            for(const m of models){const info=adapterInfo(provider,m);report.models.byType[m.modality]=(report.models.byType[m.modality]||0)+1;if(info.ready)report.models.ready++;else{report.models.pending++;report.warnings.push(`模型 ${m.name||m.id} 尚未完成适配`)}}
+            if(!models.length)report.warnings.push('当前尚未保存模型；供应商仍可保存，之后可拉取或手动添加模型。');
+            return report;
+          }'''
+          replace_block('server.js','async function diagnoseProvider(input){','async function discoverProviderModels(input) {',new_diagnose)
+
+          # Generic async polling: support POST/PUT etc and JSON poll body templates.
+          replace_once('server.js',
+            "const pollPath=opConfig.pollPath||model.pollPath||'/v1/tasks/{{taskId}}';const pollUrl = joinUrl(provider.baseUrl, renderPathTemplate(pollPath, pollCtx));\n    const polled = await fetchJson(pollUrl, { method:'GET', headers:providerHeaders(provider), timeoutMs:60000, provider });",
+            "const pollPath=opConfig.pollPath||model.pollPath||'/v1/tasks/{{taskId}}';const pollUrl = joinUrl(provider.baseUrl, renderPathTemplate(pollPath, pollCtx));\n    const pollMethod=String(opConfig.pollMethod||model.pollMethod||'GET').toUpperCase();\n    const pollTemplate=opConfig.pollBodyTemplate??model.pollBodyTemplate;\n    const pollBody=pollTemplate&&typeof pollTemplate==='object'?renderTemplate(pollTemplate,pollCtx):undefined;\n    const polled = await fetchJson(pollUrl, { method:pollMethod, headers:providerHeaders(provider), body:['GET','HEAD'].includes(pollMethod)?undefined:(pollBody===undefined?undefined:JSON.stringify(pollBody)), timeoutMs:60000, provider });")
+
+          new_std_video=r'''async function executeStandardVideoAsync(task,provider,model,payload){
+            if(task.nodeType!=='video')throw new Error('标准异步视频协议只能用于视频模型');
+            const config=normalizeVideoProtocolConfig(provider.videoProtocolConfig,provider.videoProtocolConfig);
+            const createPath=String(config.createPath||'/v1/video/generations');
+            const createUrl=joinUrl(provider.baseUrl,createPath);
+            const ctx={model:model.id,modelId:model.id,prompt:payload.prompt||'',parameters:payload.parameters||{},params:payload.parameters||{},references:payload.references||[]};
+            const body=config.requestTemplate&&Object.keys(config.requestTemplate).length?renderTemplate(config.requestTemplate,ctx):standardVideoBody(model,payload);
+            updateTask(task,{progress:8});
+            let taskId='';
+            const resume=payload._upstream&&payload._upstream.protocol==='standard-video-async-v1'&&payload._upstream.modelId===model.id?payload._upstream:null;
+            if(resume?.id){taskId=String(resume.id);taskLog(task,`恢复标准视频任务：${taskId}`)}
+            else{
+              const createMethod=String(config.createMethod||'POST').toUpperCase();
+              taskLog(task,`标准异步视频：${createMethod} ${createPath}`);
+              const created=await fetchJson(createUrl,{method:createMethod,headers:providerHeaders(provider),body:['GET','HEAD'].includes(createMethod)?undefined:JSON.stringify(body),timeoutMs:Math.min(config.timeoutMs,120000),provider});
+              taskId=standardVideoTaskId(created,config);
+              if(!taskId)throw new Error('视频任务已提交，但响应中未找到任务 ID。可在供应商/模型高级配置中设置 taskIdPath。');
+              payload._upstream={protocol:'standard-video-async-v1',modelId:model.id,id:String(taskId),createdAt:new Date().toISOString()};
+              task.payload=payload;updateTask(task,{payload,progress:20});taskLog(task,`已持久化视频任务 ID：${taskId}`);
+            }
+            const started=Date.now();let checks=0;
+            const success=(config.successValues||[]).map(x=>String(x).toLowerCase()),failure=(config.failureValues||[]).map(x=>String(x).toLowerCase());
+            while(Date.now()-started<config.timeoutMs){
+              assertTaskActive(task);await new Promise(r=>setTimeout(r,config.pollIntervalMs));checks++;
+              const pollCtx={...ctx,taskId};
+              const pollPath=renderPathTemplate(config.pollPath||'/v1/video/generations/{{taskId}}',pollCtx);
+              const pollMethod=String(config.pollMethod||'GET').toUpperCase();
+              const pollBody=config.pollBodyTemplate&&typeof config.pollBodyTemplate==='object'?renderTemplate(config.pollBodyTemplate,pollCtx):undefined;
+              const polled=await fetchJson(joinUrl(provider.baseUrl,pollPath),{method:pollMethod,headers:providerHeaders(provider),body:['GET','HEAD'].includes(pollMethod)?undefined:(pollBody===undefined?undefined:JSON.stringify(pollBody)),timeoutMs:60000,provider});
+              const statusRaw=standardVideoStatus(polled,config),status=String(statusRaw??'').toLowerCase();
+              const progressRaw=Number(standardVideoProgress(polled,config));
+              updateTask(task,{status:'polling',progress:Number.isFinite(progressRaw)?Math.max(20,Math.min(96,progressRaw)):Math.min(94,20+checks*4)});
+              if(failure.includes(status))throw new Error(`上游视频任务失败：${status||'unknown'}`);
+              const output=standardVideoOutput(polled,config);
+              if(success.includes(status)||(config.allowOutputWithoutTerminalStatus===true&&!status&&output!=null)){
+                if(output==null)throw new Error(`视频任务状态为 ${status||'成功'}，但没有解析到视频结果 URL。请配置 outputPath。`);
+                return normalizeOutput(output,'video',provider);
+              }
+            }
+            throw new Error('标准异步视频任务超时');
+          }'''
+          replace_block('server.js','async function executeStandardVideoAsync(task,provider,model,payload){','async function executeOpenAI(task, provider, model, payload) {',new_std_video)
+
+          # Normalize model must retain generic poll controls.
+          replace_once('server.js',
+            "pollPath: String(m.pollPath || '').trim(),\n    statusPath: String(m.statusPath || '').trim(),",
+            "pollPath: String(m.pollPath || '').trim(),\n    pollMethod: String(m.pollMethod || 'GET').trim().toUpperCase(),\n    pollBodyTemplate: (m.pollBodyTemplate&&typeof m.pollBodyTemplate==='object')?m.pollBodyTemplate:null,\n    statusPath: String(m.statusPath || '').trim(),")
+
+          # ---------- Worker secure runtime ----------
+          replace_once('dist/server/secure-index.js',
+            "import legacyWorker from './index.js';",
+            "import legacyWorker from './index.js';\nimport '../../provider-adapter-contract.js';\nconst ProviderAdapterContract = globalThis.CanvasProviderAdapters;")
+
+          replace_once('dist/server/secure-index.js',
+            "model.enabled = model.enabled !== false;\n  model.operationRoutes",
+            "model.enabled = model.enabled !== false;\n  model.adapterKey = String(model.adapterKey || 'auto').trim() || 'auto';\n  model.operationRoutes")
+
+          s=read('dist/server/secure-index.js')
+          s=s.replace("next.protocol = String(next.protocol || 'openai-compatible');","next.protocol = ['auto','generic-rest','openai-compatible','comfyui'].includes(String(next.protocol)) ? String(next.protocol) : 'auto';")
+          s=s.replace("next.referenceTransport = String(next.referenceTransport || 'url');","next.referenceTransport = ProviderAdapterContract.normalizeReferenceTransport(next.referenceTransport,{cloud:true});")
+          write('dist/server/secure-index.js',s)
+
+          # Worker model-list protocol detection is evidence based.
+          replace_once('dist/server/secure-index.js',
+            "const models = normalizeDiscoveredModels(await parseJsonResponse(res));\n        if (models.length) return { endpoint, models, auth };",
+            "const data = await parseJsonResponse(res);\n        const models = normalizeDiscoveredModels(data);\n        const protocolEvidence = ProviderAdapterContract.detectModelListProtocol(data, endpoint);\n        if (models.length) return { endpoint, models, auth, suggestedProtocol: protocolEvidence.protocol, protocolEvidence };"
+          )
+
+          new_worker_route=r'''function routeForTask(provider, model, nodeType) {
+            const operation=String(model?.operationRoutes?.activeOperation||'generate');
+            return ProviderAdapterContract.resolveRoute(provider,model,nodeType,operation);
+          }'''
+          replace_block('dist/server/secure-index.js','function routeForTask(provider, model, nodeType) {','function replaceTemplate(value, context) {',new_worker_route)
+
+          # Worker reference transport aliases/default.
+          old_ref="if (provider.referenceTransport === 'data-url') {\n        const media = await getLocalMedia(ref.url, request, env, ctx); ref.url = bytesToDataUrl(media.bytes, media.contentType);\n      } else if (provider.referenceTransport === 'upload') {\n        ref.url = await uploadReference(provider, model, ref, request, env, ctx);\n      } else {"
+          new_ref="const transport=ProviderAdapterContract.normalizeReferenceTransport(provider.referenceTransport,{cloud:true});\n      if (transport === 'data-url') {\n        const media = await getLocalMedia(ref.url, request, env, ctx); ref.url = bytesToDataUrl(media.bytes, media.contentType);\n      } else if (transport === 'upload') {\n        ref.url = await uploadReference(provider, model, ref, request, env, ctx);\n      } else {"
+          replace_once('dist/server/secure-index.js',old_ref,new_ref)
+
+          # Worker generic polling supports arbitrary HTTP method and JSON body template.
+          replace_once('dist/server/secure-index.js',
+            "const pollUrl = resolveProviderUrl(provider, pollPath, env);\n  const res = await safeProviderFetch(provider, pollUrl, { method: 'GET', headers: buildHeaders(provider, model, null, null), timeoutMs: 30000 }, env);",
+            "const pollUrl = resolveProviderUrl(provider, pollPath, env);\n  const pollMethod=String(route.pollMethod||'GET').toUpperCase();\n  const pollContext={taskId:String(upstream.taskId),model:model.id,modelId:model.id,prompt:task.payload?.prompt||'',parameters:task.payload?.parameters||{},params:task.payload?.parameters||{}};\n  const pollBody=route.pollBodyTemplate&&typeof route.pollBodyTemplate==='object'?replaceTemplate(route.pollBodyTemplate,pollContext):undefined;\n  const res = await safeProviderFetch(provider, pollUrl, { method: pollMethod, headers: buildHeaders(provider, model, null, ['GET','HEAD'].includes(pollMethod)?null:'application/json'), body:['GET','HEAD'].includes(pollMethod)?undefined:(pollBody===undefined?undefined:JSON.stringify(pollBody)), timeoutMs: 30000 }, env);"
+          )
+
+          # Only require poll URL for async routes.
+          replace_once('dist/server/secure-index.js',
+            "const route = routeForTask(provider, model, nodeType); resolveProviderUrl(provider, route.createPath, env); if (nodeType === 'video') resolveProviderUrl(provider, route.pollPath, env);",
+            "const route = routeForTask(provider, model, nodeType); resolveProviderUrl(provider, route.createPath, env); if (route.responseMode === 'async' && route.pollPath) resolveProviderUrl(provider, route.pollPath, env);"
+          )
+
+          # Worker provider endpoints: independent connection/auth/discovery and save-without-model-list.
+          new_worker_provider_routes=r'''async function probeProviderConnection(provider,env){
+            const route=String(provider.testPath||'').trim();
+            const target=route?resolveProviderUrl(provider,route,env):validateOutboundUrl(provider.baseUrl,provider,env).toString();
+            const res=await safeProviderFetch(provider,target,{method:'GET',headers:buildHeaders(provider,{},null,null),timeoutMs:15000},env);
+            const preview=(await res.text()).slice(0,500);
+            return {ok:true,reachable:true,endpoint:route||'/',httpStatus:res.status,preview,warning:res.ok?'':`已连接到上游，但返回 HTTP ${res.status}。连接可达不等于鉴权或生成接口可用。`};
+          }
+          async function probeProviderAuth(provider,env){
+            if(provider.testPath){
+              const url=resolveProviderUrl(provider,provider.testPath,env);
+              const res=await safeProviderFetch(provider,url,{method:'GET',headers:buildHeaders(provider,{},null,null),timeoutMs:15000},env);
+              if(!res.ok)throw new Error(`鉴权测试接口返回 HTTP ${res.status}：${(await res.text()).slice(0,300)}`);
+              return {ok:true,verified:true,endpoint:provider.testPath,mode:'test-path'};
+            }
+            try{
+              const discovered=await discoverModels(provider,env);
+              return {ok:true,verified:true,endpoint:discovered.endpoint,modelCount:discovered.models.length,mode:'model-list'};
+            }catch(error){
+              return {ok:true,verified:false,mode:'unverified',warning:`当前供应商没有可安全用于鉴权验证的模型列表/测试接口。为避免调用图片或视频生成接口产生费用，本次不发送生成请求。${error.message}`};
+            }
+          }
+          async function handleProviderRoutes(request, env, ctx, pathname) {
+            const state = globalThis.__canvasWorkerState;
+            if (pathname === '/api/providers' && request.method === 'GET') return json({ providers: (state.providers || []).map(publicProvider) });
+            if (pathname === '/api/providers' && request.method === 'POST') {
+              const body = await request.json();
+              const existing = body.id ? (state.providers || []).find(item => item.id === body.id) : null;
+              const saved = await normalizeProviderForSave(body, existing, env);
+              const runtime = await runtimeProvider(saved, env);
+              let warning='',autoConfigured=false;
+              if (!saved.models.length) {
+                try{
+                  const discovered = await discoverModels(runtime, env);
+                  saved.models = discovered.models; saved.authHeader = discovered.auth.header; saved.authScheme = discovered.auth.scheme;
+                  if(saved.protocol==='auto'&&discovered.suggestedProtocol)saved.protocol=discovered.suggestedProtocol;
+                  autoConfigured=true;
+                }catch(error){warning=`供应商已保存，但没有发现模型列表：${String(error?.message||error)}`;}
+              }
+              await persistProvider(saved, env);
+              return json({ provider: publicProvider(saved), modelCount: saved.models.length, autoConfigured, warning });
+            }
+            if (['/api/providers/test-config', '/api/providers/test-auth', '/api/providers/diagnose', '/api/providers/discover-models'].includes(pathname) && request.method === 'POST') {
+              const body = await request.json();
+              const existing = body.id ? (state.providers || []).find(item => item.id === body.id) : null;
+              const merged = { ...(existing || {}), ...clone(body) };
+              merged.referenceTransport=ProviderAdapterContract.normalizeReferenceTransport(merged.referenceTransport,{cloud:true});
+              const runtime = await runtimeProvider(merged, env, body.apiKey || '');
+              validateOutboundUrl(runtime.baseUrl, runtime, env);
+              if(pathname==='/api/providers/test-config')return json(await probeProviderConnection(runtime,env));
+              if(pathname==='/api/providers/test-auth')return json(await probeProviderAuth(runtime,env));
+              if(pathname==='/api/providers/discover-models'){
+                const discovered=await discoverModels(runtime,env);
+                return json({ok:true,endpoint:discovered.endpoint,models:discovered.models,count:discovered.models.length,modelCount:discovered.models.length,suggestedProtocol:discovered.suggestedProtocol||'',protocolEvidence:discovered.protocolEvidence||null,authHeader:discovered.auth.header,authScheme:discovered.auth.scheme});
+              }
+              const report={ok:true,connection:{ok:false},auth:{ok:false,verified:false},models:{discoveryOk:false,total:0,ready:0,pending:0},warnings:[]};
+              try{const c=await probeProviderConnection(runtime,env);report.connection=c;if(c.warning)report.warnings.push(c.warning)}catch(e){report.ok=false;report.connection={ok:false,error:String(e?.message||e)}}
+              try{const a=await probeProviderAuth(runtime,env);report.auth=a;if(a.warning)report.warnings.push(a.warning)}catch(e){report.ok=false;report.auth={ok:false,verified:false,error:String(e?.message||e)}}
+              try{const d=await discoverModels(runtime,env);report.models.discoveryOk=true;report.models.discovered=d.models.length;report.models.endpoint=d.endpoint;report.models.suggestedProtocol=d.suggestedProtocol||''}catch(e){report.models.discoveryError=String(e?.message||e);report.warnings.push('模型发现：'+String(e?.message||e))}
+              const configured=(runtime.models||[]).filter(m=>m.enabled!==false);report.models.total=configured.length;
+              for(const m of configured){const key=ProviderAdapterContract.inferAdapterKey(runtime,m),route=ProviderAdapterContract.resolveRoute(runtime,m,m.modality||'');const ready=key!=='auto'&&Boolean(route.createPath);if(ready)report.models.ready++;else{report.models.pending++;report.warnings.push(`模型 ${m.name||m.id} 尚未完成适配`)}}
+              if(!configured.length)report.warnings.push('当前尚未保存模型；供应商仍可保存，之后可拉取或手动添加模型。');
+              return json(report);
+            }
+            const match = pathname.match(/^\/api\/providers\/([^/]+)$/);
+            if (match && request.method === 'DELETE') {
+              const id = decodeURIComponent(match[1]);
+              if (!(state.providers || []).some(item => item.id === id)) return json({ error: '供应商不存在' }, 404);
+              await deleteProvider(id, env); return json({ ok: true });
+            }
+            return null;
+          }'''
+          replace_block('dist/server/secure-index.js','async function handleProviderRoutes(request, env, ctx, pathname) {','async function handleTaskRoutes(request, env, ctx, pathname) {',new_worker_provider_routes)
+
+          # ---------- Cloudflare compatibility gateway ----------
+          replace_once('dist/server/provider-compat-entry.js',
+            "if (!body.referenceTransport) body.referenceTransport = existing?.referenceTransport || 'data-url';",
+            "if (!body.referenceTransport || body.referenceTransport === 'auto') body.referenceTransport = existing?.referenceTransport && existing.referenceTransport !== 'auto' ? existing.referenceTransport : 'data-url';")
+
+          # ---------- Browser provider UI ----------
+          p=root/'app.js'; s=p.read_text()
+          s=s.replace("function emptyProviderDraft(){return {id:'',name:'',protocol:'openai-compatible'","function emptyProviderDraft(){return {id:'',name:'',protocol:'auto'",1)
+          s=s.replace("function protocolName(p){return ({'generic-rest':'通用 REST','openai-compatible':'OpenAI兼容','comfyui':'ComfyUI'})[p]||p}","function protocolName(p){return ({auto:'自动检测','generic-rest':'通用 REST','openai-compatible':'OpenAI兼容','comfyui':'ComfyUI'})[p]||p}",1)
+          old_select="<div class=\"provider-field\"><label>协议类型</label><select id=\"prvProtocol\"><option value=\"generic-rest\" ${d.protocol==='generic-rest'?'selected':''}>通用 REST API</option><option value=\"openai-compatible\" ${d.protocol==='openai-compatible'?'selected':''}>OpenAI 兼容</option><option value=\"comfyui\" ${d.protocol==='comfyui'?'selected':''}>ComfyUI API</option></select></div>"
+          new_select="<div class=\"provider-field\"><label>协议类型</label><select id=\"prvProtocol\"><option value=\"auto\" ${!d.protocol||d.protocol==='auto'?'selected':''}>自动检测（推荐）</option><option value=\"generic-rest\" ${d.protocol==='generic-rest'?'selected':''}>通用 REST API</option><option value=\"openai-compatible\" ${d.protocol==='openai-compatible'?'selected':''}>OpenAI 兼容</option><option value=\"comfyui\" ${d.protocol==='comfyui'?'selected':''}>ComfyUI API</option></select></div>"
+          if old_select not in s: raise SystemExit('provider protocol select not found')
+          s=s.replace(old_select,new_select,1)
+          s=s.replace("系统会自动尝试 /v1/models 和 /models，识别模型类型并完成接口适配。","系统会在供应商提供模型列表时自动识别；没有模型列表也会保存供应商，不再把连接失败和模型发现失败混为一谈。",1)
+          p.write_text(s)
+
+          new_ui_auth=r'''async function testAuthFromModal(){
+            const d=readProviderDraftFromDom();
+            if(!d.baseUrl.trim()){showProviderTest('请先填写 API Base URL',true);return;}
+            if(!d.apiKey?.trim()&&!d.hasApiKey){showProviderTest('请先填写 API Key',true);return;}
+            showProviderTest('正在验证鉴权（不会调用可能产生费用的图片/视频生成接口）…');
+            try{
+              const out=await apiJson('/api/providers/test-auth',{method:'POST',body:JSON.stringify(d)});
+              if(out.verified===false){showProviderTest(`连接已建立，但鉴权暂未验证。${out.warning||'当前供应商没有无副作用的鉴权测试接口；可配置测试路径，或在模型配置完成后通过真实生成验证。'}`);return;}
+              showProviderTest(`鉴权已验证${out.modelId?` · 模型 ${out.modelId}`:''}${out.endpoint?` · ${out.endpoint}`:''}${String(d.apiKey||'').trim()?' · 新密钥已通过验证，点击「保存」后用于正式生成':''}`);
+            }catch(err){showProviderTest(err.message,true)}
+          }'''
+          replace_block('app.js','async function testAuthFromModal(){','async function diagnoseProviderFromModal(){',new_ui_auth)
+
+          new_ui_diag=r'''async function diagnoseProviderFromModal(){
+            const d=readProviderDraftFromDom();
+            if(!d.baseUrl.trim()){showProviderTest('请先填写 API Base URL',true);return;}
+            showProviderTest('正在分别检查连接、鉴权、模型发现与适配器状态…');
+            try{
+              const out=await apiJson('/api/providers/diagnose',{method:'POST',body:JSON.stringify(d)});
+              const authText=out.auth?.verified===false?'? 未验证':(out.auth?.ok?'✓':'×');
+              const lines=[`连接：${out.connection?.ok?'✓':'×'}${out.connection?.endpoint?` ${out.connection.endpoint}`:''}${out.connection?.httpStatus?` · HTTP ${out.connection.httpStatus}`:''}${out.connection?.error?` · ${out.connection.error}`:''}`,`鉴权：${authText}${out.auth?.modelId?` ${out.auth.modelId}`:''}${out.auth?.error?` · ${out.auth.error}`:''}${out.auth?.warning?` · ${out.auth.warning}`:''}`,`模型发现：${out.models?.discoveryOk?'✓':'?'}${out.models?.discovered!=null?` ${out.models.discovered} 个`:''}${out.models?.discoveryError?` · ${out.models.discoveryError}`:''}`,`已配置模型：${out.models?.ready||0}/${out.models?.total||0} 已就绪${out.models?.pending?` · ${out.models.pending} 个待配置`:''}`];
+              if(out.warnings?.length)lines.push('提示：'+out.warnings.slice(0,5).join('；'));
+              showProviderTest(lines.join('\n'),!out.connection?.ok||out.auth?.ok===false);
+            }catch(err){showProviderTest(err.message,true)}
+          }'''
+          replace_block('app.js','async function diagnoseProviderFromModal(){','async function fetchModelsFromModal(){',new_ui_diag)
+
+          # ---------- Models page status must reflect the same contract ----------
+          new_models_resolved=r'''function resolvedAdapter(p,m){
+            const r=m.adapterResolved||{};if(r.key)return r;
+            let k=String(m.adapterKey||'auto');
+            if(k==='auto'){
+              if(p.protocol==='comfyui')k='comfyui-workflow';
+              else if(p.protocol==='openai-compatible')k=m.modality==='text'?'openai-chat':m.modality==='image'?'openai-image':m.modality==='audio'?'openai-audio-speech':(p.videoProtocol==='standard-video-async-v1'?'standard-video-async-v1':'auto');
+              else {
+                const path=String(m.createPath||m.operationRoutes?.generate?.createPath||'').toLowerCase();
+                if(/\/responses(?:$|\?)/.test(path))k='openai-responses';
+                else if(/\/chat\/completions(?:$|\?)/.test(path))k='openai-chat';
+                else if(/\/images\/generations(?:$|\?)/.test(path))k='openai-image';
+                else if(m.modality==='video'&&p.videoProtocol==='standard-video-async-v1')k='standard-video-async-v1';
+                else if(path)k=(m.responseMode==='async'||m.operationRoutes?.generate?.responseMode==='async')?'generic-async':'generic-sync';
+                else k='auto';
+              }
+            }
+            const ready=Boolean(m.id)&&k!=='auto'&&(!['generic-sync','generic-async'].includes(k)||Boolean(String(m.createPath||m.operationRoutes?.generate?.createPath||'').trim()));
+            return{key:k,label:adapterLabels[k]||'自动适配',ready};
+          }'''
+          replace_block('models.js','function resolvedAdapter(p,m){','const defaultModel=',new_models_resolved)
+
+          # package check includes shared contract.
+          pkg=json.loads(read('package.json'))
+          if 'provider-adapter-contract.js' not in pkg['scripts']['check']:
+              pkg['scripts']['check']=pkg['scripts']['check'].replace('node --check server.js','node --check provider-adapter-contract.js && node --check server.js')
+          write('package.json',json.dumps(pkg,ensure_ascii=False,indent=2)+"\n")
+
+          test=r'''import test from 'node:test';
+          import assert from 'node:assert/strict';
+          import '../provider-adapter-contract.js';
+          import worker from '../dist/server/final-entry.js';
+
+          const Contract=globalThis.CanvasProviderAdapters;
+          const ENV={PROVIDER_SECRET_KEY:'provider-v2-test-secret'};
+
+          function context(){
+            const jobs=[];
+            return {ctx:{waitUntil(p){jobs.push(Promise.resolve(p))}},flush:async()=>{while(jobs.length)await jobs.shift()}};
+          }
+          async function call(path,{method='GET',body}={}){
+            const c=context();
+            const response=await worker.fetch(new Request(`https://canvas.test${path}`,{method,headers:body?{'content-type':'application/json'}:undefined,body:body?JSON.stringify(body):undefined}),ENV,c.ctx);
+            const data=await response.json().catch(()=>({}));
+            await c.flush();
+            return {response,data};
+          }
+
+          test('shared contract does not classify a generic models array as OpenAI',()=>{
+            assert.equal(Contract.detectModelListProtocol({models:[{id:'vendor-model'}]},'/models').protocol,'');
+            assert.equal(Contract.detectModelListProtocol({data:[{id:'vendor-model'}]},'/v1/models').protocol,'');
+            assert.equal(Contract.detectModelListProtocol({object:'list',data:[{id:'gpt-test',object:'model'}]},'/v1/models').protocol,'openai-compatible');
+          });
+
+          test('shared contract canonicalizes cloud reference transport and adapter selection',()=>{
+            assert.equal(Contract.normalizeReferenceTransport('auto',{cloud:true}),'data-url');
+            assert.equal(Contract.normalizeReferenceTransport('base64',{cloud:true}),'data-url');
+            assert.equal(Contract.normalizeReferenceTransport('upload-endpoint',{cloud:true}),'upload');
+            assert.equal(Contract.inferAdapterKey({protocol:'auto'},{modality:'video',adapterKey:'auto'}),'auto');
+            assert.equal(Contract.inferAdapterKey({protocol:'openai-compatible'},{modality:'image',adapterKey:'auto'}),'openai-image');
+            assert.equal(Contract.inferAdapterKey({protocol:'auto'},{modality:'video',adapterKey:'generic-async',createPath:'/jobs'}),'generic-async');
+          });
+
+          test('worker separates connection, auth and model discovery; generic list is not auto-OpenAI', {concurrency:false}, async()=>{
+            const realFetch=globalThis.fetch;
+            globalThis.__canvasWorkerState={booted:true,supabase:null,providers:[],projects:[],tasks:[],bridgeToken:'x',bridgeState:{},sessions:new Map(),media:new Map()};
+            globalThis.__canvasProviderMigrationPromise=null;
+            globalThis.fetch=async(input,init={})=>{
+              const u=new URL(typeof input==='string'?input:input.url);
+              if(u.hostname==='generic.vendor.test'){
+                if(u.pathname==='/v1/models')return new Response('not found',{status:404});
+                if(u.pathname==='/models')return Response.json({models:[{id:'vendor-video',type:'video'}]});
+                return new Response('root missing',{status:404});
+              }
+              if(u.hostname==='nomodel.vendor.test')return new Response('not found',{status:404});
+              return realFetch(input,init);
+            };
+            try{
+              const connection=await call('/api/providers/test-config',{method:'POST',body:{baseUrl:'https://generic.vendor.test',apiKey:'k',protocol:'auto'}});
+              assert.equal(connection.response.status,200);assert.equal(connection.data.reachable,true);assert.equal(connection.data.httpStatus,404);
+              const discovered=await call('/api/providers/discover-models',{method:'POST',body:{baseUrl:'https://generic.vendor.test',apiKey:'k',protocol:'auto'}});
+              assert.equal(discovered.response.status,200);assert.equal(discovered.data.suggestedProtocol,'');assert.equal(discovered.data.models[0].id,'vendor-video');
+              const auth=await call('/api/providers/test-auth',{method:'POST',body:{baseUrl:'https://nomodel.vendor.test',apiKey:'k',protocol:'auto'}});
+              assert.equal(auth.response.status,200);assert.equal(auth.data.verified,false);
+              const saved=await call('/api/providers',{method:'POST',body:{id:'no-model-provider',baseUrl:'https://nomodel.vendor.test',apiKey:'k',protocol:'auto',referenceTransport:'auto',models:[]}});
+              assert.equal(saved.response.status,200);assert.equal(saved.data.provider.referenceTransport,'data-url');assert.equal(saved.data.provider.models.length,0);assert.match(saved.data.warning,/已保存/);
+            }finally{globalThis.fetch=realFetch}
+          });
+
+          test('worker generic async video supports POST polling with JSON body', {concurrency:false}, async()=>{
+            const realFetch=globalThis.fetch;let pollSeen=null;
+            globalThis.__canvasWorkerState={booted:true,supabase:null,providers:[],projects:[],tasks:[],bridgeToken:'x',bridgeState:{},sessions:new Map(),media:new Map()};
+            globalThis.__canvasProviderMigrationPromise=null;
+            globalThis.fetch=async(input,init={})=>{
+              const u=new URL(typeof input==='string'?input:input.url);
+              if(u.hostname==='video.vendor.test'&&u.pathname==='/create')return Response.json({job:{id:'job-1'}});
+              if(u.hostname==='video.vendor.test'&&u.pathname==='/status/job-1'){
+                pollSeen={method:String(init.method||'GET').toUpperCase(),body:init.body?JSON.parse(String(init.body)):null};
+                return Response.json({state:'done',result:{url:'https://cdn.vendor.test/final.mp4'}});
+              }
+              return realFetch(input,init);
+            };
+            try{
+              const provider=await call('/api/providers',{method:'POST',body:{id:'video-provider',baseUrl:'https://video.vendor.test',apiKey:'k',protocol:'auto',downloadOutputs:false,models:[{id:'video-model',name:'video',modality:'video',adapterKey:'generic-async',createPath:'/create',method:'POST',responseMode:'async',taskIdPath:'job.id',pollPath:'/status/{{taskId}}',pollMethod:'POST',pollBodyTemplate:{job:'{{taskId}}'},statusPath:'state',outputPath:'result.url',successValues:['done'],failureValues:['failed'],pollIntervalMs:500}]}});
+              assert.equal(provider.response.status,200);
+              const createCtx=context();
+              const createRes=await worker.fetch(new Request('https://canvas.test/api/tasks',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({providerId:'video-provider',modelId:'video-model',nodeType:'video',prompt:'test',parameters:{duration:5}})}),ENV,createCtx.ctx);
+              const created=await createRes.json();await createCtx.flush();
+              const taskId=created.task.id;
+              const polled=await call('/api/tasks/poll',{method:'POST',body:{taskId}});
+              assert.equal(polled.data.task.status,'succeeded');
+              assert.deepEqual(pollSeen,{method:'POST',body:{job:'job-1'}});
+              assert.equal(polled.data.task.output.value,'https://cdn.vendor.test/final.mp4');
+            }finally{globalThis.fetch=realFetch}
+          });
+          '''
+          write('tests/provider-adapter-v2.test.mjs',test)
+
+          # Static regression: both runtimes consume the same contract.
+          static_test=r'''import test from 'node:test';
+          import assert from 'node:assert/strict';
+          import {readFileSync} from 'node:fs';
+          const node=readFileSync(new URL('../server.js',import.meta.url),'utf8');
+          const worker=readFileSync(new URL('../dist/server/secure-index.js',import.meta.url),'utf8');
+          const compat=readFileSync(new URL('../dist/server/provider-compat-entry.js',import.meta.url),'utf8');
+          test('Node and Worker share provider adapter contract',()=>{
+            assert.match(node,/ProviderAdapterContract\.inferAdapterKey/);
+            assert.match(worker,/ProviderAdapterContract\.resolveRoute/);
+            assert.match(worker,/pollMethod/);assert.match(worker,/pollBodyTemplate/);
+            assert.match(compat,/body\.referenceTransport === 'auto'/);
+          });
+          '''
+          write('tests/provider-runtime-parity.test.mjs',static_test)
+          PY
+      - name: Syntax and targeted regression tests
+        working-directory: _read_123_zip_20260821_180410
+        run: |
+          npm run check
+          node --test \
+            tests/provider-adapter-v2.test.mjs \
+            tests/provider-runtime-parity.test.mjs \
+            tests/provider-production-defaults.test.mjs \
+            tests/provider-settings-access.test.mjs \
+            tests/worker-security.test.mjs \
+            tests/reference-ownership.test.mjs \
+            tests/owner-isolation.test.mjs \
+            tests/stateless-auth.test.mjs
+      - name: Commit production changes
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/apply-provider-api-v2.yml
+          git add _read_123_zip_20260821_180410
+          git commit -m 'fix: unify provider adapters and diagnostics'
+          git push origin main
