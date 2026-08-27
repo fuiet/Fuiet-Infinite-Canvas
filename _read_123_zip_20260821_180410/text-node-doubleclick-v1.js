@@ -72,11 +72,3 @@ nodeLayer.addEventListener('pointercancel',clearLast,true);
 window.addEventListener('blur',clearLast,{capture:true});
 
 })();
-
-/* Load the independent visual-only send icon layer. */
-if(!document.querySelector('script[data-node-send-icon]')){
-  const s=document.createElement('script');
-  s.src='./node-send-icon-v1.js?v=20260827-sendicon-1';
-  s.dataset.nodeSendIcon='1';
-  document.head.appendChild(s);
-}
