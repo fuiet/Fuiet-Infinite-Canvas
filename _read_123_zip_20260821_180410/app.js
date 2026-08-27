@@ -1304,10 +1304,14 @@
     const hit=document.elementFromPoint(clientX,clientY);
     const shouldQuickAdd=onCanvas&&moved>10&&!hit?.closest?.('.node');
     const dropPoint=shouldQuickAdd?screenToWorld(clientX,clientY):null;
-    cleanupConnectionDrag(true);
+    // The connection gesture is already fully cleaned in-place here. Avoid a full
+    // canvas render before opening the continuation palette: rebuilding every node in
+    // the pointerup path can invalidate the just-finished gesture and make blank drops
+    // appear to lock the canvas.
+    cleanupConnectionDrag(false);
     if(shouldQuickAdd){
       window.__quickAddOpenedAt=Date.now();
-      requestAnimationFrame(()=>showQuickAdd(clientX,clientY,dropPoint,from));
+      requestAnimationFrame(()=>showCommandPalette(clientX,clientY,dropPoint,{fromNodeId:from}));
     }
     return true;
   }
