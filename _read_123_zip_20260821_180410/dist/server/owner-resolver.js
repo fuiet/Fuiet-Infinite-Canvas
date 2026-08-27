@@ -94,8 +94,12 @@ export async function resolveCanvasOwner(request, env, ctx) {
   if (bearer) return { owner: bearer, source: 'supabase-bearer' };
 
   const configured = configuredOwner(env);
-  if (configured && String(env?.CANVAS_ALLOW_UNAUTHENTICATED_OWNER || '0') === '1') {
-    return { owner: configured, source: 'configured-unauthenticated' };
+  const trustedAdminPassThrough = String(env?.CANVAS_ALLOW_UNAUTHENTICATED_OWNER || '0') === '1';
+  if (trustedAdminPassThrough) {
+    if (configured) return { owner: configured, source: 'configured-admin-pass-through' };
+    const automatic = await singleSupabaseOwner(env);
+    if (automatic) return { owner: automatic, source: 'single-supabase-admin-pass-through' };
+    return { owner: '', source: '' };
   }
 
   const auth = await adminAuthStatus(request, env, ctx);
