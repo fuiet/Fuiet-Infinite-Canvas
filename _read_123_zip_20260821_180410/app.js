@@ -2922,7 +2922,7 @@
     {id:'upload',icon:'↑',label:'上传图片 / 视频 / 音频',keywords:'upload import media 上传 导入 素材',run:p=>openLocalUpload(p)},
     {id:'shortcuts',icon:'?',label:'快捷键面板',keywords:'shortcut keyboard 快捷键',run:()=>openShortcutHelp()}
   ]}
-  function runPaletteNode(type,p,fromNodeId){const created=addNode(type,p,true);if(created&&['image','video','audio','script'].includes(created.type))expandedNodeId=created.id;else if(created?.type==='text')expandedNodeId=null;if(fromNodeId&&created){const edge=createEdge(fromNodeId,created.id,{type:'asset',silent:true});if(!edge)showToast('这个节点组合无法连接')}saveState();render();return created}
+  function runPaletteNode(type,p,fromNodeId){const created=addNode(type,p,true);expandedNodeId=null;if(fromNodeId&&created){const edge=createEdge(fromNodeId,created.id,{type:'asset',silent:true});if(!edge)showToast('这个节点组合无法连接')}saveState();render();return created}
   function showCommandPalette(x,y,p,{fromNodeId=null,initialQuery=''}={}){
     const source=fromNodeId&&state.nodes.find(n=>n.id===fromNodeId),allowed=new Set(compatibleDownstreamTypes(source));let active=0,rows=[];
     setDockModeMenuOpen(false);
