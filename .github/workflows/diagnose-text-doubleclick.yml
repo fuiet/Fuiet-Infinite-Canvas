@@ -1,4 +1,5 @@
 name: Diagnose Text Doubleclick
+# rerun after stable node-id fix
 
 on:
   push:
