@@ -1,0 +1,93 @@
+name: Diagnose Blank Drop
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/diagnose-blank-drop.yml'
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browser
+        run: npx -y playwright@1.55.0 install --with-deps chromium
+      - name: Start app
+        working-directory: _read_123_zip_20260821_180410
+        run: |
+          node server.js > /tmp/canvas-server.log 2>&1 &
+          echo $! > /tmp/canvas-server.pid
+          for i in {1..40}; do curl -fsS http://127.0.0.1:8080/ >/dev/null && break; sleep .5; done
+      - name: Run blank-drop diagnostic
+        run: |
+          cat > /tmp/diag.mjs <<'JS'
+          import { chromium } from 'playwright';
+          const browser=await chromium.launch({headless:true});
+          const page=await browser.newPage({viewport:{width:1440,height:1000}});
+          page.on('console',m=>console.log('BROWSER',m.type(),m.text()));
+          page.on('pageerror',e=>console.log('PAGEERROR',e.stack||e.message));
+          await page.goto('http://127.0.0.1:8080/',{waitUntil:'domcontentloaded'});
+          await page.waitForTimeout(1200);
+          const viewport=page.locator('#canvasViewport');
+          const vr=await viewport.boundingBox();
+          if(!vr) throw new Error('canvasViewport missing');
+          // Create a node via the same add-node UI used by the dock.
+          await page.mouse.dblclick(vr.x+420,vr.y+300);
+          await page.waitForTimeout(200);
+          const first=page.locator('#contextMenu .libtv-add-row[data-kind="node"]').first();
+          if(!(await first.count())) throw new Error('add-node menu did not open');
+          await first.click();
+          await page.waitForTimeout(350);
+          const out=page.locator('.node .node-port.out').first();
+          const ob=await out.boundingBox();
+          if(!ob) throw new Error('output port missing');
+          const sx=ob.x+ob.width/2, sy=ob.y+ob.height/2;
+          const tx=Math.min(vr.x+vr.width-220,sx+360), ty=Math.min(vr.y+vr.height-220,sy+180);
+          await page.mouse.move(sx,sy);
+          await page.mouse.down();
+          await page.mouse.move(tx,ty,{steps:12});
+          const before=await page.evaluate(()=>({
+            connecting:document.querySelector('#canvasViewport')?.classList.contains('connecting-mode'),
+            temp:!!document.querySelector('#tempEdge'),
+            menuHidden:document.querySelector('#contextMenu')?.classList.contains('hidden'),
+            menuClass:document.querySelector('#contextMenu')?.className
+          }));
+          console.log('BEFORE_UP',JSON.stringify(before));
+          await page.mouse.up();
+          await page.waitForTimeout(250);
+          const after=await page.evaluate(()=>{
+            const vp=document.querySelector('#canvasViewport');
+            const cm=document.querySelector('#contextMenu');
+            const hit=document.elementFromPoint(innerWidth/2,innerHeight/2);
+            return {
+              connecting:vp?.classList.contains('connecting-mode'),
+              viewportPointerEvents:getComputedStyle(vp).pointerEvents,
+              temp:!!document.querySelector('#tempEdge'),
+              menuHidden:cm?.classList.contains('hidden'),
+              menuClass:cm?.className,
+              menuText:(cm?.innerText||'').slice(0,300),
+              menuRect:cm?.getBoundingClientRect().toJSON?.()||null,
+              bodyClass:document.body.className,
+              hitTag:hit?.tagName,
+              hitId:hit?.id,
+              hitClass:hit?.className
+            };
+          });
+          console.log('AFTER_UP',JSON.stringify(after));
+          // Verify the viewport can still receive a fresh click after release.
+          await page.mouse.click(vr.x+100,vr.y+100);
+          await page.waitForTimeout(80);
+          const finalState=await page.evaluate(()=>({
+            connecting:document.querySelector('#canvasViewport')?.classList.contains('connecting-mode'),
+            temp:!!document.querySelector('#tempEdge'),
+            menuHidden:document.querySelector('#contextMenu')?.classList.contains('hidden'),
+            active:document.activeElement?.id||document.activeElement?.tagName
+          }));
+          console.log('FINAL',JSON.stringify(finalState));
+          await browser.close();
+          JS
+          npx -y -p playwright@1.55.0 node /tmp/diag.mjs
