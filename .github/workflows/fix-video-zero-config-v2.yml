@@ -7,6 +7,7 @@ on:
     paths:
       - '.github/workflows/fix-video-zero-config-v2.yml'
       - '_read_123_zip_20260821_180410/scripts/fix-video-zero-config-v2.py'
+      - '_read_123_zip_20260821_180410/scripts/fix-video-zero-config-v2b.py'
   workflow_dispatch:
 
 permissions:
@@ -27,7 +28,7 @@ jobs:
           node-version: '22'
       - name: Apply video zero-config runtime patch
         working-directory: _read_123_zip_20260821_180410
-        run: python scripts/fix-video-zero-config-v2.py
+        run: python scripts/fix-video-zero-config-v2b.py
       - name: Validate syntax
         working-directory: _read_123_zip_20260821_180410
         run: |
