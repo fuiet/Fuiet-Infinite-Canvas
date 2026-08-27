@@ -16,6 +16,17 @@ Old automatically generated `/v1/video/generations` defaults are migrated to the
 
 A provider with a proprietary or undocumented API cannot be made universally compatible from only two strings. Such providers remain supported through the developer adapter overrides (paths, request template, task-id/status/output fields, polling method/body).
 
+## Shared Node / Worker business core
+
+Provider behavior is split into portable pure logic and platform-specific I/O:
+
+- `provider-adapter-contract.js` is the shared adapter/route contract: protocol inference, zero-config defaults, legacy-route migration, reference transport, and model finalization.
+- `provider-runtime-core.js` is the shared asynchronous runtime state core: common task-id/status/progress/output extraction, success/failure/pending classification, failure formatting, and bounded polling backoff.
+- `server.js` keeps Node-specific networking, SQLite, filesystem, FFmpeg/FFprobe/ImageMagick, and local media storage.
+- `dist/server/secure-index.js` keeps Worker-specific fetch, Supabase/R2-style persistence, request-driven scheduling, and Cloudflare restrictions.
+
+Node and Worker therefore no longer maintain separate copies of the provider protocol/state interpretation. Environment-specific I/O remains separate intentionally because those platforms have different capabilities.
+
 ## Secret and SSRF rules
 
 - API keys are encrypted at rest.
@@ -25,6 +36,18 @@ A provider with a proprietary or undocumented API cannot be made universally com
 - Cross-origin redirects are blocked while credentials are present.
 - Result/content redirects may cross origin only after authentication headers have been stripped.
 - Private/reserved/metadata network targets are blocked in production unless an explicitly permitted local-development mode applies.
+
+## Hosted security defaults
+
+Public Cloudflare Pages deployment is owner-isolated by default:
+
+- `CANVAS_DESKTOP_SINGLE_USER=0`
+- `CANVAS_ENFORCE_OWNER=1`
+- `CANVAS_CLAIM_UNOWNED=0`
+- `CANVAS_ALLOW_UNAUTHENTICATED_OWNER=0`
+- `CANVAS_ALLOW_PRIVATE_PROVIDER_HOSTS=0`
+
+The account-free desktop/single-user mode still exists for a genuinely local or packaged build, but it must be enabled explicitly and is not a safe public-hosting default.
 
 ## Task lifecycle
 
