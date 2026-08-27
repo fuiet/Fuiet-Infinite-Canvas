@@ -8,6 +8,7 @@ on:
       - '.github/workflows/fix-video-zero-config-v2.yml'
       - '_read_123_zip_20260821_180410/scripts/fix-video-zero-config-v2.py'
       - '_read_123_zip_20260821_180410/scripts/fix-video-zero-config-v2b.py'
+      - '_read_123_zip_20260821_180410/tests/provider-adapter-v2.test.mjs'
   workflow_dispatch:
 
 permissions:
