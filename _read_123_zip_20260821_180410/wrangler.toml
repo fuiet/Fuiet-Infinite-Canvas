@@ -16,8 +16,12 @@ CANVAS_ALLOW_UNAUTHENTICATED_OWNER = "0"
 # SUPABASE_SERVICE_ROLE_KEY
 # SUPABASE_ANON_KEY              # optional; used to validate Supabase Bearer users
 # CANVAS_ADMIN_PASSWORD
-# CANVAS_OWNER_ID                # UUID of the Supabase auth user mapped to current admin mode
+# CANVAS_OWNER_ID                # optional in single-user admin mode; required when Supabase has multiple users
 # CANVAS_PUBLIC_BASE_URL=https://fuiet-infinite-canvas.pages.dev
+#
+# Single-user admin mode: after the signed admin session is verified, the gateway may
+# automatically use the only auth.users row as CANVAS_OWNER_ID. Set
+# CANVAS_AUTO_SINGLE_SUPABASE_OWNER=0 to disable that fallback.
 #
 # CANVAS_CLAIM_UNOWNED=1 may be used only during an explicit one-time migration of
 # legacy ownerless rows. Return it to 0 immediately after ownership is assigned.
