@@ -17,15 +17,27 @@ function normalizeReferenceTransport(value,{cloud=false}={}){
   if(!v||v==='auto')return cloud?'data-url':'auto';
   return ['data-url','url','upload'].includes(v)?v:(cloud?'data-url':'auto');
 }
+function providerLooksOpenAIStyle(provider={}){
+  if(provider.protocol==='openai-compatible')return true;
+  try{
+    const url=new URL(String(provider.baseUrl||''));
+    const path=url.pathname.replace(/\/+$/,'').toLowerCase();
+    return /(?:^|\/)v\d+(?:\/|$)/.test(path)||/openai|api/.test(url.hostname);
+  }catch{return false}
+}
+function modelHint(model={}){
+  return `${model.id||''} ${model.name||''}`.trim().toLowerCase();
+}
 function inferAdapterKey(provider={},model={}){
   const explicit=String(model.adapterKey||'auto').trim();
   if(explicit&&explicit!=='auto')return explicit;
   if(provider.protocol==='comfyui')return 'comfyui-workflow';
-  const mod=String(model.modality||'image');
+  const mod=String(model.modality||'image').toLowerCase();
   if(provider.protocol==='openai-compatible'){
     if(mod==='text'||mod==='script')return 'openai-chat';
     if(mod==='image')return 'openai-image';
     if(mod==='audio')return 'openai-audio-speech';
+    if(mod==='video')return 'standard-video-async-v1';
   }
   const route=String(model.createPath||model.operationRoutes?.generate?.createPath||'').toLowerCase();
   if(/\/responses(?:$|\?)/.test(route))return 'openai-responses';
@@ -34,7 +46,24 @@ function inferAdapterKey(provider={},model={}){
   if(/\/audio\/speech(?:$|\?)/.test(route))return 'openai-audio-speech';
   if(mod==='video'&&provider.videoProtocol==='standard-video-async-v1')return 'standard-video-async-v1';
   if(route)return (model.responseMode==='async'||model.operationRoutes?.generate?.responseMode==='async')?'generic-async':'generic-sync';
-  return 'auto';
+
+  // Imported models must be immediately usable. When the provider did not expose
+  // enough protocol metadata, infer the common execution contract from modality,
+  // model family and an OpenAI-style /v1 Base URL instead of forcing the user into
+  // advanced configuration.
+  const hint=modelHint(model), openAIStyle=providerLooksOpenAIStyle(provider);
+  if(mod==='image'&&(/gpt[-_. ]?image|dall[-_. ]?e|flux|imagen|ideogram|stable[-_. ]?diffusion|sdxl/.test(hint)||openAIStyle))return 'openai-image';
+  if((mod==='text'||mod==='script')&&(/^(gpt|o1|o3|o4)|claude|gemini|qwen|deepseek|llama|mistral|glm|doubao|moonshot|kimi/.test(hint)||openAIStyle))return 'openai-chat';
+  if(mod==='audio'&&(/tts|speech|voice|audio/.test(hint)||openAIStyle))return 'openai-audio-speech';
+  if(mod==='video'&&(/sora|seedance|veo|kling|hailuo|minimax|vidu|wan|hunyuan|video/.test(hint)||openAIStyle))return 'standard-video-async-v1';
+
+  // Final zero-config fallback: choose the conventional route for the selected
+  // modality. A custom route can still override this automatically later.
+  if(mod==='image')return 'openai-image';
+  if(mod==='audio')return 'openai-audio-speech';
+  if(mod==='video')return 'standard-video-async-v1';
+  if(mod==='text'||mod==='script')return 'openai-chat';
+  return 'generic-sync';
 }
 function adapterDefaults(key,nodeType){
   if(key==='openai-chat')return{createPath:'/v1/chat/completions',method:'POST',responseMode:'sync',outputPath:'choices.0.message.content'};
@@ -51,8 +80,13 @@ function resolveRoute(provider={},model={},nodeType='',operation='generate'){
   const adapterKey=inferAdapterKey(provider,model);
   const defaults=adapterDefaults(adapterKey,nodeType);
   const providerVideo=nodeType==='video'?compact(provider.videoProtocolConfig||{}):{};
+  const explicitAdapter=Boolean(String(model.adapterKey||'').trim()&&String(model.adapterKey||'auto').trim()!=='auto');
+  const hasExplicitRoute=Boolean(String(model.createPath||model.operationRoutes?.generate?.createPath||'').trim());
   const direct=compact({
-    createPath:model.createPath,method:model.method,responseMode:model.responseMode,outputPath:model.outputPath,
+    createPath:model.createPath,
+    method:(explicitAdapter||hasExplicitRoute)?model.method:undefined,
+    responseMode:(explicitAdapter||hasExplicitRoute)?model.responseMode:undefined,
+    outputPath:model.outputPath,
     taskIdPath:model.taskIdPath,pollPath:model.pollPath,pollMethod:model.pollMethod,pollBodyTemplate:model.pollBodyTemplate,
     statusPath:model.statusPath,progressPath:model.progressPath,successValues:model.successValues,failureValues:model.failureValues,
     pollIntervalMs:model.pollIntervalMs,timeoutMs:model.timeoutMs,requestTemplate:model.requestTemplate,
@@ -69,14 +103,15 @@ function resolveRoute(provider={},model={},nodeType='',operation='generate'){
   return route;
 }
 function detectModelListProtocol(data,endpoint=''){
-  const list=Array.isArray(data?.data)?data.data:null;
-  if(!list)return{protocol:'',confidence:0,reason:'response-not-openai-list'};
+  const list=Array.isArray(data?.data)?data.data:Array.isArray(data?.models)?data.models:Array.isArray(data)?data:null;
+  if(!list)return{protocol:'',confidence:0,reason:'response-not-model-list'};
   const objects=list.filter(x=>x&&typeof x==='object');
   const withIds=objects.filter(x=>typeof x.id==='string'&&x.id.trim()).length;
   const modelObjects=objects.filter(x=>String(x.object||'').toLowerCase()==='model').length;
   if(data?.object==='list'&&withIds===objects.length&&objects.length>0)return{protocol:'openai-compatible',confidence:.99,reason:'object=list + data[id]'};
   if(objects.length>0&&modelObjects/objects.length>=.8&&withIds/objects.length>=.8)return{protocol:'openai-compatible',confidence:.96,reason:'data[].object=model'};
+  if(objects.length>0&&withIds/objects.length>=.8&&/\/models(?:$|\?)/i.test(String(endpoint||'')))return{protocol:'openai-compatible',confidence:.9,reason:'models endpoint + model ids'};
   return{protocol:'',confidence:0,reason:`generic-model-list:${endpoint||'unknown'}`};
 }
-globalThis.CanvasProviderAdapters=Object.freeze({SUCCESS,FAILURE,normalizeReferenceTransport,inferAdapterKey,adapterDefaults,resolveRoute,detectModelListProtocol});
+globalThis.CanvasProviderAdapters=Object.freeze({SUCCESS,FAILURE,normalizeReferenceTransport,providerLooksOpenAIStyle,inferAdapterKey,adapterDefaults,resolveRoute,detectModelListProtocol});
 })();
