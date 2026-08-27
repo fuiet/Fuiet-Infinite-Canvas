@@ -61,7 +61,8 @@ jobs:
           console.log('GENERATOR_RECT',JSON.stringify(gr));
           if(!gr||gr.x<0||gr.y<0||gr.x+gr.width>1365||gr.y+gr.height>768) throw new Error('generator clipped');
 
-          await page.locator('#imageSettingsSummary').click();
+          const settingsBtn=page.locator('#imageSettingsSummary');
+          await settingsBtn.click();
           const settings=page.locator('.image-settings-popover');
           await settings.waitFor({state:'visible'});
           for(const label of ['画质','清晰度','比例','生成数量']){
@@ -75,9 +76,9 @@ jobs:
             const actual=await page.locator('#generatorPanel #ratioSelect').inputValue();
             if(actual!==value) throw new Error(`ratio sync failed ${actual} != ${value}`);
           }
-          await page.locator('#generatorPanel #promptInput').click();
+          await settingsBtn.click();
           await page.waitForTimeout(80);
-          if(await page.locator('.image-settings-popover').count()) throw new Error('settings popover did not close');
+          if(await page.locator('.image-settings-popover').count()) throw new Error('settings toggle did not close');
 
           const storyBtn=page.locator('#generatorPanel [data-image-preset-cat="story"]');
           await storyBtn.click();
