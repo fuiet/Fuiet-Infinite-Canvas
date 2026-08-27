@@ -1,0 +1,69 @@
+name: Unify Provider Runtime Core
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/unify-provider-runtime-core-v1.yml'
+      - '_read_123_zip_20260821_180410/provider-runtime-core.js'
+      - '_read_123_zip_20260821_180410/scripts/unify-provider-runtime-core-v1.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  unify:
+    runs-on: ubuntu-latest
+    env:
+      NODE_OPTIONS: --no-warnings
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply shared runtime integration
+        working-directory: _read_123_zip_20260821_180410
+        run: python scripts/unify-provider-runtime-core-v1.py
+      - name: Validate shared runtime syntax
+        working-directory: _read_123_zip_20260821_180410
+        run: |
+          node --check provider-runtime-core.js
+          node --check server.js
+          node --check dist/server/secure-index.js
+      - name: Run shared runtime regressions
+        working-directory: _read_123_zip_20260821_180410
+        run: |
+          node --test tests/provider-runtime-core.test.mjs
+          node --test tests/provider-runtime-parity.test.mjs
+          node --test tests/video-zero-config-v2.test.mjs
+          node --test tests/worker-task-recovery.test.mjs
+      - name: Run full checks
+        working-directory: _read_123_zip_20260821_180410
+        run: |
+          npm run check
+          npm test
+      - name: Verify diff
+        run: |
+          git status --short
+          git diff --check
+      - name: Commit shared runtime integration
+        run: |
+          if git diff --quiet; then
+            echo 'No changes to commit.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add _read_123_zip_20260821_180410/provider-runtime-core.js \
+                  _read_123_zip_20260821_180410/server.js \
+                  _read_123_zip_20260821_180410/package.json \
+                  _read_123_zip_20260821_180410/tests/provider-runtime-core.test.mjs \
+                  _read_123_zip_20260821_180410/tests/provider-runtime-parity.test.mjs
+          git add -f _read_123_zip_20260821_180410/dist/server/secure-index.js
+          git commit -m 'Share provider runtime state logic across Node and Worker'
+          git push origin HEAD:main
