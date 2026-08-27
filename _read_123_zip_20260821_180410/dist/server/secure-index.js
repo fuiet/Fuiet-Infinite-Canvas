@@ -339,12 +339,64 @@ async function persistTask(task, env) {
   return task;
 }
 
+async function recoverPersistedTasks(env) {
+  const state = globalThis.__canvasWorkerState;
+  if (!state || state.__secureRecoveryDone) return;
+  for (const task of state.tasks || []) {
+    if (!task || ['succeeded', 'failed', 'canceled', 'cancelled'].includes(String(task.status || '').toLowerCase())) continue;
+    const upstream = task.payload?._upstream && typeof task.payload._upstream === 'object' ? task.payload._upstream : null;
+    const upstreamId = upstream?.taskId || upstream?.id || '';
+    let changed = false;
+    let note = '';
+
+    if (upstream && upstreamId && !upstream.taskId) {
+      upstream.taskId = String(upstreamId);
+      task.payload = { ...(task.payload || {}), _upstream: upstream };
+      changed = true;
+    }
+
+    if (task.cancelRequested || task.status === 'cancelling') {
+      task.status = 'canceled';
+      task.error = null;
+      note = 'Worker 重启后完成取消状态恢复';
+      changed = true;
+    } else if (task.status === 'running') {
+      if (upstreamId) {
+        task.status = 'polling';
+        task.progress = Math.max(20, Number(task.progress || 0));
+        note = 'Worker 重启后恢复已提交的上游任务轮询';
+      } else {
+        // A running task without a persisted upstream id may have crossed the POST
+        // boundary before the isolate died. Never resubmit automatically: that can
+        // duplicate a paid generation. Require an explicit manual retry instead.
+        task.status = 'failed';
+        task.error = 'Worker 在任务执行中重启，且没有安全持久化上游 taskId。为避免重复提交和重复扣费，已停止自动重试；请确认上游状态后手动重试。';
+        note = 'Worker 重启：缺少上游 taskId，按防重复扣费策略停止自动重提';
+      }
+      changed = true;
+    } else if (task.status === 'polling' && !upstreamId) {
+      task.status = 'failed';
+      task.error = '持久化轮询任务缺少上游 taskId，无法安全恢复；为避免重新创建付费任务，已停止自动执行。';
+      note = 'Worker 重启：轮询任务缺少 taskId，已安全终止';
+      changed = true;
+    }
+
+    if (!changed) continue;
+    task.updatedAt = nowIso();
+    if (note) task.logs = [...(task.logs || []), { time: task.updatedAt, level: task.status === 'failed' ? 'error' : 'info', message: note }].slice(-100);
+    try { await persistTask(task, env); }
+    catch (error) { console.warn('[canvas-secure] failed to persist recovered task', task.id, error); }
+  }
+  state.__secureRecoveryDone = true;
+}
+
 async function bootstrap(request, env, ctx) {
   if (!globalThis.__canvasWorkerState?.booted) {
     const url = new URL(request.url);
     url.pathname = '/api/health'; url.search = '';
     await legacyWorker.fetch(new Request(url.toString(), { method: 'GET', headers: request.headers }), env, ctx);
   }
+  await recoverPersistedTasks(env);
   return globalThis.__canvasWorkerState;
 }
 async function requireAuthorized(request, env, ctx) {
@@ -715,16 +767,81 @@ async function runTask(task, request, env, ctx) {
   }
   task.updatedAt = nowIso(); await persistTask(task, env);
 }
+async function handlePollingFailure(task, error, env) {
+  const message = String(error?.message || error);
+  const upstream = task.payload?._upstream && typeof task.payload._upstream === 'object' ? task.payload._upstream : null;
+  if (task.cancelRequested) {
+    task.status = 'canceled'; task.error = null; task.updatedAt = nowIso();
+    task.logs = [...(task.logs || []), { time: task.updatedAt, level: 'warn', message: '轮询期间收到取消请求' }].slice(-100);
+    await persistTask(task, env);
+    return 0;
+  }
+  if (!upstream?.taskId) {
+    task.status = 'failed'; task.output = null; task.error = message; task.updatedAt = nowIso();
+    task.logs = [...(task.logs || []), { time: task.updatedAt, level: 'error', message }].slice(-100);
+    await persistTask(task, env);
+    return 0;
+  }
+  const count = Number(upstream.pollErrorCount || 0) + 1;
+  const maxErrors = clamp(env?.CANVAS_POLL_ERROR_RETRIES, 0, 20, 5);
+  if (count > maxErrors) {
+    task.status = 'failed'; task.output = null;
+    task.error = `上游轮询连续失败 ${count} 次：${message}`;
+    task.updatedAt = nowIso();
+    task.logs = [...(task.logs || []), { time: task.updatedAt, level: 'error', message: task.error }].slice(-100);
+    await persistTask(task, env);
+    return 0;
+  }
+  const delay = Math.min(60000, Math.round(1000 * Math.pow(2, Math.min(count - 1, 6))));
+  upstream.pollErrorCount = count;
+  upstream.nextPollAt = Date.now() + delay;
+  task.payload = { ...(task.payload || {}), _upstream: upstream };
+  task.status = 'polling'; task.error = message; task.updatedAt = nowIso();
+  task.logs = [...(task.logs || []), { time: task.updatedAt, level: 'warn', message: `上游轮询失败，${Math.ceil(delay / 1000)} 秒后重试（${count}/${maxErrors}）：${message}` }].slice(-100);
+  await persistTask(task, env);
+  return delay;
+}
+
 async function drainQueue(request, env, ctx) {
   const state = globalThis.__canvasWorkerState;
   const queueState = state.__secureQueue || (state.__secureQueue = { running: 0, active: new Set() });
   const concurrency = clamp(env?.CANVAS_TASK_CONCURRENCY, 1, 8, 2);
-  const candidates = (state.tasks || []).filter(task => task.status === 'queued' && !task.cancelRequested).sort((a, b) => Number(b.priority || 50) - Number(a.priority || 50));
+  const now = Date.now();
+  const candidates = (state.tasks || []).filter(task => {
+    if (!task || task.cancelRequested) return false;
+    if (task.status === 'queued') return true;
+    if (task.status !== 'polling') return false;
+    const upstream = task.payload?._upstream;
+    return Boolean(upstream?.taskId) && Number(upstream.nextPollAt || 0) <= now;
+  }).sort((a, b) => {
+    if (a.status === 'polling' && b.status !== 'polling') return -1;
+    if (b.status === 'polling' && a.status !== 'polling') return 1;
+    if (a.status === 'polling' && b.status === 'polling') return Number(a.payload?._upstream?.nextPollAt || 0) - Number(b.payload?._upstream?.nextPollAt || 0);
+    const priority = Number(b.priority || 50) - Number(a.priority || 50);
+    return priority || String(a.createdAt || '').localeCompare(String(b.createdAt || ''));
+  });
   while (queueState.running < concurrency && candidates.length) {
-    const task = candidates.shift(); if (queueState.active.has(task.id)) continue;
+    const task = candidates.shift(); if (!task || queueState.active.has(task.id)) continue;
     queueState.running++; queueState.active.add(task.id);
-    try { await runTask(task, request, env, ctx); }
-    finally { queueState.running--; queueState.active.delete(task.id); }
+    try {
+      if (task.status === 'polling') {
+        try {
+          await pollTask(task, request, env);
+          const upstream = task.payload?._upstream;
+          if (task.status === 'polling' && upstream?.pollErrorCount) {
+            upstream.pollErrorCount = 0;
+            task.payload = { ...(task.payload || {}), _upstream: upstream };
+            await persistTask(task, env);
+          }
+        } catch (error) {
+          await handlePollingFailure(task, error, env);
+        }
+      } else {
+        await runTask(task, request, env, ctx);
+      }
+    } finally {
+      queueState.running--; queueState.active.delete(task.id);
+    }
   }
 }
 function kickQueue(request, env, ctx) {
