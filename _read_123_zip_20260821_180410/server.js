@@ -643,7 +643,7 @@ function normalizeVideoRequestBody(body) {
   return out;
 }
 
-function providerHeaders(provider, extra={}) {
+function providerHeaders(provider, extra={}, authOverride=null) {
   const headers = { 'Content-Type': 'application/json', ...sanitizeHeaderObject(provider.defaultHeaders || {}), ...sanitizeHeaderObject(extra) };
   const encrypted = String(provider.apiKeyEncrypted || '');
   let key = encrypted ? decryptSecret(encrypted) : '';
@@ -651,13 +651,23 @@ function providerHeaders(provider, extra={}) {
     throw new Error('已保存的 API Key 无法解密。通常是只复制了 providers.json、没有一起复制 .data/secret.key。请到「API供应商」重新输入 API Key 并保存。');
   }
   if (key) {
-    const headerName = provider.authHeader || 'Authorization';
-    const scheme = String(provider.authScheme || '').trim();
+    const headerName = authOverride?.header || provider.authHeader || 'Authorization';
+    const scheme = String(authOverride ? (authOverride.scheme ?? '') : (provider.authScheme || '')).trim();
     key = normalizeApiKeyValue(key, scheme, headerName);
     // Never emit `Bearer Bearer xxx` even for legacy data.
     headers[headerName] = scheme ? `${scheme} ${key}` : key;
   }
   return headers;
+}
+function providerAuthCandidates(provider){
+  const raw=[
+    {header:String(provider?.authHeader||'Authorization'),scheme:String(provider?.authScheme??'Bearer').trim()},
+    {header:'Authorization',scheme:'Bearer'},
+    {header:'x-api-key',scheme:''},
+    {header:'api-key',scheme:''}
+  ];
+  const seen=new Set();
+  return raw.filter(item=>{const key=`${item.header.toLowerCase()}|${item.scheme.toLowerCase()}`;if(seen.has(key))return false;seen.add(key);return true;});
 }
 
 function joinUrl(base, route) {
@@ -1159,7 +1169,7 @@ function modelEndpointCandidates(provider) {
   const base = String(provider.baseUrl || '').replace(/\/+$/, '');
   // Many OpenAI-compatible vendors let users enter either https://host or https://host/v1.
   if (/\/v1$/i.test(base)) return ['/models'];
-  return ['/v1/models', '/models'];
+  return ['/v1/models', '/models', '/api/v1/models', '/api/models'];
 }
 
 function inferModality(item, id, name) {
@@ -1205,15 +1215,21 @@ function detectModelListProtocol(data,route=''){
 async function fetchModelsFromProvider(provider) {
   if (!provider.baseUrl) throw new Error('Base URL 不能为空');
   const errors = [];
+  const authCandidates=providerAuthCandidates(provider);
   for (const route of modelEndpointCandidates(provider)) {
     const url = joinUrl(provider.baseUrl, route);
-    try {
-      const data = await fetchJson(url, { method:'GET', headers:providerHeaders(provider), timeoutMs:15000, provider });
-      const models = normalizeDiscoveredModels(data);
-      if (models.length) return { models, endpoint:route, preview:JSON.stringify(data).slice(0,500), suggestedProtocol:detectModelListProtocol(data,route) };
-      errors.push(`${route}: 已连接，但没有识别到模型列表`);
-    } catch (err) {
-      errors.push(`${route}: ${err.message}`);
+    for(const auth of authCandidates){
+      try {
+        const data = await fetchJson(url, { method:'GET', headers:providerHeaders(provider,{},auth), timeoutMs:15000, provider });
+        const models = normalizeDiscoveredModels(data);
+        if (models.length) return { models, endpoint:route, auth, preview:JSON.stringify(data).slice(0,500), suggestedProtocol:detectModelListProtocol(data,route) };
+        errors.push(`${route} [${auth.header}]: 已连接，但没有识别到模型列表`);
+        break;
+      } catch (err) {
+        errors.push(`${route} [${auth.header}]: ${err.message}`);
+        if(err?.status===401||err?.status===403)continue;
+        break;
+      }
     }
   }
   throw new Error(`连接成功性无法确认或未找到模型列表。${errors.join('；')}`);
@@ -1246,7 +1262,7 @@ async function testProviderAuth(input) {
   }
   try{
     const discovered=await fetchModelsFromProvider(provider);
-    return {ok:true,verified:true,endpoint:discovered.endpoint,modelCount:discovered.models.length,mode:'model-list'};
+    return {ok:true,verified:true,endpoint:discovered.endpoint,modelCount:discovered.models.length,mode:'model-list',authHeader:discovered.auth?.header||provider.authHeader,authScheme:discovered.auth?.scheme??provider.authScheme};
   }catch(error){
     return {ok:true,verified:false,mode:'unverified',warning:`当前供应商没有可安全用于鉴权验证的模型列表/测试接口。为避免调用图片或视频生成接口产生费用，本次不发送生成请求。${error.message}`};
   }
@@ -1269,7 +1285,7 @@ async function discoverProviderModels(input) {
   const existing = input.id ? loadProvidersRaw().find(p => p.id === input.id) : null;
   const provider = normalizeProvider(input, existing || null);
   const discovered = await fetchModelsFromProvider(provider);
-  return { ok:true, endpoint:discovered.endpoint, count:discovered.models.length, models:discovered.models, suggestedProtocol:discovered.suggestedProtocol||'' };
+  return { ok:true, endpoint:discovered.endpoint, count:discovered.models.length, modelCount:discovered.models.length, models:discovered.models, suggestedProtocol:discovered.suggestedProtocol||'', authHeader:discovered.auth?.header||provider.authHeader, authScheme:discovered.auth?.scheme??provider.authScheme };
 }
 
 
@@ -1353,7 +1369,25 @@ const server = http.createServer(async (req, res) => {
     if(pathname==='/api/providers'&&req.method==='POST'){
       const body=await readJson(req),list=loadProvidersRaw(),index=body.id?list.findIndex(p=>p.id===body.id):-1,saved=normalizeProvider(body,index>=0?list[index]:null);
       if(!saved.baseUrl)return json(res,400,{error:'Base URL 不能为空'});try{await validateOutboundUrl(saved.baseUrl,saved)}catch(err){return json(res,400,{error:err.message})}
-      if(saved.models.some(m=>!m.id||!m.modality))return json(res,400,{error:'模型 ID 和类型不能为空'});if(index>=0)list[index]=saved;else list.push(saved);saveProvidersRaw(list);return json(res,200,{provider:publicProvider(saved)});
+      if(saved.models.some(m=>!m.id||!m.modality))return json(res,400,{error:'模型 ID 和类型不能为空'});
+      let warning='',autoConfigured=false,discoveredEndpoint='';
+      if(!saved.models.length){
+        try{
+          const discovered=await fetchModelsFromProvider(saved);
+          saved.models=discovered.models.map(normalizeModel);
+          saved.authHeader=discovered.auth?.header||saved.authHeader;
+          saved.authScheme=discovered.auth?.scheme??saved.authScheme;
+          if(saved.protocol==='auto'&&discovered.suggestedProtocol)saved.protocol=discovered.suggestedProtocol;
+          const finalized=ProviderAdapterContract.finalizeProvider(saved);
+          saved.models=finalized.models||saved.models;
+          autoConfigured=true;discoveredEndpoint=discovered.endpoint||'';
+        }catch(error){warning=`供应商已保存，但没有发现模型列表：${String(error?.message||error)}`;}
+      }else{
+        const finalized=ProviderAdapterContract.finalizeProvider(saved);
+        saved.models=finalized.models||saved.models;
+      }
+      if(index>=0)list[index]=saved;else list.push(saved);saveProvidersRaw(list);
+      return json(res,200,{provider:publicProvider(saved),modelCount:saved.models.length,autoConfigured,discoveredEndpoint,warning});
     }
     if(pathname==='/api/providers/test-config'&&req.method==='POST'){const body=await readJson(req);try{return json(res,200,await testProviderConfig(body))}catch(err){return json(res,502,{ok:false,error:err.message})}}
     if(pathname==='/api/providers/test-auth'&&req.method==='POST'){const body=await readJson(req);try{return json(res,200,await testProviderAuth(body))}catch(err){return json(res,502,{ok:false,error:err.message})}}

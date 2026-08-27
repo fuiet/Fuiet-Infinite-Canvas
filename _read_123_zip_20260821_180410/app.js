@@ -3436,7 +3436,7 @@
   function escapeHtml(s=''){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
   function escapeAttr(s=''){return escapeHtml(String(s)).replace(/`/g,'&#96;')}
 
-  function emptyProviderDraft(){return {id:'',name:'',protocol:'auto',videoProtocol:'auto',videoProtocolConfig:{pollPath:'/v1/video/generations/{{taskId}}',taskIdPath:'',statusPath:'',progressPath:'',outputPath:'',successValues:['succeeded','completed','success','done','finished'],failureValues:['failed','error','cancelled','canceled'],pollIntervalMs:1500,timeoutMs:1200000},baseUrl:'',apiKey:'',authHeader:'Authorization',authScheme:'Bearer',testPath:'',modelsPath:'',referenceTransport:'auto',publicBaseUrl:'',uploadPath:'',uploadFileField:'file',uploadOutputPath:'data.url',allowPrivateHosts:false,downloadOutputs:true,defaultHeaders:{},models:[]}}
+  function emptyProviderDraft(){return {id:'',name:'',protocol:'auto',videoProtocol:'auto',videoProtocolConfig:{createPath:'/v1/videos',pollPath:'/v1/videos/{{taskId}}',contentPath:'/v1/videos/{{taskId}}/content',taskIdPath:'',statusPath:'',progressPath:'',outputPath:'',successValues:['succeeded','completed','success','done','finished'],failureValues:['failed','error','cancelled','canceled'],pollIntervalMs:1500,timeoutMs:1200000},baseUrl:'',apiKey:'',authHeader:'Authorization',authScheme:'Bearer',testPath:'',modelsPath:'',referenceTransport:'auto',publicBaseUrl:'',uploadPath:'',uploadFileField:'file',uploadOutputPath:'data.url',allowPrivateHosts:false,downloadOutputs:true,defaultHeaders:{},models:[]}}
   function defaultModelRoute(modality='image',protocol='generic-rest'){
     const base={id:'',name:labelForType(modality)+'模型',modality,enabled:true,adapterKey:'auto',operationRoutes:{},createPath:'',method:'POST',responseMode:'async',outputPath:'output.url',taskIdPath:'id',pollPath:'/v1/tasks/{{taskId}}',statusPath:'status',progressPath:'progress',successValues:['succeeded','completed','success'],failureValues:['failed','error','cancelled'],pollIntervalMs:1500,timeoutMs:1200000,requestTemplate:{model:'{{model}}',prompt:'{{prompt}}',references:'{{references}}',images:'{{images}}',videos:'{{videos}}',audios:'{{audios}}',aspect_ratio:'{{aspectRatio}}',duration:'{{duration}}',resolution:'{{resolution}}',parameters:'{{params}}'},capabilities:defaultCapabilities(modality)};
     if(protocol==='openai-compatible'&&modality==='text')return{...base,adapterKey:'openai-chat',name:'文本模型',createPath:'',responseMode:'sync',outputPath:'choices.0.message.content',taskIdPath:'',pollPath:'',statusPath:'',progressPath:'',timeoutMs:120000,requestTemplate:{model:'{{model}}',prompt:'{{prompt}}'}};
@@ -3533,7 +3533,7 @@
         </div>
         <div class="provider-section" hidden><div class="provider-section-title">视频生成协议</div><div class="provider-grid provider-grid-basic">
           <div class="provider-field full"><label>视频协议</label><select id="prvVideoProtocol"><option value="auto" ${!d.videoProtocol||d.videoProtocol==='auto'?'selected':''}>跟随模型配置 / 自动</option><option value="standard-video-async-v1" ${d.videoProtocol==='standard-video-async-v1'?'selected':''}>标准异步视频协议 v1</option></select><div class="field-hint">绑定后，此供应商的所有视频模型自动共用同一套协议；模型无需再单独填写创建接口。</div></div>
-          ${d.videoProtocol==='standard-video-async-v1'?`<div class="provider-field full"><label>创建接口</label><input value="POST /v1/video/generations" disabled><div class="field-hint">协议固定：Authorization 继承供应商配置；请求体发送 model / prompt / duration / ratio，并透传额外供应商参数。</div></div>
+          ${d.videoProtocol==='standard-video-async-v1'?`<div class="provider-field full"><label>创建接口</label><input value="POST /v1/videos" disabled><div class="field-hint">协议固定：Authorization 继承供应商配置；请求体发送 model / prompt / duration / ratio，并透传额外供应商参数。</div></div>
           <div class="provider-field full"><label>查询接口</label><input id="prvVideoPollPath" value="${escapeAttr(d.videoProtocolConfig?.pollPath||'/v1/video/generations/{{taskId}}')}" placeholder="/v1/video/generations/{{taskId}}"></div>
           <details class="provider-field full provider-advanced"><summary>视频协议高级设置</summary><div class="provider-grid provider-advanced-grid" style="margin-top:12px">
             <div class="provider-field"><label>任务 ID 字段</label><input id="prvVideoTaskIdPath" value="${escapeAttr(d.videoProtocolConfig?.taskIdPath||'')}" placeholder="留空自动识别 id / task_id / data.id"></div>
@@ -3647,7 +3647,7 @@ async function fetchModelsFromModal(){
       if(out.authHeader){d.authHeader=out.authHeader;d.authScheme=out.authScheme||'';}
       // 如果供应商返回的是标准 OpenAI /v1/models 结构，则自动切换到 OpenAI 兼容适配器。
       // 这样文本模型会自动走 /v1/chat/completions，而不是落入 Generic REST 的未知路由。
-      if(d.protocol==='generic-rest'&&out.suggestedProtocol==='openai-compatible'){
+      if((d.protocol==='auto'||d.protocol==='generic-rest')&&out.suggestedProtocol==='openai-compatible'){
         d.protocol='openai-compatible';
       }
       providerEditorDraft=d;
