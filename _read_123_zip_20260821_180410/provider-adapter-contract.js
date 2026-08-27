@@ -71,7 +71,11 @@ function adapterDefaults(key,nodeType){
   if(key==='openai-image')return{createPath:'/v1/images/generations',method:'POST',responseMode:'sync',outputPath:'data.0.url'};
   if(key==='openai-audio-speech')return{createPath:'/v1/audio/speech',method:'POST',responseMode:'sync',outputPath:''};
   if(key==='comfyui-workflow')return{createPath:'/prompt',method:'POST',responseMode:'async',taskIdPath:'prompt_id',pollPath:'/history/{{taskId}}',pollMethod:'GET'};
-  if(key==='standard-video-async-v1')return{createPath:'/v1/video/generations',method:'POST',responseMode:'async',taskIdPath:'',pollPath:'/v1/video/generations/{{taskId}}',pollMethod:'GET',statusPath:'',progressPath:'',outputPath:'',successValues:SUCCESS,failureValues:FAILURE,pollIntervalMs:1500,timeoutMs:1200000};
+  // Current OpenAI Videos API and the growing set of compatible gateways use
+  // POST /v1/videos, GET /v1/videos/{id}, and a content endpoint when the final
+  // status object does not itself contain a CDN URL. Older/custom routes remain
+  // supported when explicitly configured by a provider/model.
+  if(key==='standard-video-async-v1')return{createPath:'/v1/videos',method:'POST',responseMode:'async',taskIdPath:'',pollPath:'/v1/videos/{{taskId}}',pollMethod:'GET',contentPath:'/v1/videos/{{taskId}}/content',statusPath:'',progressPath:'',outputPath:'',successValues:SUCCESS,failureValues:FAILURE,pollIntervalMs:1500,timeoutMs:1200000};
   if(key==='generic-async')return{createPath:'',method:'POST',responseMode:'async',pollMethod:'GET',successValues:SUCCESS,failureValues:FAILURE,pollIntervalMs:1500,timeoutMs:1200000};
   if(key==='generic-sync')return{createPath:'',method:'POST',responseMode:'sync'};
   return{createPath:'',method:'POST',responseMode:nodeType==='video'?'async':'sync',pollMethod:'GET',successValues:SUCCESS,failureValues:FAILURE,pollIntervalMs:1500,timeoutMs:1200000};
@@ -95,6 +99,7 @@ function resolveRoute(provider={},model={},nodeType='',operation='generate'){
     pollPath:autoDefaults?undefined:model.pollPath,
     pollMethod:autoDefaults?undefined:model.pollMethod,
     pollBodyTemplate:autoDefaults?undefined:model.pollBodyTemplate,
+    contentPath:autoDefaults?undefined:model.contentPath,
     statusPath:autoDefaults?undefined:model.statusPath,
     progressPath:autoDefaults?undefined:model.progressPath,
     successValues:autoDefaults?undefined:model.successValues,
@@ -127,6 +132,7 @@ function finalizeModel(provider={},model={},nodeType=''){
     next.taskIdPath=route.taskIdPath||'';
     next.pollPath=route.pollPath||'';
     next.pollMethod=route.pollMethod||'GET';
+    next.contentPath=route.contentPath||'';
     next.statusPath=route.statusPath||'';
     next.progressPath=route.progressPath||'';
     next.successValues=route.successValues||SUCCESS;
