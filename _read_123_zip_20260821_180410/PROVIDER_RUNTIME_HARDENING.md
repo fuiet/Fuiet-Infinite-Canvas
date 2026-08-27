@@ -53,6 +53,8 @@ The account-free desktop/single-user mode still exists for a genuinely local or 
 
 Tasks are persisted and support queue priority, concurrency, retry, cancellation, and logs.
 
+The browser monitors only the Canvas task resource (`GET /api/tasks/{taskId}`). It no longer posts task snapshots, `_upstream` state, poll paths, or provider task metadata back to `/api/tasks/poll`. Node keeps its local task runner, while Cloudflare task reads wake the persisted server-owned queue/poller. This keeps browser input out of upstream routing decisions and works consistently in both runtimes.
+
 For asynchronous paid jobs, the creation request is sent once and the returned upstream `taskId` is persisted before polling. After a Worker restart:
 
 - `polling` tasks with a persisted `taskId` resume polling without re-creating the upstream job.
