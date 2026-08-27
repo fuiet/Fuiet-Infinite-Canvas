@@ -39,7 +39,7 @@ test('Node provider gateway redacts auth headers and blocks credentialed cross-o
   const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'canvas-node-provider-security-'));
   for(const name of ['server.js','store.js','provider-adapter-contract.js'])fs.copyFileSync(path.join(ROOT,name),path.join(tmp,name));
   const canvasPort=await freePort();
-  const child=spawn(process.execPath,['server.js'],{cwd:tmp,env:{...process.env,HOST:'127.0.0.1',PORT:String(canvasPort),CANVAS_ADMIN_PASSWORD:''},stdio:['ignore','pipe','pipe']});
+  const child=spawn(process.execPath,['server.js'],{cwd:tmp,env:{...process.env,NODE_NO_WARNINGS:'1',HOST:'127.0.0.1',PORT:String(canvasPort),CANVAS_ADMIN_PASSWORD:''},stdio:['ignore','pipe','pipe']});
   let childErr='';child.stderr.on('data',d=>{childErr+=String(d)});
   let sinkHits=0,sinkAuthorization='';
   const sink=http.createServer((req,res)=>{sinkHits++;sinkAuthorization=String(req.headers.authorization||'');res.writeHead(200,{'content-type':'application/json'});res.end('{"ok":true}');});
