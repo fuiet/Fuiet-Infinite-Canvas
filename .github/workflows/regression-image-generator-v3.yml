@@ -156,7 +156,8 @@ jobs:
             if(!ior) throw new Error('blank-drop port missing');
             await page.mouse.move(ior.x+ior.width/2,ior.y+ior.height/2);
             await page.mouse.down();
-            await page.mouse.move(vr.x+1110,vr.y+610,{steps:10});
+            // x=100 is deliberately left of both nodes and away from the bottom dock.
+            await page.mouse.move(vr.x+100,vr.y+500,{steps:10});
             await page.mouse.up();
             await page.waitForTimeout(240);
             const connecting=await viewport.evaluate(el=>el.classList.contains('connecting-mode'));
