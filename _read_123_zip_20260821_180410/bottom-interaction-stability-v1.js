@@ -1,6 +1,6 @@
-/* Canvas Studio · Bottom interaction stability v4
+/* Canvas Studio · Bottom interaction stability v5
  * Gives the persistent bottom dock one deterministic activation path and
- * hardens connection pointer cleanup, including single-node blank drops.
+ * hardens connection pointer cleanup without capturing node connection drags.
  */
 (()=>{
 'use strict';
@@ -9,12 +9,6 @@ const dock=document.querySelector('#bottomDock');
 const viewport=document.querySelector('#canvasViewport');
 if(!dock||!viewport)return;
 
-/*
- * app.js installs button.onclick handlers while bottom-dock-v3 installs a
- * capture-phase delegated click handler. Clone every button once to remove any
- * late button-local listeners, preserve the app handler, then route every real
- * user activation through one document-level dispatcher.
- */
 const APP_ACTIONS=new Set(['add','mode','layout','workflow','asset','help']);
 const V3_ACTIONS=new Set(['history','shortcuts']);
 
@@ -127,11 +121,16 @@ document.addEventListener('click',e=>{
   runUserActivation(btn,e);
 },true);
 
-/* Connection hardening. */
+/* Connection hardening.
+ * Connection drags deliberately do NOT use pointer capture. app.js already
+ * listens on window for pointermove/pointerup, so the gesture remains tracked
+ * while allowing a blank-canvas release to reach its native branch:
+ * cleanupConnectionDrag(false) -> showQuickAdd(..., fromNodeId).
+ */
 let connectionMoveFrameOpen=true;
 let sourcePort=null;
 let sourcePointerId=null;
-let singleNodeConnection=false;
+let connectionStartedAt=0;
 let cancelQueued=false;
 
 function connectionActive(){
@@ -163,30 +162,27 @@ function dispatchConnectionCancel(pointerId=sourcePointerId){
   });
 }
 
-/*
- * With one node there is no existing connection target. The normal app path on
- * pointerup cleans the connection state and opens the compatible-node menu.
- * Do not capture the pointer in that case: keeping capture on the only node while
- * the menu is being mounted can leave browsers in a stale connection gesture.
- */
 document.addEventListener('pointerdown',e=>{
   const port=e.target.closest?.('.node-port.out');
   if(!port||e.button!==0)return;
   sourcePort=port;
   sourcePointerId=e.pointerId;
-  singleNodeConnection=document.querySelectorAll('#nodeLayer .node').length<=1;
-  queueMicrotask(()=>{
-    if(!connectionActive()||sourcePort!==port||singleNodeConnection)return;
-    try{port.setPointerCapture(e.pointerId)}catch{}
-  });
+  connectionStartedAt=performance.now();
+  /* Never call setPointerCapture here. Blank-drop creation must stay reachable
+   * regardless of how many nodes are currently on the canvas. */
 },true);
 
 window.addEventListener('pointermove',e=>{
   if(!connectionActive())return;
+  if(sourcePointerId!=null&&e.pointerId!==sourcePointerId)return;
+
+  /* If the browser missed pointerup, the first move with buttons=0 terminates the
+   * stale connection instead of leaving the canvas locked. */
   if(typeof e.buttons==='number'&&(e.buttons&1)===0){
     dispatchConnectionCancel(e.pointerId);
     return;
   }
+
   if(!connectionMoveFrameOpen){
     e.stopImmediatePropagation();
     return;
@@ -196,35 +192,38 @@ window.addEventListener('pointermove',e=>{
 },true);
 
 window.addEventListener('pointerup',e=>{
+  if(sourcePointerId!=null&&e.pointerId!==sourcePointerId)return;
   const pointerId=e.pointerId;
-  const wasSingle=singleNodeConnection&&(sourcePointerId==null||sourcePointerId===pointerId);
+  const wasConnection=Boolean(sourcePort)||connectionActive();
 
-  if(wasSingle&&sourcePort){
-    try{if(sourcePort.hasPointerCapture?.(pointerId))sourcePort.releasePointerCapture(pointerId)}catch{}
-  }
+  /* Do not stop/prevent this event. app.js must receive the same pointerup so it
+   * can either complete a target connection or open the compatible add-node menu
+   * at the blank release point. */
+  if(wasConnection){
+    queueMicrotask(()=>{
+      /* Normal target/blank-drop paths clear connecting-mode synchronously. Only
+       * cancel when it is still present after app.js has processed pointerup. */
+      if(connectionActive())dispatchConnectionCancel(pointerId);
+      sourcePort=null;
+      sourcePointerId=null;
+      connectionStartedAt=0;
+    });
 
-  /* Let app.js process the same pointerup first. Then verify that its blank-drop
-   * branch actually left connecting-mode. If not, cancel through app.js's own
-   * pointercancel handler so closure state is cleared as well as DOM state. */
-  queueMicrotask(()=>{
-    if(wasSingle&&connectionActive())dispatchConnectionCancel(pointerId);
-    sourcePort=null;
-    sourcePointerId=null;
-    singleNodeConnection=false;
-  });
-
-  if(wasSingle){
     setTimeout(()=>{
       if(connectionActive())dispatchConnectionCancel(pointerId);
       setTimeout(()=>{if(connectionActive())forceConnectionDomCleanup()},0);
-    },80);
+    },100);
+  }else{
+    sourcePort=null;
+    sourcePointerId=null;
+    connectionStartedAt=0;
   }
 },true);
 
 window.addEventListener('pointercancel',()=>{
   sourcePort=null;
   sourcePointerId=null;
-  singleNodeConnection=false;
+  connectionStartedAt=0;
   connectionMoveFrameOpen=true;
 },true);
 window.addEventListener('blur',()=>{
@@ -234,8 +233,13 @@ window.addEventListener('blur',()=>{
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden){press=null;if(connectionActive())dispatchConnectionCancel()}
 });
-document.addEventListener('lostpointercapture',()=>{
-  if(connectionActive()&&!singleNodeConnection)dispatchConnectionCancel();
+
+/* A final mouse-only watchdog: if a connection somehow survives after the button
+ * has been released and no further pointer event arrives, clear it quickly. */
+document.addEventListener('mousemove',e=>{
+  if(!connectionActive()||!connectionStartedAt)return;
+  if((e.buttons&1)!==0)return;
+  if(performance.now()-connectionStartedAt>40)dispatchConnectionCancel(sourcePointerId);
 },true);
 
 })();
