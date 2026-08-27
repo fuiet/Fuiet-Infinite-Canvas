@@ -1,0 +1,46 @@
+name: Cache Bust Canvas Runtime
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/cache-bust-canvas-runtime.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Version canvas runtime assets
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('_read_123_zip_20260821_180410/index.html')
+          s=p.read_text(encoding='utf-8')
+          version='20260827-blankdrop-1'
+          scripts=['three-runtime.js','app.js','security-client.js','ui-zh.js','ui-v2.js','ui-v23.js','ui-connect-v23.js','bottom-dock-v3.js','bottom-dock-v4.js','bottom-left-minimap-v1.js','bottom-left-edge-toggle-v1.js']
+          for name in scripts:
+              import re
+              s=re.sub(rf'(src="\./{re.escape(name)})(?:\?v=[^"]+)?(" )',rf'\1?v={version}\2',s)
+              s=re.sub(rf'(src="\./{re.escape(name)})(?:\?v=[^"]+)?(")',rf'\1?v={version}\2',s)
+          p.write_text(s,encoding='utf-8')
+          PY
+      - name: Verify version lock
+        run: |
+          grep -q 'src="./app.js?v=20260827-blankdrop-1"' _read_123_zip_20260821_180410/index.html
+          grep -q 'src="./bottom-left-edge-toggle-v1.js?v=20260827-blankdrop-1"' _read_123_zip_20260821_180410/index.html
+          git diff --check
+      - name: Commit
+        run: |
+          if git diff --quiet; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add _read_123_zip_20260821_180410/index.html
+          git commit -m "Version-lock canvas runtime assets"
+          git push origin main
