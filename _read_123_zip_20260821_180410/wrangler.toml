@@ -6,22 +6,24 @@ pages_build_output_dir = "."
 SUPABASE_STORAGE_BUCKET = "canvas-media"
 CANVAS_TASK_CONCURRENCY = "2"
 CANVAS_ALLOW_PRIVATE_PROVIDER_HOSTS = "0"
-CANVAS_ENFORCE_OWNER = "1"
+
+# Current product mode: desktop/single-user. No account, login, Bearer token or owner id
+# is required to configure providers, projects, tasks or media.
+CANVAS_DESKTOP_SINGLE_USER = "1"
+CANVAS_ENFORCE_OWNER = "0"
 CANVAS_CLAIM_UNOWNED = "0"
 CANVAS_ALLOW_UNAUTHENTICATED_OWNER = "0"
+CANVAS_AUTO_SINGLE_SUPABASE_OWNER = "0"
 
 # Configure secrets / environment values in Cloudflare Pages/Workers settings, not in Git:
-# PROVIDER_SECRET_KEY
-# SUPABASE_URL
-# SUPABASE_SERVICE_ROLE_KEY
-# SUPABASE_ANON_KEY              # optional; used to validate Supabase Bearer users
-# CANVAS_ADMIN_PASSWORD
-# CANVAS_OWNER_ID                # optional in single-user admin mode; required when Supabase has multiple users
+# PROVIDER_SECRET_KEY                 # still required to encrypt provider API keys
+# SUPABASE_URL                       # optional while developing the web preview
+# SUPABASE_SERVICE_ROLE_KEY          # optional while developing the web preview
 # CANVAS_PUBLIC_BASE_URL=https://fuiet-infinite-canvas.pages.dev
 #
-# Single-user admin mode: after the signed admin session is verified, the gateway may
-# automatically use the only auth.users row as CANVAS_OWNER_ID. Set
-# CANVAS_AUTO_SINGLE_SUPABASE_OWNER=0 to disable that fallback.
+# CANVAS_ADMIN_PASSWORD, CANVAS_OWNER_ID and SUPABASE_ANON_KEY are not required in
+# desktop/single-user mode. Even if old values remain in Cloudflare, the desktop-mode
+# entry point ignores them for normal application/provider API access.
 #
-# CANVAS_CLAIM_UNOWNED=1 may be used only during an explicit one-time migration of
-# legacy ownerless rows. Return it to 0 immediately after ownership is assigned.
+# If a future hosted multi-user edition is built, set CANVAS_DESKTOP_SINGLE_USER=0,
+# CANVAS_ENFORCE_OWNER=1 and configure a real authentication/owner strategy there.
