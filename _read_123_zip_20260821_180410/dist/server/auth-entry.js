@@ -15,6 +15,21 @@ function json(body, status = 200, extraHeaders = {}) {
   });
 }
 
+function desktopSingleUser(env) {
+  return String(env?.CANVAS_DESKTOP_SINGLE_USER || '0') === '1';
+}
+
+function desktopEnv(env) {
+  return {
+    ...env,
+    CANVAS_ADMIN_PASSWORD: '',
+    CANVAS_ENFORCE_OWNER: '0',
+    CANVAS_OWNER_ID: '',
+    CANVAS_ALLOW_UNAUTHENTICATED_OWNER: '0',
+    CANVAS_AUTO_SINGLE_SUPABASE_OWNER: '0'
+  };
+}
+
 function parseCookies(request) {
   const out = {};
   const raw = String(request.headers.get('cookie') || '');
@@ -124,8 +139,8 @@ function csrfAllowed(request) {
   if (SAFE_METHODS.has(request.method)) return true;
   const origin = String(request.headers.get('origin') || '').trim();
   if (!origin) return true;
-  try { return new URL(origin).origin === new URL(request.url).origin; }
-  catch { return false; }
+  try { return new URL(origin).origin === new URL(request.url).origin;
+  } catch { return false; }
 }
 
 function innerEnvForAdmin(env) {
@@ -177,6 +192,23 @@ async function handleAuth(request, env, pathname) {
 
 async function route(request, env, ctx) {
   const url = new URL(request.url), pathname = url.pathname;
+
+  // Desktop/single-user builds are intentionally account-free. This guard runs
+  // before all legacy admin-cookie and Supabase-Bearer authentication code so
+  // stale cloud secrets cannot accidentally make provider configuration require login.
+  if (desktopSingleUser(env)) {
+    if (pathname === '/api/auth/status' && request.method === 'GET') {
+      return json({ enabled: false, authenticated: true, mode: 'desktop-single-user' });
+    }
+    if (pathname === '/api/auth/login' && request.method === 'POST') {
+      return json({ ok: true, disabled: true, mode: 'desktop-single-user' });
+    }
+    if (pathname === '/api/auth/logout' && request.method === 'POST') {
+      return json({ ok: true, disabled: true, mode: 'desktop-single-user' });
+    }
+    return finalWorker.fetch(request, desktopEnv(env), ctx);
+  }
+
   const authResponse = await handleAuth(request, env, pathname);
   if (authResponse) return authResponse;
 
@@ -193,8 +225,6 @@ async function route(request, env, ctx) {
     return finalWorker.fetch(request, innerEnvForAdmin(env), ctx);
   }
 
-  // A valid Supabase Bearer user is verified and owner-scoped by production-entry.js.
-  // Do not require the shared admin cookie for that authentication mode.
   if (hasBearer(request)) return finalWorker.fetch(request, innerEnvForBearer(env), ctx);
 
   return json({ error: '需要管理员登录或有效用户身份' }, 401);
