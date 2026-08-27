@@ -9,7 +9,9 @@ const dns = require('dns').promises;
 const net = require('net');
 const { CanvasStore } = require('./store');
 require('./provider-adapter-contract.js');
+require('./provider-runtime-core.js');
 const ProviderAdapterContract = globalThis.CanvasProviderAdapters;
+const ProviderRuntimeCore = globalThis.CanvasProviderRuntimeCore;
 const execFileAsync = promisify(execFile);
 
 const ROOT = __dirname;
@@ -867,7 +869,7 @@ async function executeGeneric(task, provider, model, payload) {
       else {const outputPath=opConfig.outputPath||model.outputPath;raw = outputPath ? deepGet(created, outputPath) : created;if(raw==null && outputPath)raw=deepGet(created,outputPath);}
       return normalizeOutput(raw ?? created, task.nodeType, provider);
     }
-    const taskIdPath=opConfig.taskIdPath||model.taskIdPath||'id';upstreamTaskId = deepGet(created, taskIdPath);
+    const taskIdPath=opConfig.taskIdPath||model.taskIdPath||'';upstreamTaskId = ProviderRuntimeCore.extractTaskId(created,{taskIdPath});
     if (!upstreamTaskId) throw new Error(`创建任务成功，但未能从字段「${taskIdPath}」读取任务 ID`);
     payload._upstream={protocol:'generic',modelId:model.id,id:String(upstreamTaskId),createdAt:new Date().toISOString()};task.payload=payload;updateTask(task,{payload});taskLog(task,`已持久化上游任务 ID：${upstreamTaskId}`);
   }
@@ -981,26 +983,10 @@ function standardVideoBody(model,payload,config={}){
   }
   return body;
 }
-function standardVideoTaskId(created,config={}){
-  if(config.taskIdPath){const explicit=deepGet(created,config.taskIdPath);if(explicit)return String(explicit)}
-  const common=firstDeepValue(created,['id','task_id','taskId','data.id','data.task_id','data.taskId','task.id','result.id']);
-  return common?String(common):findStringByPrefix(created,'video_task_');
-}
-function standardVideoStatus(polled,config={}){
-  if(config.statusPath)return deepGet(polled,config.statusPath);
-  return firstDeepValue(polled,['status','data.status','state','data.state','task.status','result.status']);
-}
-function standardVideoProgress(polled,config={}){
-  if(config.progressPath)return deepGet(polled,config.progressPath);
-  return firstDeepValue(polled,['progress','data.progress','percent','data.percent','task.progress']);
-}
-function standardVideoOutput(polled,config={}){
-  if(config.outputPath)return deepGet(polled,config.outputPath);
-  return firstDeepValue(polled,[
-    'output.url','output.video_url','output.videoUrl','data.output.url','data.output.video_url','data.video_url','data.videoUrl',
-    'video_url','videoUrl','result.url','result.video_url','data.result.url','data.result.video_url','url','data.url','output.0.url','data.output.0.url'
-  ]);
-}
+function standardVideoTaskId(created,config={}){return ProviderRuntimeCore.extractTaskId(created,config);}
+function standardVideoStatus(polled,config={}){return ProviderRuntimeCore.extractStatus(polled,config);}
+function standardVideoProgress(polled,config={}){return ProviderRuntimeCore.extractProgress(polled,config);}
+function standardVideoOutput(polled,config={}){return ProviderRuntimeCore.extractOutput(polled,config,'video');}
 async function downloadStandardVideoContent(task,provider,config,taskId){
   const template=String(config.contentPath||'').trim();
   if(!template)return null;
@@ -1050,12 +1036,12 @@ async function executeStandardVideoAsync(task,provider,model,payload){
     const pollMethod=String(config.pollMethod||'GET').toUpperCase();
     const pollBody=config.pollBodyTemplate&&typeof config.pollBodyTemplate==='object'?renderTemplate(config.pollBodyTemplate,pollCtx):undefined;
     const polled=await fetchJson(joinUrl(provider.baseUrl,pollPath),{method:pollMethod,headers:providerHeaders(provider),body:['GET','HEAD'].includes(pollMethod)?undefined:(pollBody===undefined?undefined:JSON.stringify(pollBody)),timeoutMs:60000,provider});
-    const statusRaw=standardVideoStatus(polled,config),status=String(statusRaw??'').toLowerCase();
-    const progressRaw=Number(standardVideoProgress(polled,config));
+    const assessment=ProviderRuntimeCore.classifyAsyncPoll(polled,config,'video');
+    const status=assessment.status,progressRaw=assessment.progress;
     updateTask(task,{status:'polling',progress:Number.isFinite(progressRaw)?Math.max(20,Math.min(96,progressRaw)):Math.min(94,20+checks*4)});
-    if(failure.includes(status))throw new Error(`上游视频任务失败：${status||'unknown'}`);
-    const output=standardVideoOutput(polled,config);
-    if(success.includes(status)||(config.allowOutputWithoutTerminalStatus===true&&!status&&output!=null)){
+    if(assessment.state==='failure')throw new Error(ProviderRuntimeCore.formatFailure(assessment,'上游视频任务失败'));
+    const output=assessment.output;
+    if(assessment.state==='success'){
       if(output!=null)return normalizeOutput(output,'video',provider);
       const content=await downloadStandardVideoContent(task,provider,config,taskId);
       if(content)return content;

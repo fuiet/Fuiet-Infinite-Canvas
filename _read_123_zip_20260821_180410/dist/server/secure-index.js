@@ -1,6 +1,8 @@
 import legacyWorker from './index.js';
 import '../../provider-adapter-contract.js';
+import '../../provider-runtime-core.js';
 const ProviderAdapterContract = globalThis.CanvasProviderAdapters;
+const ProviderRuntimeCore = globalThis.CanvasProviderRuntimeCore;
 
 const SENSITIVE_HEADER_NAMES = new Set([
   'authorization', 'proxy-authorization', 'x-api-key', 'api-key', 'apikey',
@@ -738,7 +740,7 @@ async function submitTask(task, request, env, ctx) {
     output = await persistMediaOutput(task, output, provider, env);
     return { output };
   }
-  const taskId = route.taskIdPath ? getPath(parsed, route.taskIdPath) : firstPath(parsed, ['id', 'task_id', 'taskId', 'request_id', 'job_id', 'data.id', 'data.task_id', 'data.taskId', 'task.id', 'result.id']);
+  const taskId = ProviderRuntimeCore.extractTaskId(parsed, route);
   if (!taskId) throw new Error('视频任务已提交，但响应中没有识别到任务 ID；不会再次 POST，以避免重复扣费');
   if (!route.pollPath) throw new Error('视频任务已创建，但服务端未配置 pollPath');
   return { pending: true, upstream: { taskId: String(taskId), startedAt: Date.now(), pollAttempt: 0, nextPollAt: Date.now(), routeVersion: 1 } };
@@ -870,17 +872,13 @@ async function pollTask(task, request, env) {
   const pollBody=route.pollBodyTemplate&&typeof route.pollBodyTemplate==='object'?replaceTemplate(route.pollBodyTemplate,pollContext):undefined;
   const res = await safeProviderFetch(provider, pollUrl, { method: pollMethod, headers: buildHeaders(provider, model, null, ['GET','HEAD'].includes(pollMethod)?null:'application/json'), body:['GET','HEAD'].includes(pollMethod)?undefined:(pollBody===undefined?undefined:JSON.stringify(pollBody)), timeoutMs: 30000 }, env);
   const parsed = await parseJsonResponse(res);
-  const statusRaw = firstPath(parsed, [route.statusPath, 'status', 'data.status', 'state', 'data.state', 'task.status', 'result.status']);
-  const status = String(statusRaw || '').toLowerCase();
-  const progressRaw = firstPath(parsed, [route.progressPath, 'progress', 'data.progress', 'percent', 'data.percent', 'task.progress']);
-  const progress = Number(progressRaw);
-  const success = new Set(route.successValues.map(v => String(v).toLowerCase()));
-  const failure = new Set(route.failureValues.map(v => String(v).toLowerCase()));
-  if (failure.has(status)) {
-    const detail = firstPath(parsed, ['error.message', 'message', 'error', 'data.error.message', 'data.error', 'task.error', 'result.error']);
-    throw new Error(`上游任务失败（${status || 'unknown'}）${detail ? `：${typeof detail === 'object' ? JSON.stringify(detail).slice(0, 500) : String(detail).slice(0, 500)}` : ''}`);
+  const assessment = ProviderRuntimeCore.classifyAsyncPoll(parsed, route, task.nodeType);
+  const status = assessment.status;
+  const progress = assessment.progress;
+  if (assessment.state === 'failure') {
+    throw new Error(ProviderRuntimeCore.formatFailure(assessment, '上游任务失败'));
   }
-  if (success.has(status)) {
+  if (assessment.state === 'success') {
     let output = extractOutput(parsed, task.nodeType, route);
     if ((!output || output.type !== 'url') && task.nodeType === 'video') output = await fetchCompletedVideoContent(task, provider, model, route, upstream.taskId, env);
     if (!output || output.type !== 'url') throw new Error(`上游任务状态为 ${status}，但没有识别到最终媒体 URL，也无法从 contentPath 获取媒体内容`);
@@ -895,7 +893,7 @@ async function pollTask(task, request, env) {
   }
   const attempt = Number(upstream.pollAttempt || 0) + 1;
   const baseDelay = route.pollIntervalMs;
-  const delay = Math.min(30000, Math.round(baseDelay * Math.pow(1.7, Math.min(attempt, 8))));
+  const delay = ProviderRuntimeCore.nextPollDelay(baseDelay, attempt);
   upstream.pollAttempt = attempt; upstream.nextPollAt = Date.now() + delay;
   task.payload = { ...(task.payload || {}), _upstream: upstream };
   task.status = 'polling'; task.progress = Number.isFinite(progress) ? Math.max(20, Math.min(96, progress)) : Math.min(95, Number(task.progress || 20) + 2); task.updatedAt = nowIso();
