@@ -1,0 +1,42 @@
+name: Diagnose owner fix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/diagnose-owner-fix.yml'
+
+jobs:
+  test-file:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        file:
+          - audio-node-v23.test.mjs
+          - canvas-add-node-menu.test.mjs
+          - final-entry.test.mjs
+          - image-node-libtv.test.mjs
+          - owner-auto-resolution.test.mjs
+          - owner-isolation.test.mjs
+          - provider-adapter-v2.test.mjs
+          - provider-production-defaults.test.mjs
+          - provider-runtime-parity.test.mjs
+          - provider-settings-access.test.mjs
+          - reference-ownership.test.mjs
+          - stateless-auth.test.mjs
+          - text-node-v23.test.mjs
+          - ui-design-system.test.mjs
+          - upload-stream-limit.test.mjs
+          - video-node-v23.test.mjs
+          - worker-security.test.mjs
+    name: owner-fix ${{ matrix.file }}
+    defaults:
+      run:
+        working-directory: _read_123_zip_20260821_180410
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test tests/${{ matrix.file }}
