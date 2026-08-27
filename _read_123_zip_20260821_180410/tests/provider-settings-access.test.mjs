@@ -21,3 +21,11 @@ test('creator settings remains visible and exposes provider configuration', () =
   assert.match(app, /if\(b\.dataset\.setting==='providers'\)openProviderModal\(\)/);
   assert.match(app, /PROVIDERS_STORAGE_KEY/);
 });
+
+test('provider auth UI never reports unverified credentials as verified', () => {
+  const app = read('app.js');
+
+  assert.match(app, /if\(out\.verified===false\)\{showProviderTest\(`连接已建立，但鉴权暂未验证。/);
+  assert.match(app, /showProviderTest\(`鉴权已验证/);
+  assert.doesNotMatch(app, /if\(out\.verified===false\)[\s\S]{0,500}showProviderTest\(`鉴权已验证/);
+});
