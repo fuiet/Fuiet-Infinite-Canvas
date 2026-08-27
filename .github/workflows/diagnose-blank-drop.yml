@@ -21,7 +21,7 @@ jobs:
       - name: Start app
         working-directory: _read_123_zip_20260821_180410
         run: |
-          node server.js > /tmp/canvas-server.log 2>&1 &
+          python3 -m http.server 8080 --bind 127.0.0.1 > /tmp/canvas-server.log 2>&1 &
           echo $! > /tmp/canvas-server.pid
           for i in {1..40}; do curl -fsS http://127.0.0.1:8080/ >/dev/null && break; sleep .5; done
       - name: Run blank-drop diagnostic
