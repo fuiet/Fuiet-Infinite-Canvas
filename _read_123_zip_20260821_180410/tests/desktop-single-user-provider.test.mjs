@@ -4,7 +4,6 @@ import worker from '../dist/server/pages-entry.js';
 
 const BASE = 'https://canvas.example.test';
 const ENV = {
-  PROVIDER_SECRET_KEY: 'desktop-provider-test-key',
   CANVAS_DESKTOP_SINGLE_USER: '1',
   // Deliberately stale cloud settings: desktop mode must override them.
   CANVAS_ADMIN_PASSWORD: 'must-not-be-required',
@@ -34,7 +33,7 @@ test('desktop single-user mode reports authentication disabled', { concurrency: 
   assert.equal(result.data.mode, 'desktop-single-user');
 });
 
-test('desktop single-user mode can list and save providers without login, bearer or owner id', { concurrency: false }, async () => {
+test('desktop single-user mode can save provider API keys without login, owner id or configured provider secret', { concurrency: false }, async () => {
   await call('/api/health');
   if (globalThis.__canvasWorkerState?.providers) globalThis.__canvasWorkerState.providers = [];
   globalThis.__canvasProviderMigrationPromise = null;
@@ -58,4 +57,11 @@ test('desktop single-user mode can list and save providers without login, bearer
   assert.equal(saved.data.provider.id, 'desktop-direct-provider');
   assert.equal(saved.data.provider.ownerId, undefined);
   assert.equal(saved.data.provider.hasApiKey, true);
+  assert.equal(saved.data.provider.apiKey, undefined);
+  assert.equal(saved.data.provider.apiKeyEncrypted, undefined);
+
+  const stored = globalThis.__canvasWorkerState.providers.find(item => item.id === 'desktop-direct-provider');
+  assert.ok(stored);
+  assert.equal(stored.apiKey, undefined);
+  assert.match(String(stored.apiKeyEncrypted || ''), /^v1\./);
 });
