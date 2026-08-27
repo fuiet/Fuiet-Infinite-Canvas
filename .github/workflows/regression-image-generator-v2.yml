@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/regression-image-generator-v2.yml'
+      - '_read_123_zip_20260821_180410/image-generator-v2.js'
+      - '_read_123_zip_20260821_180410/styles/image-generator-v2.css'
+      - '_read_123_zip_20260821_180410/index.html'
 
 jobs:
   browser:
@@ -95,7 +98,7 @@ jobs:
           await page.mouse.click(vr.x+80,vr.y+100);
           await page.waitForTimeout(120);
 
-          const text=await addNode('text',900,200);
+          await addNode('text',900,200);
           const manual=page.locator('.node[data-node-type="text"] [data-text-quick="manual"]').last();
           if(await manual.count()){await manual.click();await page.waitForTimeout(180)}
           const surface=page.locator('.node[data-node-type="text"] [data-text-manual-view]').last();
