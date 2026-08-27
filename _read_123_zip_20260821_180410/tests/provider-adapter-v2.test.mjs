@@ -51,8 +51,9 @@ test('auto video keeps async adapter defaults instead of stale sync model defaul
   const route=Contract.resolveRoute(provider,model,'video','generate');
   assert.equal(route.adapterKey,'standard-video-async-v1');
   assert.equal(route.responseMode,'async');
-  assert.equal(route.createPath,'/v1/video/generations');
-  assert.equal(route.pollPath,'/v1/video/generations/{{taskId}}');
+  assert.equal(route.createPath,'/v1/videos');
+  assert.equal(route.pollPath,'/v1/videos/{{taskId}}');
+  assert.equal(route.contentPath,'/v1/videos/{{taskId}}/content');
 });
 
 test('worker separates connection, auth and model discovery; model list auto-enables common compatible protocol', {concurrency:false}, async()=>{
