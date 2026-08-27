@@ -41,16 +41,22 @@ jobs:
           const textRow=page.locator('#contextMenu .libtv-add-row[data-kind="node"][data-id="text"]').first();
           if(!(await textRow.count())) throw new Error('text node add row missing');
           await textRow.click();
-          await page.waitForTimeout(300);
+          await page.waitForTimeout(250);
 
-          const node=page.locator('.node').filter({has:page.locator('[data-text-manual-view]')}).first();
-          const surface=node.locator('.text-node-preview').first();
+          const quickManual=page.locator('.node [data-text-quick="manual"]').first();
+          if(await quickManual.count()){
+            await quickManual.click();
+            await page.waitForTimeout(250);
+          }
+
+          const surface=page.locator('.node [data-text-manual-view]').first();
           const sb=await surface.boundingBox();
-          if(!sb) throw new Error('manual text preview missing');
-          await page.mouse.dblclick(sb.x+sb.width/2,sb.y+80,{delay:90});
+          if(!sb) throw new Error('empty manual text surface missing');
+          console.log('MANUAL_SURFACE',await surface.innerText());
+          await page.mouse.dblclick(sb.x+sb.width/2,sb.y+Math.min(90,sb.height/2),{delay:90});
           await page.waitForTimeout(200);
 
-          const editor=node.locator('[data-text-manual][contenteditable="true"]').first();
+          const editor=page.locator('.node [data-text-manual][contenteditable="true"]').first();
           if(!(await editor.count())) throw new Error('double-click did not enter manual text editor');
           const focused=await editor.evaluate(el=>document.activeElement===el);
           console.log('EDITOR_FOCUSED',focused);
@@ -59,7 +65,7 @@ jobs:
           await page.keyboard.type('双击编辑测试');
           await page.keyboard.press('Escape');
           await page.waitForTimeout(180);
-          const preview=node.locator('.text-node-preview').first();
+          const preview=page.locator('.node [data-text-result]').first();
           const text=(await preview.innerText()).trim();
           console.log('SAVED_TEXT',text);
           if(!text.includes('双击编辑测试')) throw new Error('typed text was not saved');
