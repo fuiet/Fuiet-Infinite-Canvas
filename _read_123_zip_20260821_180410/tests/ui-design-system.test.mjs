@@ -25,13 +25,16 @@ test('canvas loads the UI 2.3 visual stack after a quarantined legacy scaffold',
   assert.doesNotMatch(html, /ui-type-v2\.css/);
 });
 
-test('UI 2.3 keeps assets in the bottom-left status area instead of a permanent sidebar tool', () => {
+test('asset management is the first persistent bottom-left tool', () => {
   const html = read('index.html');
-  const css = read('styles/desktop.css');
-  assert.match(html, /id="assetManagerBtn"/);
-  assert.match(html, /aria-controls="drawer"/);
-  assert.match(css, /data-dock-action="asset"/);
-  assert.match(css, /display:none/);
+  const dock = read('bottom-dock-v4.js');
+  assert.match(html, /bottom-dock-v4\.js/);
+  assert.match(dock, /btn\.id='assetMgrBtn'/);
+  assert.match(dock, /btn\.innerHTML=.*资产管理/);
+  assert.match(dock, /bl\.prepend\(btn\)/);
+  assert.match(dock, /panel\.id='assetMgrPanel'/);
+  assert.match(dock, /modal\.id='globalAssetModal'/);
+  assert.match(dock, /\.bottom-left\.asset-ready/);
 });
 
 test('app renderNode natively owns the universal four-state node model', () => {
@@ -105,17 +108,17 @@ test('asset manager implements canvas and asset tabs', () => {
   assert.match(runtime, /decorateAssetDrawer/);
 });
 
-test('bottom dock exposes a dedicated connect mode and reuses port drag mechanics', () => {
+test('connection dragging remains native instead of a dedicated bottom-dock mode', () => {
   const html = read('index.html');
-  const runtime = read('ui-connect-v23.js');
-  const css = read('styles/connections.css');
-  assert.match(html, /data-dock-action="connect"/);
-  assert.match(html, /ui-connect-v23\.js/);
-  assert.doesNotMatch(html, /data-dock-action="workflow"/);
-  assert.match(runtime, /setConnectMode/);
-  assert.match(runtime, /node-port\.out/);
-  assert.match(runtime, /拖动节点右侧/);
-  assert.match(css, /ui-connect-mode/);
+  const app = read('app.js');
+  const stability = read('bottom-interaction-stability-v1.js');
+  assert.doesNotMatch(html, /data-dock-action="connect"/);
+  assert.match(html, /data-dock-action="mode"/);
+  assert.match(app, /function beginConnectionDrag/);
+  assert.match(app, /node-port\.out/);
+  assert.match(stability, /Connection dragging is intentionally owned 100% by app\.js/);
+  assert.match(stability, /app\.js owns the entire connection state machine/);
+  assert.match(stability, /completeConnection\(target\.id\)/);
 });
 
 test('generation progress is native, visible, and never fabricates a minimum percentage', () => {
