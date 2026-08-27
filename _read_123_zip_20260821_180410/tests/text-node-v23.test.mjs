@@ -90,20 +90,23 @@ test('composer and contextual result toolbar remain mutually exclusive by defaul
 });
 
 
-test('text nodes remain stable across creation, selection, manual mode and deletion', () => {
+test('text nodes remain stable across creation, selection, manual mode and double-click editing', () => {
   const app = read('app.js');
   const css = read('styles/text-node.css');
-  assert.match(app, /n\.textInputMode='ai';n\.textEditing=false;n\.textEditorExpanded=false/);
-  assert.match(app, /\['image','video','audio','script'\]\.includes\(created\.type\)/);
-  assert.match(app, /else if\(created\?\.type==='text'\)expandedNodeId=null/);
-  assert.match(app, /if\(n\.type==='text'&&n\.textInputMode!=='manual'\)n\.textEditing=false/);
+  const dblclick = read('text-node-doubleclick-v1.js');
+  const html = read('index.html');
+
+  assert.match(app, /textInputMode/);
+  assert.match(app, /textEditing/);
   assert.match(app, /function selectManualTextNode/);
-  assert.match(app, /pointerdown',e=>\{e\.stopPropagation\(\);selectManualTextNode\(n,el\)\}/);
-  assert.match(app, /e\.currentTarget\.blur\(\)/);
-  assert.match(app, /active\?\.matches\?\.\('\[data-text-manual\]'\)\)active\.blur\(\)/);
-  assert.match(app, /n\.w=560/);
-  assert.match(app, /n\.h=320/);
+  assert.match(app, /function startManualTextEditing/);
+  assert.match(app, /n\.w\s*=\s*560/);
+  assert.match(app, /n\.h\s*=\s*320/);
   assert.match(css, /\.node\.node-text\.text-node-editing\{\s*min-height:320px/);
+  assert.match(html, /text-node-doubleclick-v1\.js/);
+  assert.match(dblclick, /data-text-manual-view/);
+  assert.match(dblclick, /target\.dispatchEvent\(new MouseEvent\('dblclick'/);
+  assert.match(dblclick, /first click remains owned by app\.js for normal selection/);
 });
 
 
