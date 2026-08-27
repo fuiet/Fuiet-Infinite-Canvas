@@ -1311,7 +1311,7 @@
     cleanupConnectionDrag(false);
     if(shouldQuickAdd){
       window.__quickAddOpenedAt=Date.now();
-      requestAnimationFrame(()=>showCommandPalette(clientX,clientY,dropPoint,{fromNodeId:from}));
+      requestAnimationFrame(()=>showQuickAdd(clientX,clientY,dropPoint,from));
     }
     return true;
   }
