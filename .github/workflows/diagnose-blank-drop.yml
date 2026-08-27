@@ -14,8 +14,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Install browser
-        run: npx -y playwright@1.55.0 install --with-deps chromium
+      - name: Install browser test runtime
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
       - name: Start app
         working-directory: _read_123_zip_20260821_180410
         run: |
@@ -24,7 +26,7 @@ jobs:
           for i in {1..40}; do curl -fsS http://127.0.0.1:8080/ >/dev/null && break; sleep .5; done
       - name: Run blank-drop diagnostic
         run: |
-          cat > /tmp/diag.mjs <<'JS'
+          cat > diag.mjs <<'JS'
           import { chromium } from 'playwright';
           const browser=await chromium.launch({headless:true});
           const page=await browser.newPage({viewport:{width:1440,height:1000}});
@@ -35,7 +37,6 @@ jobs:
           const viewport=page.locator('#canvasViewport');
           const vr=await viewport.boundingBox();
           if(!vr) throw new Error('canvasViewport missing');
-          // Create a node via the same add-node UI used by the dock.
           await page.mouse.dblclick(vr.x+420,vr.y+300);
           await page.waitForTimeout(200);
           const first=page.locator('#contextMenu .libtv-add-row[data-kind="node"]').first();
@@ -50,19 +51,19 @@ jobs:
           await page.mouse.move(sx,sy);
           await page.mouse.down();
           await page.mouse.move(tx,ty,{steps:12});
-          const before=await page.evaluate(()=>({
+          console.log('BEFORE_UP',JSON.stringify(await page.evaluate(()=>({
             connecting:document.querySelector('#canvasViewport')?.classList.contains('connecting-mode'),
             temp:!!document.querySelector('#tempEdge'),
             menuHidden:document.querySelector('#contextMenu')?.classList.contains('hidden'),
             menuClass:document.querySelector('#contextMenu')?.className
-          }));
-          console.log('BEFORE_UP',JSON.stringify(before));
+          }))));
           await page.mouse.up();
           await page.waitForTimeout(250);
-          const after=await page.evaluate(()=>{
+          console.log('AFTER_UP',JSON.stringify(await page.evaluate(()=>{
             const vp=document.querySelector('#canvasViewport');
             const cm=document.querySelector('#contextMenu');
-            const hit=document.elementFromPoint(innerWidth/2,innerHeight/2);
+            const point={x:Math.round(innerWidth/2),y:Math.round(innerHeight/2)};
+            const hit=document.elementFromPoint(point.x,point.y);
             return {
               connecting:vp?.classList.contains('connecting-mode'),
               viewportPointerEvents:getComputedStyle(vp).pointerEvents,
@@ -70,24 +71,21 @@ jobs:
               menuHidden:cm?.classList.contains('hidden'),
               menuClass:cm?.className,
               menuText:(cm?.innerText||'').slice(0,300),
-              menuRect:cm?.getBoundingClientRect().toJSON?.()||null,
+              menuRect:cm?{left:cm.getBoundingClientRect().left,top:cm.getBoundingClientRect().top,width:cm.getBoundingClientRect().width,height:cm.getBoundingClientRect().height}:null,
               bodyClass:document.body.className,
               hitTag:hit?.tagName,
               hitId:hit?.id,
-              hitClass:hit?.className
+              hitClass:typeof hit?.className==='string'?hit.className:''
             };
-          });
-          console.log('AFTER_UP',JSON.stringify(after));
-          // Verify the viewport can still receive a fresh click after release.
+          })));
           await page.mouse.click(vr.x+100,vr.y+100);
           await page.waitForTimeout(80);
-          const finalState=await page.evaluate(()=>({
+          console.log('FINAL',JSON.stringify(await page.evaluate(()=>({
             connecting:document.querySelector('#canvasViewport')?.classList.contains('connecting-mode'),
             temp:!!document.querySelector('#tempEdge'),
             menuHidden:document.querySelector('#contextMenu')?.classList.contains('hidden'),
             active:document.activeElement?.id||document.activeElement?.tagName
-          }));
-          console.log('FINAL',JSON.stringify(finalState));
+          }))));
           await browser.close();
           JS
-          npx -y -p playwright@1.55.0 node /tmp/diag.mjs
+          node diag.mjs
