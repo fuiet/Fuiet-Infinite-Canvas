@@ -1,0 +1,13 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const runtime=fs.readFileSync(path.join(ROOT,'browser-runtime.js'),'utf8');
+const sw=fs.readFileSync(path.join(ROOT,'browser-media-sw.js'),'utf8');
+test('provider project task queue and media use IndexedDB stores',()=>{for(const name of ['providers','projects','tasks','media','settings','meta'])assert.match(runtime,new RegExp(`'${name}'`));assert.match(runtime,/idbReplaceAll/);assert.match(runtime,/idbPut/)});
+test('legacy browser localStorage is migrated then removed',()=>{assert.match(runtime,/LEGACY_KEYS/);assert.match(runtime,/legacyRead/);assert.match(runtime,/localStorage\.removeItem/)});
+test('provider API keys are encrypted before IndexedDB persistence',()=>{assert.match(runtime,/AES-GCM/);assert.match(runtime,/crypto\.subtle\.encrypt/);assert.match(runtime,/apiKeyEncrypted/);assert.match(runtime,/delete out\.apiKey/)});
+test('uploaded and binary provider media are stored as IndexedDB blobs',()=>{assert.match(runtime,/storeMediaBlob\(blob/);assert.match(runtime,/\/__browser_media\//);assert.match(runtime,/persistent:true/)});
+test('service worker serves IndexedDB media and supports range requests',()=>{assert.match(sw,/indexedDB\.open/);assert.match(sw,/\/__browser_media\//);assert.match(sw,/status:206/);assert.match(sw,/content-range/);assert.match(sw,/accept-ranges/);assert.match(sw,/clients\.claim/)});

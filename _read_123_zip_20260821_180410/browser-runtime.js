@@ -9,32 +9,102 @@ if(typeof window==='undefined'||typeof window.fetch!=='function')return;
 const rawFetch=window.fetch.bind(window);
 const Adapters=globalThis.CanvasProviderAdapters;
 const Core=globalThis.CanvasProviderRuntimeCore;
-const KEYS={
+const LEGACY_KEYS={
   providers:'fuiet-browser-providers-v1',
   projects:'fuiet-browser-projects-v1',
   tasks:'fuiet-browser-tasks-v1',
   queue:'fuiet-browser-queue-v1'
 };
-const runtime={running:0,pumping:false,controllers:new Map(),objectUrls:new Set()};
+const DB_NAME='fuiet-infinite-canvas-browser';
+const DB_VERSION=1;
+const STORES={providers:'providers',projects:'projects',tasks:'tasks',media:'media',settings:'settings',meta:'meta'};
+const cache={providers:[],projects:[],tasks:[],queue:{paused:false,concurrency:2}};
+const runtime={running:0,pumping:false,controllers:new Map(),objectUrls:new Set(),persistChain:Promise.resolve(),db:null,ready:null,swReady:null};
 const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
 const now=()=>new Date().toISOString();
 const uid=p=>`${p}${crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2)+Date.now().toString(36)}`;
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 
-function read(key,fallback){try{const v=JSON.parse(localStorage.getItem(key));return v==null?clone(fallback):v}catch{return clone(fallback)}}
-function write(key,value){localStorage.setItem(key,JSON.stringify(value));return value}
 function json(body,status=200,headers={}){return new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store',...headers}})}
 function parseBody(init){if(init?.body==null)return{};if(typeof init.body==='string'){try{return JSON.parse(init.body)}catch{return{}}}return init.body}
 function requestInfo(input,init={}){try{const url=new URL(typeof input==='string'||input instanceof URL?String(input):input.url,location.href);return{url,method:String(init.method||(input instanceof Request?input.method:'GET')||'GET').toUpperCase()}}catch{return null}}
 function safeProvider(p){const x=clone(p||{});const has=Boolean(String(x.apiKey||'').trim());delete x.apiKey;delete x.apiKeyEncrypted;x.hasApiKey=has||x.hasApiKey===true;return x}
-function providers(){return read(KEYS.providers,[])}
-function saveProviders(list){return write(KEYS.providers,list)}
-function projects(){return read(KEYS.projects,[])}
-function saveProjects(list){return write(KEYS.projects,list)}
-function tasks(){return read(KEYS.tasks,[])}
-function saveTasks(list){return write(KEYS.tasks,list.slice(0,300))}
-function queueState(){return{paused:false,concurrency:2,...read(KEYS.queue,{})}}
-function setQueue(patch){return write(KEYS.queue,{...queueState(),...patch})}
+function legacyRead(key,fallback){try{const v=JSON.parse(localStorage.getItem(key));return v==null?clone(fallback):v}catch{return clone(fallback)}}
+function requestPromise(req){return new Promise((resolve,reject)=>{req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error||new Error('IndexedDB 请求失败'))})}
+function txPromise(tx){return new Promise((resolve,reject)=>{tx.oncomplete=()=>resolve();tx.onabort=()=>reject(tx.error||new Error('IndexedDB 事务已中止'));tx.onerror=()=>reject(tx.error||new Error('IndexedDB 事务失败'))})}
+function openDatabase(){return new Promise((resolve,reject)=>{const req=indexedDB.open(DB_NAME,DB_VERSION);req.onupgradeneeded=()=>{const db=req.result;for(const name of Object.values(STORES)){if(!db.objectStoreNames.contains(name)){if(name===STORES.settings||name===STORES.meta)db.createObjectStore(name,{keyPath:'key'});else db.createObjectStore(name,{keyPath:'id'})}}};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error||new Error('无法打开 IndexedDB'))})}
+async function idbGet(store,key){const tx=runtime.db.transaction(store,'readonly'),value=await requestPromise(tx.objectStore(store).get(key));await txPromise(tx);return value}
+async function idbGetAll(store){const tx=runtime.db.transaction(store,'readonly'),value=await requestPromise(tx.objectStore(store).getAll());await txPromise(tx);return value||[]}
+async function idbPut(store,value){const tx=runtime.db.transaction(store,'readwrite');tx.objectStore(store).put(value);await txPromise(tx);return value}
+async function idbDelete(store,key){const tx=runtime.db.transaction(store,'readwrite');tx.objectStore(store).delete(key);await txPromise(tx)}
+async function idbReplaceAll(store,values){const tx=runtime.db.transaction(store,'readwrite'),os=tx.objectStore(store);os.clear();for(const value of values)os.put(value);await txPromise(tx)}
+function enqueuePersist(job){runtime.persistChain=runtime.persistChain.then(job).catch(error=>{console.error('[browser-runtime] IndexedDB persistence failed',error);throw error});return runtime.persistChain}
+function bytesToBase64(value){const bytes=value instanceof Uint8Array?value:new Uint8Array(value);let s='';for(const b of bytes)s+=String.fromCharCode(b);return btoa(s)}
+function base64ToBytes(value){const s=atob(String(value||'')),out=new Uint8Array(s.length);for(let i=0;i<s.length;i++)out[i]=s.charCodeAt(i);return out}
+let providerCryptoKeyPromise=null;
+async function providerCryptoKey(){
+  if(providerCryptoKeyPromise)return providerCryptoKeyPromise;
+  providerCryptoKeyPromise=(async()=>{
+    const existing=await idbGet(STORES.meta,'provider-aes-key');
+    if(existing?.value)return existing.value;
+    if(!crypto?.subtle)throw new Error('当前浏览器不支持 WebCrypto，无法安全保存 API Key');
+    const key=await crypto.subtle.generateKey({name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+    await idbPut(STORES.meta,{key:'provider-aes-key',value:key,createdAt:now()});
+    return key;
+  })();
+  return providerCryptoKeyPromise;
+}
+async function providerToRecord(provider){
+  const out=clone(provider||{}),plain=String(out.apiKey||'');delete out.apiKey;delete out.apiKeyEncrypted;
+  if(plain){const key=await providerCryptoKey(),iv=crypto.getRandomValues(new Uint8Array(12)),cipher=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,new TextEncoder().encode(plain));out.apiKeyEncrypted={v:1,iv:bytesToBase64(iv),cipher:bytesToBase64(cipher)};out.hasApiKey=true}
+  return out;
+}
+async function providerFromRecord(record){
+  const out=clone(record||{}),enc=out.apiKeyEncrypted;
+  if(enc?.iv&&enc?.cipher){try{const key=await providerCryptoKey(),plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:base64ToBytes(enc.iv)},key,base64ToBytes(enc.cipher));out.apiKey=new TextDecoder().decode(plain);out.hasApiKey=true}catch(error){console.warn('[browser-runtime] provider API key decrypt failed',error)}}
+  delete out.apiKeyEncrypted;
+  return out;
+}
+async function persistProvidersNow(){const records=[];for(const p of cache.providers)records.push(await providerToRecord(p));await idbReplaceAll(STORES.providers,records)}
+function providers(){return cache.providers}
+function saveProviders(list){cache.providers=clone(Array.isArray(list)?list:[]);enqueuePersist(persistProvidersNow);return cache.providers}
+function projects(){return cache.projects}
+function saveProjects(list){cache.projects=clone(Array.isArray(list)?list:[]);enqueuePersist(()=>idbReplaceAll(STORES.projects,cache.projects));return cache.projects}
+function tasks(){return cache.tasks}
+function saveTasks(list){cache.tasks=clone((Array.isArray(list)?list:[]).slice(0,300));enqueuePersist(()=>idbReplaceAll(STORES.tasks,cache.tasks));return cache.tasks}
+function queueState(){return{paused:false,concurrency:2,...cache.queue}}
+function setQueue(patch){cache.queue={...queueState(),...clone(patch||{})};enqueuePersist(()=>idbPut(STORES.settings,{key:'queue',value:cache.queue,updatedAt:now()}));return cache.queue}
+function mediaUrl(id){return `/__browser_media/${encodeURIComponent(id)}`}
+async function ensureMediaServiceWorker(){
+  if(!('serviceWorker'in navigator))return false;
+  try{
+    await navigator.serviceWorker.register('./browser-media-sw.js?v=20260828-idb-1',{scope:'./'});
+    await navigator.serviceWorker.ready;
+    if(navigator.serviceWorker.controller)return true;
+    return await new Promise(resolve=>{let done=false;const finish=value=>{if(done)return;done=true;clearTimeout(timer);resolve(value)};const timer=setTimeout(()=>finish(Boolean(navigator.serviceWorker.controller)),5000);navigator.serviceWorker.addEventListener('controllerchange',()=>finish(true),{once:true})});
+  }catch(error){console.warn('[browser-runtime] media service worker unavailable',error);return false}
+}
+async function storeMediaBlob(blob,{name='',id=''}={}){
+  if(!(blob instanceof Blob))throw new Error('媒体内容不是 Blob');
+  const mediaId=id||uid('media_');
+  await idbPut(STORES.media,{id:mediaId,blob,name:String(name||''),type:blob.type||'application/octet-stream',size:blob.size,createdAt:now(),updatedAt:now()});
+  const controlled=await (runtime.swReady||(runtime.swReady=ensureMediaServiceWorker()));
+  if(!controlled)throw new Error('浏览器本地媒体服务未就绪，请刷新页面后重试');
+  return{id:mediaId,url:mediaUrl(mediaId),size:blob.size,type:blob.type||'application/octet-stream',persistent:true};
+}
+async function initializePersistence(){
+  runtime.db=await openDatabase();
+  const providerRows=await idbGetAll(STORES.providers),projectRows=await idbGetAll(STORES.projects),taskRows=await idbGetAll(STORES.tasks),queueRow=await idbGet(STORES.settings,'queue');
+  if(!providerRows.length){const legacy=legacyRead(LEGACY_KEYS.providers,[]);const fallback=legacy.length?legacy:legacyRead('canvas-studio-providers-v1',[]);cache.providers=Array.isArray(fallback)?fallback:[];if(cache.providers.length)await persistProvidersNow()}else cache.providers=await Promise.all(providerRows.map(providerFromRecord));
+  if(!projectRows.length){cache.projects=legacyRead(LEGACY_KEYS.projects,[]);if(cache.projects.length)await idbReplaceAll(STORES.projects,cache.projects)}else cache.projects=projectRows;
+  if(!taskRows.length){cache.tasks=legacyRead(LEGACY_KEYS.tasks,[]).slice(0,300);if(cache.tasks.length)await idbReplaceAll(STORES.tasks,cache.tasks)}else cache.tasks=taskRows.slice(0,300);
+  cache.queue={paused:false,concurrency:2,...(queueRow?.value||legacyRead(LEGACY_KEYS.queue,{}))};
+  if(!queueRow)await idbPut(STORES.settings,{key:'queue',value:cache.queue,updatedAt:now()});
+  for(const key of Object.values(LEGACY_KEYS)){try{localStorage.removeItem(key)}catch{}}
+  try{navigator.storage?.persist?.().catch(()=>{})}catch{}
+  runtime.swReady=ensureMediaServiceWorker();
+  return true;
+}
 function findProvider(id){return providers().find(p=>String(p.id)===String(id))||null}
 function findTask(id){return tasks().find(t=>String(t.id)===String(id))||null}
 function updateTask(id,patch){const list=tasks(),i=list.findIndex(t=>t.id===id);if(i<0)return null;list[i]={...list[i],...patch,updatedAt:now()};saveTasks(list);return list[i]}
@@ -69,7 +139,7 @@ async function fetchWithAuth(provider,url,init={}){
   }
   return last;
 }
-async function readResponse(res){const ct=String(res.headers.get('content-type')||'').toLowerCase();if(ct.includes('application/json')||ct.includes('+json'))return{kind:'json',value:await res.json()};if(ct.startsWith('text/'))return{kind:'text',value:await res.text()};const blob=await res.blob(),url=URL.createObjectURL(blob);runtime.objectUrls.add(url);return{kind:'blob',value:url,blob,type:ct}}
+async function readResponse(res){const ct=String(res.headers.get('content-type')||'').toLowerCase();if(ct.includes('application/json')||ct.includes('+json'))return{kind:'json',value:await res.json()};if(ct.startsWith('text/'))return{kind:'text',value:await res.text()};const blob=await res.blob(),stored=await storeMediaBlob(blob,{name:'provider-output'});return{kind:'blob',value:stored.url,blob,type:ct,mediaId:stored.id,persistent:true}}
 function outputObject(value,modality='text'){
   if(value==null)return null;
   if(typeof value==='object'&&value.type&&('value'in value))return value;
@@ -192,7 +262,7 @@ async function handleApi(info,input,init){
   if(path.startsWith('/api/tasks/')){const parts=path.split('/').filter(Boolean),id=decodeURIComponent(parts[2]||''),task=findTask(id);if(!task)return json({error:'任务不存在'},404);if(parts[3]==='retry'&&method==='POST'){const t=updateTask(id,{status:'queued',cancelRequested:false,error:null,progress:0});pump();return json({task:t});}if(method==='GET')return json({task});if(method==='PATCH'){const t=updateTask(id,{...(body.priority!=null?{priority:Number(body.priority)}:{})});return json({task:t});}if(method==='DELETE'){const t=updateTask(id,{cancelRequested:true,status:['queued'].includes(task.status)?'canceled':'cancelling'});return json({task:t});}}
   if(path.startsWith('/api/projects'))return projectRoute(path,method,body);
   if(path==='/api/upload'&&method==='POST'){
-    let blob=init.body;if(!(blob instanceof Blob)){try{blob=await new Response(init.body).blob()}catch{return json({error:'无法读取浏览器本地素材'},400)}}const url=URL.createObjectURL(blob);runtime.objectUrls.add(url);return json({ok:true,url,browserLocal:true,size:blob.size,type:blob.type,name:info.url.searchParams.get('name')||''});
+    let blob=init.body;if(!(blob instanceof Blob)){try{blob=await new Response(init.body).blob()}catch{return json({error:'无法读取浏览器本地素材'},400)}}try{const stored=await storeMediaBlob(blob,{name:info.url.searchParams.get('name')||''});return json({ok:true,url:stored.url,mediaId:stored.id,browserLocal:true,persistent:true,size:stored.size,type:stored.type,name:info.url.searchParams.get('name')||''})}catch(error){return json({error:String(error.message||error)},503)};
   }
   if(path==='/api/media/process')return json({error:'在线预览不把媒体上传到 Cloudflare；FFmpeg / ImageMagick 本地处理将在 Windows 正式版运行'},501);
   if(path.startsWith('/api/blender/bridge/'))return json({error:'Blender Bridge 属于本地桌面能力，在线预览不通过 Cloudflare 保存或转发场景状态'},501);
@@ -200,13 +270,17 @@ async function handleApi(info,input,init){
   return null;
 }
 
-// Tasks left in an executing state after a reload have lost their in-memory polling loop.
-(()=>{const list=tasks();let changed=false;for(const t of list){if(['running','polling','retrying','cancelling'].includes(t.status)){t.status='failed';t.error='页面刷新中断了浏览器本地任务，请重新生成';t.updatedAt=now();changed=true}}if(changed)saveTasks(list)})();
+// IndexedDB is the source of truth. Existing localStorage stores are migrated once.
+runtime.ready=initializePersistence();
+runtime.ready.then(()=>{const list=tasks();let changed=false;for(const t of list){if(['running','polling','retrying','cancelling'].includes(t.status)){t.status='failed';t.error='页面刷新中断了浏览器本地任务，请重新生成';t.updatedAt=now();changed=true}}if(changed)saveTasks(list);pump()}).catch(error=>console.error('[browser-runtime] initialization failed',error));
 
 window.fetch=async function canvasBrowserRuntimeFetch(input,init={}){
   const info=requestInfo(input,init);if(!info||info.url.origin!==location.origin||!info.url.pathname.startsWith('/api/'))return rawFetch(input,init);
-  const handled=await handleApi(info,input,init);return handled||rawFetch(input,init);
+  await runtime.ready;
+  const handled=await handleApi(info,input,init);
+  if(handled){await runtime.persistChain;return handled}
+  return rawFetch(input,init);
 };
 
-globalThis.CanvasBrowserRuntime=Object.freeze({mode:'browser-local-preview',cloudflarePersistence:false,getProviders:()=>providers().map(safeProvider),getProjects:()=>projects().map(projectSummary),getTasks:()=>tasks(),rawFetch});
+globalThis.CanvasBrowserRuntime=Object.freeze({mode:'browser-indexeddb-preview',storage:'indexeddb',cloudflarePersistence:false,ready:runtime.ready,getProviders:()=>providers().map(safeProvider),getProjects:()=>projects().map(projectSummary),getTasks:()=>clone(tasks()),getStorageEstimate:async()=>navigator.storage?.estimate?.()||{},deleteMedia:async id=>idbDelete(STORES.media,id),rawFetch});
 })();
