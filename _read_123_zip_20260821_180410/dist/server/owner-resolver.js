@@ -2,6 +2,8 @@ import secureWorker from './secure-entry.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const AUTO_OWNER_CACHE_MS = 15_000;
+const ANON_COOKIE_NAME = 'canvas_owner_v1';
+const ANON_COOKIE_MAX_AGE = 60 * 60 * 24 * 365 * 2;
 
 export function configuredOwner(env) {
   const value = String(env?.CANVAS_OWNER_ID || '').trim();
@@ -13,6 +15,74 @@ export function supabaseOwnerConfig(env) {
   const serviceKey = String(env?.SUPABASE_SERVICE_ROLE_KEY || '').trim();
   const anonKey = String(env?.SUPABASE_ANON_KEY || '').trim();
   return url && serviceKey ? { url, serviceKey, anonKey: anonKey || serviceKey } : null;
+}
+
+function anonymousOwnerEnabled(env) {
+  return String(env?.CANVAS_ANONYMOUS_OWNER ?? '0') === '1';
+}
+
+function ownerSigningSecret(env) {
+  return String(env?.CANVAS_SESSION_SECRET || env?.PROVIDER_SECRET_KEY || '').trim();
+}
+
+function parseCookieHeader(header) {
+  const out = {};
+  for (const part of String(header || '').split(';')) {
+    const index = part.indexOf('=');
+    if (index <= 0) continue;
+    const key = part.slice(0, index).trim();
+    const value = part.slice(index + 1).trim();
+    if (key) out[key] = value;
+  }
+  return out;
+}
+
+function base64Url(bytes) {
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+async function signAnonymousOwner(owner, secret) {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(owner));
+  return base64Url(new Uint8Array(signature));
+}
+
+async function verifyAnonymousOwnerCookie(value, secret) {
+  const raw = String(value || '').trim();
+  const dot = raw.indexOf('.');
+  if (dot <= 0) return '';
+  const owner = raw.slice(0, dot);
+  const signature = raw.slice(dot + 1);
+  if (!UUID_RE.test(owner) || !signature) return '';
+  const expected = await signAnonymousOwner(owner, secret);
+  if (expected.length !== signature.length) return '';
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ signature.charCodeAt(i);
+  return diff === 0 ? owner : '';
+}
+
+export async function anonymousOwnerFromRequest(request, env) {
+  if (!anonymousOwnerEnabled(env)) return { owner: '', setCookie: '' };
+  const secret = ownerSigningSecret(env);
+  if (!secret) return { owner: '', setCookie: '', error: '匿名 owner 模式需要 CANVAS_SESSION_SECRET 或 PROVIDER_SECRET_KEY' };
+
+  const cookies = parseCookieHeader(request.headers.get('cookie'));
+  const existing = await verifyAnonymousOwnerCookie(cookies[ANON_COOKIE_NAME], secret);
+  if (existing) return { owner: existing, setCookie: '' };
+
+  const owner = crypto.randomUUID();
+  const signature = await signAnonymousOwner(owner, secret);
+  const secure = new URL(request.url).protocol === 'https:' ? '; Secure' : '';
+  const setCookie = `${ANON_COOKIE_NAME}=${owner}.${signature}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${ANON_COOKIE_MAX_AGE}${secure}`;
+  return { owner, setCookie };
 }
 
 export async function ownerFromBearer(request, env) {
@@ -90,27 +160,31 @@ export async function singleSupabaseOwner(env) {
 }
 
 export async function resolveCanvasOwner(request, env, ctx) {
+  const anonymous = await anonymousOwnerFromRequest(request, env);
+  if (anonymous.owner) return { owner: anonymous.owner, source: 'anonymous-cookie', setCookie: anonymous.setCookie };
+  if (anonymous.error) return { owner: '', source: '', error: anonymous.error };
+
   const bearer = await ownerFromBearer(request, env);
-  if (bearer) return { owner: bearer, source: 'supabase-bearer' };
+  if (bearer) return { owner: bearer, source: 'supabase-bearer', setCookie: '' };
 
   const configured = configuredOwner(env);
   const trustedAdminPassThrough = String(env?.CANVAS_ALLOW_UNAUTHENTICATED_OWNER || '0') === '1';
   if (trustedAdminPassThrough) {
-    if (configured) return { owner: configured, source: 'configured-admin-pass-through' };
+    if (configured) return { owner: configured, source: 'configured-admin-pass-through', setCookie: '' };
     const automatic = await singleSupabaseOwner(env);
-    if (automatic) return { owner: automatic, source: 'single-supabase-admin-pass-through' };
-    return { owner: '', source: '' };
+    if (automatic) return { owner: automatic, source: 'single-supabase-admin-pass-through', setCookie: '' };
+    return { owner: '', source: '', setCookie: '' };
   }
 
   const auth = await adminAuthStatus(request, env, ctx);
   if (!auth.enabled || !auth.authenticated) {
-    return { owner: '', source: '', auth };
+    return { owner: '', source: '', auth, setCookie: '' };
   }
 
-  if (configured) return { owner: configured, source: 'configured-admin', auth };
+  if (configured) return { owner: configured, source: 'configured-admin', auth, setCookie: '' };
 
   const automatic = await singleSupabaseOwner(env);
-  if (automatic) return { owner: automatic, source: 'single-supabase-admin', auth };
+  if (automatic) return { owner: automatic, source: 'single-supabase-admin', auth, setCookie: '' };
 
-  return { owner: '', source: '', auth };
+  return { owner: '', source: '', auth, setCookie: '' };
 }
