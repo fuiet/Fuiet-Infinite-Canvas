@@ -9,24 +9,29 @@ CANVAS_ALLOW_PRIVATE_PROVIDER_HOSTS = "0"
 CANVAS_MAX_UPLOAD_BYTES = "52428800"
 CANVAS_LOGIN_ATTEMPTS_PER_10M = "10"
 
-# Hosted Cloudflare Pages is secure-by-default. Provider/project/task/media access
-# requires an authenticated owner. Never publish the account-free desktop mode as
-# the default for a public Pages deployment.
+# Public hosted mode: no login/registration is required. Every browser receives a
+# signed anonymous owner cookie, and providers/projects/tasks/media stay isolated
+# by that anonymous owner UUID. Visitors can add their own API suppliers without
+# seeing or overwriting another visitor's data.
 CANVAS_DESKTOP_SINGLE_USER = "0"
 CANVAS_ENFORCE_OWNER = "1"
+CANVAS_ANONYMOUS_OWNER = "1"
 CANVAS_CLAIM_UNOWNED = "0"
 CANVAS_ALLOW_UNAUTHENTICATED_OWNER = "0"
 CANVAS_AUTO_SINGLE_SUPABASE_OWNER = "0"
 
 # Configure these as Cloudflare Secrets / Variables; never commit real values:
-# PROVIDER_SECRET_KEY          = a long random encryption key (required in hosted mode)
-# CANVAS_SESSION_SECRET        = optional dedicated session-signing secret
+# PROVIDER_SECRET_KEY          = long random secret; required to encrypt provider API keys
+# CANVAS_SESSION_SECRET        = long random secret used to sign anonymous owner cookies
+#                                (falls back to PROVIDER_SECRET_KEY when omitted)
 # SUPABASE_URL                 = your Supabase project URL
 # SUPABASE_SERVICE_ROLE_KEY    = server only; never expose to browser code
-# SUPABASE_ANON_KEY            = recommended for validating Supabase user tokens
-# CANVAS_ADMIN_PASSWORD        = admin login password (if using admin mode)
-# CANVAS_OWNER_ID              = admin's auth.users UUID (if using admin mode)
+# SUPABASE_ANON_KEY            = optional; only needed if Supabase Bearer auth is also supported
 # CANVAS_PUBLIC_BASE_URL       = https://fuiet-infinite-canvas.pages.dev
+#
+# CANVAS_ADMIN_PASSWORD and CANVAS_OWNER_ID are NOT required in anonymous-owner mode.
+# Do not enable CANVAS_ALLOW_UNAUTHENTICATED_OWNER: anonymous owner cookies already
+# provide per-browser isolation without a login screen.
 #
 # For a genuinely local/packaged single-user build only, explicitly set
 # CANVAS_DESKTOP_SINGLE_USER=1. That mode intentionally disables login and owner
