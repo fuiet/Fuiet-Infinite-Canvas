@@ -1,0 +1,54 @@
+name: Fix Image Generation Dimensions V1
+
+on:
+  push:
+    branches:
+      - fix/image-generation-dimensions
+    paths:
+      - .github/scripts/fix_image_generation_dimensions.py
+      - .github/workflows/fix-image-generation-dimensions-v1.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/image-generation-dimensions
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply repair
+        run: python .github/scripts/fix_image_generation_dimensions.py
+      - name: Syntax checks
+        working-directory: _read_123_zip_20260821_180410
+        run: |
+          node --check image-request-parameters.js
+          node --check browser-runtime.js
+          node --check browser-bootstrap.js
+          node --check app.js
+          node --check image-generator-v2.js
+      - name: Full checks
+        working-directory: _read_123_zip_20260821_180410
+        run: |
+          npm run check
+          npm test
+      - name: Commit verified repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add _read_123_zip_20260821_180410/image-request-parameters.js \
+                  _read_123_zip_20260821_180410/browser-runtime.js \
+                  _read_123_zip_20260821_180410/browser-bootstrap.js \
+                  _read_123_zip_20260821_180410/app.js \
+                  _read_123_zip_20260821_180410/index.html \
+                  _read_123_zip_20260821_180410/models.html \
+                  _read_123_zip_20260821_180410/package.json \
+                  _read_123_zip_20260821_180410/tests/image-generation-parameters.test.mjs
+          git diff --cached --check
+          git commit -m "Honor image node dimensions and quality in provider requests"
+          git push origin HEAD:fix/image-generation-dimensions
