@@ -1,13 +1,12 @@
 {
-  "name": "fuiet-infinite-canvas-web",
-  "version": "4.3.0",
+  "name": "fuiet-infinite-canvas-cloudflare",
+  "version": "4.4.0",
   "private": true,
-  "description": "Fuiet Infinite Canvas 网页在线体验版：Node Web 服务、SQLite 持久化、服务端供应商密钥加密、任务队列与媒体处理。",
+  "description": "Fuiet Infinite Canvas Cloudflare 在线开发预览版：Pages Functions + Worker provider gateway，GitHub main 自动部署。",
   "scripts": {
-    "start": "node web-start.cjs",
-    "start:web": "node web-start.cjs",
+    "start": "node server.js",
     "start:local": "node server.js",
-    "check": "node --check app.js && node --check provider-adapter-contract.js && node --check provider-runtime-core.js && node --check server.js && node --check web-start.cjs && node --check store.js && node --check models.js && node --check three-runtime.js && node --check ui-zh.js && node --check ui-v23.js && node --check ui-connect-v23.js",
+    "check": "node --check app.js && node --check provider-adapter-contract.js && node --check provider-runtime-core.js && node --check server.js && node --check store.js && node --check models.js && node --check three-runtime.js && node --check ui-zh.js && node --check ui-v23.js && node --check ui-connect-v23.js && node --check dist/server/secure-index.js && node --check dist/server/secure-entry.js && node --check dist/server/production-entry.js && node --check dist/server/provider-compat-entry.js && node --check dist/server/reference-guard-entry.js && node --check dist/server/final-entry.js && node --check dist/server/auth-entry.js && node --check dist/server/pages-entry.js",
     "test": "node --test tests/*.test.mjs"
   },
   "engines": {
