@@ -76,3 +76,15 @@
   margin:0!important;
   padding:0!important;
 }
+
+/* Image results are media-only: remove the two corner controls shown below
+ * generated images. The media itself remains clickable for preview and the
+ * contextual result toolbar still owns explicit fullscreen/download actions. */
+.node.node-image[data-content-state="result"] .ui-media-preview-trigger,
+.node.node-image.ui-v23-media-result[data-content-state="result"] .ui-media-preview-trigger,
+.node.node-image[data-content-state="result"] .node-resize-handle,
+.node.node-image[data-content-state="result"] .ui-v23-resize-handle{
+  display:none!important;
+  opacity:0!important;
+  pointer-events:none!important;
+}
