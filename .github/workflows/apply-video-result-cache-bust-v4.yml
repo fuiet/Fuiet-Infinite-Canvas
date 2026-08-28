@@ -1,0 +1,37 @@
+name: Apply Video Result Cache Bust V4
+
+on:
+  push:
+    branches:
+      - video-result-cache-bust-v4
+    paths:
+      - '.github/workflows/apply-video-result-cache-bust-v4.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: video-result-cache-bust-v4
+          fetch-depth: 0
+      - name: Apply cache version patch
+        run: python scripts/patch-video-result-cache-bust-v4.py
+      - name: Validate syntax
+        working-directory: _read_123_zip_20260821_180410
+        run: npm run check
+      - name: Remove one-time patch machinery
+        run: |
+          rm scripts/patch-video-result-cache-bust-v4.py
+          rm .github/workflows/apply-video-result-cache-bust-v4.yml
+      - name: Commit cache bust
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Bust cache for video result reconciliation"
+          git push origin HEAD:video-result-cache-bust-v4
