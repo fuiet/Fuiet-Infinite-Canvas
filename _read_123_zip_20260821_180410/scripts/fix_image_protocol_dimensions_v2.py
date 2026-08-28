@@ -1,6 +1,7 @@
 from pathlib import Path
 import re
 
+# trigger v2
 ROOT = Path(__file__).resolve().parents[1]
 runtime_path = ROOT / 'browser-runtime.js'
 index_path = ROOT / 'index.html'
