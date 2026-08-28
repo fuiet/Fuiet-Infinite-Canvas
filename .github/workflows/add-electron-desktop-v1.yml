@@ -51,4 +51,6 @@ jobs:
             exit 0
           fi
           git commit -m 'Package local app as Windows Electron desktop installer'
+          git fetch origin main
+          git rebase origin/main
           git push origin HEAD:main
