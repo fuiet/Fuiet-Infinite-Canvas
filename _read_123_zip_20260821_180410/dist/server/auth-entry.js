@@ -20,6 +20,10 @@ function desktopSingleUser(env) {
   return String(env?.CANVAS_DESKTOP_SINGLE_USER || '0') === '1';
 }
 
+function hostedSingleUserNoAuth(env) {
+  return String(env?.CANVAS_SINGLE_USER_NO_AUTH || '0') === '1';
+}
+
 function desktopEnv(env) {
   return {
     ...env,
@@ -27,6 +31,20 @@ function desktopEnv(env) {
     // to configure server secrets. Keep an explicitly configured secret when
     // present; otherwise use the desktop-only fallback for provider-key encryption.
     PROVIDER_SECRET_KEY: String(env?.PROVIDER_SECRET_KEY || '').trim() || DESKTOP_PROVIDER_SECRET,
+    CANVAS_ADMIN_PASSWORD: '',
+    CANVAS_ENFORCE_OWNER: '0',
+    CANVAS_OWNER_ID: '',
+    CANVAS_ALLOW_UNAUTHENTICATED_OWNER: '0',
+    CANVAS_AUTO_SINGLE_SUPABASE_OWNER: '0'
+  };
+}
+
+function hostedSingleUserEnv(env) {
+  return {
+    ...env,
+    // Hosted single-user mode is intentionally account-free, but unlike the
+    // desktop mode it must never synthesize a public fallback encryption key.
+    // PROVIDER_SECRET_KEY remains whatever the deployment configured.
     CANVAS_ADMIN_PASSWORD: '',
     CANVAS_ENFORCE_OWNER: '0',
     CANVAS_OWNER_ID: '',
@@ -197,6 +215,23 @@ async function handleAuth(request, env, pathname) {
 
 async function route(request, env, ctx) {
   const url = new URL(request.url), pathname = url.pathname;
+
+  // Hosted single-user mode intentionally has no login, no Supabase user, and no
+  // owner isolation. It still keeps the deployment's real PROVIDER_SECRET_KEY so
+  // saved supplier API keys remain encrypted at rest.
+  if (hostedSingleUserNoAuth(env)) {
+    const singleEnv = hostedSingleUserEnv(env);
+    if (pathname === '/api/auth/status' && request.method === 'GET') {
+      return json({ enabled: false, authenticated: true, mode: 'hosted-single-user-no-auth' });
+    }
+    if (pathname === '/api/auth/login' && request.method === 'POST') {
+      return json({ ok: true, disabled: true, mode: 'hosted-single-user-no-auth' });
+    }
+    if (pathname === '/api/auth/logout' && request.method === 'POST') {
+      return json({ ok: true, disabled: true, mode: 'hosted-single-user-no-auth' });
+    }
+    return finalWorker.fetch(request, singleEnv, ctx);
+  }
 
   // Desktop/single-user builds are intentionally account-free. This guard runs
   // before all legacy admin-cookie and Supabase-Bearer authentication code so
