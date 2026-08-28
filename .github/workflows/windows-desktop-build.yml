@@ -12,6 +12,7 @@ on:
       - '_read_123_zip_20260821_180410/provider-adapter-contract.js'
       - '_read_123_zip_20260821_180410/provider-runtime-core.js'
       - '_read_123_zip_20260821_180410/scripts/fetch-windows-media-tools.ps1'
+      - '_read_123_zip_20260821_180410/tests/bundled-media-tools.test.mjs'
       - '.github/workflows/windows-desktop-build.yml'
   workflow_dispatch:
 
