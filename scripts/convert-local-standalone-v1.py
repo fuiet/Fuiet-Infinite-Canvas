@@ -58,7 +58,7 @@ if tests.exists():
         text = path.read_text(encoding='utf-8', errors='ignore').lower()
         if any(token in text for token in (
             'dist/server/', 'wrangler.toml', 'pages-entry', 'secure-index', 'production-entry',
-            'canvAs_owner'.lower(), 'canvas_single_user_no_auth', 'supabase_service_role_key',
+            'canvas_owner', 'canvas_single_user_no_auth', 'supabase_service_role_key',
             'cloudflare', 'worker.fetch'
         )):
             path.unlink()
@@ -113,7 +113,7 @@ if errorlevel 1 pause
 ''', encoding='utf-8')
 
 # 6) Regression test for the new architecture.
-(TEST := PROJECT / 'tests' / 'local-standalone-architecture.test.mjs').write_text(r'''import test from 'node:test';
+(PROJECT / 'tests' / 'local-standalone-architecture.test.mjs').write_text(r'''import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -131,17 +131,17 @@ test('standalone runtime has no cloud/serverless entrypoints', () => {
 });
 
 test('standalone server is local-only and self-encrypts provider keys', () => {
-  assert.match(server, /const HOST = '127\\.0\\.0\\.1'/);
+  assert.match(server, /const HOST = '127\.0\.0\.1'/);
   assert.match(server, /const ADMIN_PASSWORD = ''/);
-  assert.match(server, /SECRET_FILE = path\\.join\\(DATA_DIR, 'secret\\.key'\\)/);
-  assert.match(server, /createCipheriv\\('aes-256-gcm', MASTER_KEY, iv\\)/);
+  assert.match(server, /SECRET_FILE = path\.join\(DATA_DIR, 'secret\.key'\)/);
+  assert.match(server, /createCipheriv\('aes-256-gcm', MASTER_KEY, iv\)/);
   assert.doesNotMatch(server, /PROVIDER_SECRET_KEY/);
   assert.doesNotMatch(server, /SUPABASE_/);
 });
 
 test('package scripts no longer validate a Worker build', () => {
   assert.equal(pkg.name, 'fuiet-infinite-canvas-local');
-  assert.doesNotMatch(pkg.scripts.check, /dist\\/server/);
+  assert.doesNotMatch(pkg.scripts.check, /dist\/server/);
   assert.equal(pkg.scripts.start, 'node server.js');
 });
 ''', encoding='utf-8')
@@ -150,6 +150,4 @@ test('package scripts no longer validate a Worker build', () => {
 workflow = ROOT / '.github' / 'workflows' / 'convert-local-standalone-v1.yml'
 if workflow.exists():
     workflow.unlink()
-self_path = ROOT / 'scripts' / 'convert-local-standalone-v1.py'
-# Keep this script until the process exits; the workflow removes it before commit.
 print('Local standalone conversion applied.')
