@@ -8,6 +8,8 @@ on:
       - '_read_123_zip_20260821_180410/scripts/apply_image_output_dimension_contract.py'
       - '_read_123_zip_20260821_180410/image-output-dimensions.js'
       - '_read_123_zip_20260821_180410/tests/image-output-dimension-contract.test.mjs'
+      - '_read_123_zip_20260821_180410/tests/image-provider-profiles.test.mjs'
+      - '_read_123_zip_20260821_180410/tests/model-image-capabilities.test.mjs'
       - '.github/workflows/image-output-dimension-contract.yml'
 
 permissions:
