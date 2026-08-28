@@ -6,8 +6,8 @@ $OutputRoot = Join-Path $Root 'runtime-tools'
 $TempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("fuiet-media-tools-" + [guid]::NewGuid().ToString('N'))
 
 $FfmpegVersion = '9.0'
-$FfmpegUrl = 'https://github.com/GyanD/codexffmpeg/releases/download/9.0/ffmpeg-9.0-essentials_build.zip'
-$FfmpegSha256 = 'e6b54767a6065919048f1a098eb27211ca4e12b4348a05d88777a5855d0b6e71'
+$FfmpegUrl = 'https://github.com/GyanD/codexffmpeg/releases/download/9.0/ffmpeg-9.0-essentials_build.7z'
+$FfmpegSha256 = 'ffb866303866995734849995027533b9756971215e8c55ef408073628cdc27a2'
 $FfmpegSourceCommit = 'https://github.com/FFmpeg/FFmpeg/commit/d32b387f2b'
 $ImageMagickVersion = '7.1.2-30'
 $ImageMagickUrl = 'https://github.com/ImageMagick/ImageMagick/releases/download/7.1.2-30/ImageMagick-7.1.2-30-portable-Q16-HDRI-x64.7z'
@@ -31,23 +31,38 @@ function Find-SevenZip {
   foreach ($candidate in $candidates) {
     if ($candidate -and (Test-Path $candidate)) { return $candidate }
   }
-  throw '7z.exe is required to unpack the official ImageMagick portable archive.'
+  throw '7z.exe is required to unpack the bundled Windows media tool archives.'
+}
+
+function Invoke-VersionCheck([string]$Name, [string]$File) {
+  # Capture the whole process output first. Piping the live process into
+  # Select-Object -First can close stdout early and make a healthy FFmpeg
+  # process report a non-zero/broken-pipe exit code.
+  $output = & $File -version 2>&1
+  $exitCode = $LASTEXITCODE
+  if ($exitCode -ne 0) {
+    throw "Bundled $Name failed to run (exit $exitCode)."
+  }
+  @($output) | Select-Object -First 2 | ForEach-Object { Write-Host $_ }
 }
 
 try {
   Remove-Item $OutputRoot -Recurse -Force -ErrorAction SilentlyContinue
   New-Item $OutputRoot -ItemType Directory -Force | Out-Null
   New-Item $TempRoot -ItemType Directory -Force | Out-Null
+  $sevenZip = Find-SevenZip
 
   # FFmpeg / FFprobe: pinned 64-bit static release essentials build.
-  $ffmpegArchive = Join-Path $TempRoot 'ffmpeg.zip'
+  $ffmpegArchive = Join-Path $TempRoot 'ffmpeg.7z'
   Download-File $FfmpegUrl $ffmpegArchive
   $actualSha = (Get-FileHash $ffmpegArchive -Algorithm SHA256).Hash.ToLowerInvariant()
   if ($actualSha -ne $FfmpegSha256) {
     throw "FFmpeg SHA-256 mismatch. expected=$FfmpegSha256 actual=$actualSha"
   }
   $ffmpegExtract = Join-Path $TempRoot 'ffmpeg-extracted'
-  Expand-Archive -Path $ffmpegArchive -DestinationPath $ffmpegExtract -Force
+  New-Item $ffmpegExtract -ItemType Directory -Force | Out-Null
+  & $sevenZip x $ffmpegArchive "-o$ffmpegExtract" -y | Out-Host
+  if ($LASTEXITCODE -ne 0) { throw "7-Zip failed to unpack FFmpeg (exit $LASTEXITCODE)." }
   $ffmpegExe = Get-ChildItem $ffmpegExtract -Recurse -File -Filter 'ffmpeg.exe' | Select-Object -First 1
   $ffprobeExe = Get-ChildItem $ffmpegExtract -Recurse -File -Filter 'ffprobe.exe' | Select-Object -First 1
   if (!$ffmpegExe -or !$ffprobeExe) { throw 'FFmpeg archive did not contain ffmpeg.exe and ffprobe.exe.' }
@@ -71,7 +86,6 @@ try {
   }
   $imageMagickExtract = Join-Path $TempRoot 'imagemagick-extracted'
   New-Item $imageMagickExtract -ItemType Directory -Force | Out-Null
-  $sevenZip = Find-SevenZip
   & $sevenZip x $imageMagickArchive "-o$imageMagickExtract" -y | Out-Host
   if ($LASTEXITCODE -ne 0) { throw "7-Zip failed to unpack ImageMagick (exit $LASTEXITCODE)." }
   $magickExe = Get-ChildItem $imageMagickExtract -Recurse -File -Filter 'magick.exe' | Select-Object -First 1
@@ -121,12 +135,9 @@ ImageMagick
   $manifest | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $OutputRoot 'tool-manifest.json') -Encoding UTF8
 
   Write-Host 'Validating downloaded executables...'
-  & (Join-Path $ffmpegTarget 'ffmpeg.exe') -version | Select-Object -First 1 | Write-Host
-  if ($LASTEXITCODE -ne 0) { throw 'Bundled ffmpeg.exe failed to run.' }
-  & (Join-Path $ffmpegTarget 'ffprobe.exe') -version | Select-Object -First 1 | Write-Host
-  if ($LASTEXITCODE -ne 0) { throw 'Bundled ffprobe.exe failed to run.' }
-  & (Join-Path $imageMagickTarget 'magick.exe') -version | Select-Object -First 2 | Write-Host
-  if ($LASTEXITCODE -ne 0) { throw 'Bundled magick.exe failed to run.' }
+  Invoke-VersionCheck 'ffmpeg.exe' (Join-Path $ffmpegTarget 'ffmpeg.exe')
+  Invoke-VersionCheck 'ffprobe.exe' (Join-Path $ffmpegTarget 'ffprobe.exe')
+  Invoke-VersionCheck 'magick.exe' (Join-Path $imageMagickTarget 'magick.exe')
 
   Write-Host "Bundled runtime tools prepared under $OutputRoot"
 }
