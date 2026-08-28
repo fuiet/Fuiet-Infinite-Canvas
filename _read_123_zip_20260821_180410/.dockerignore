@@ -1,0 +1,8 @@
+.git
+.github
+.data
+release
+runtime-tools
+node_modules
+*.exe
+*.zip

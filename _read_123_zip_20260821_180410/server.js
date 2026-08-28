@@ -25,13 +25,15 @@ const PORT = Number(process.env.PORT || 8080);
 const MAX_UPLOAD_BYTES = Math.max(10*1024*1024, Number(process.env.CANVAS_MAX_UPLOAD_BYTES || 100*1024*1024));
 const TASK_CONCURRENCY = Math.max(1, Math.min(8, Number(process.env.CANVAS_TASK_CONCURRENCY || 2)));
 let taskQueuePaused=false;
-const ADMIN_PASSWORD = ''; // standalone: no login
-const HOST = '127.0.0.1'; // standalone: never expose the local API to the LAN by default
-const TRUST_PROXY = false;
+const RUNTIME_MODE = String(process.env.CANVAS_RUNTIME || 'local').trim().toLowerCase();
+const IS_WEB_RUNTIME = RUNTIME_MODE === 'web' || RUNTIME_MODE === 'preview' || String(process.env.CANVAS_WEB_PREVIEW || '0') === '1';
+const ADMIN_PASSWORD = IS_WEB_RUNTIME ? String(process.env.CANVAS_ADMIN_PASSWORD || '').trim() : ''; // optional for an internet-facing preview; local stays login-free
+const HOST = IS_WEB_RUNTIME ? String(process.env.HOST || '0.0.0.0').trim() : '127.0.0.1';
+const TRUST_PROXY = IS_WEB_RUNTIME && String(process.env.CANVAS_TRUST_PROXY || '0') === '1';
 const SESSION_TTL_MS = Math.max(60*60*1000, Number(process.env.CANVAS_SESSION_TTL_MS || 24*60*60*1000));
 const ALLOW_CORS = false;
 const FFMPEG_BIN = process.env.FFMPEG_PATH || 'ffmpeg';
-const MAGICK_BIN = process.env.MAGICK_PATH || 'magick';
+const MAGICK_BIN = process.env.MAGICK_PATH || (process.platform === 'win32' ? 'magick' : 'convert');
 const FFPROBE_BIN = process.env.FFPROBE_PATH || 'ffprobe';
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -1336,7 +1338,7 @@ const server = http.createServer(async (req, res) => {
   try {
     const u=new URL(req.url,`http://${req.headers.host||'localhost'}`);const pathname=u.pathname;
     if(!enforceRateLimit(req,res))return;
-    if(pathname==='/api/health'&&req.method==='GET')return json(res,200,{ok:true,service:'canvas-provider-gateway',taskConcurrency:TASK_CONCURRENCY,queuePaused:taskQueuePaused,authEnabled:Boolean(ADMIN_PASSWORD)});
+    if(pathname==='/api/health'&&req.method==='GET')return json(res,200,{ok:true,service:'canvas-provider-gateway',runtime:IS_WEB_RUNTIME?'web':'local',taskConcurrency:TASK_CONCURRENCY,queuePaused:taskQueuePaused,authEnabled:Boolean(ADMIN_PASSWORD)});
     if(pathname==='/api/queue'&&req.method==='GET'){const queued=store.listTasks({status:'queued',limit:300}).length;return json(res,200,{paused:taskQueuePaused,concurrency:TASK_CONCURRENCY,running:runningTasks,queued})}
     if(pathname==='/api/queue'&&req.method==='PUT'){const body=await readJson(req);taskQueuePaused=Boolean(body.paused);if(!taskQueuePaused)processTaskQueue();return json(res,200,{paused:taskQueuePaused,concurrency:TASK_CONCURRENCY,running:runningTasks})}
     if(pathname==='/api/auth/status'&&req.method==='GET')return json(res,200,{enabled:Boolean(ADMIN_PASSWORD),authenticated:!ADMIN_PASSWORD||verifySession(parseCookies(req).canvas_session)});
@@ -1423,6 +1425,6 @@ const server = http.createServer(async (req, res) => {
   } catch(err){json(res,500,{error:err?.message||String(err)})}
 });
 server.listen(PORT, HOST, () => {
-  console.log(`Canvas Studio running at http://${HOST}:${PORT}`);
+  console.log(`Fuiet Infinite Canvas (${IS_WEB_RUNTIME?'web':'local'}) running at http://${HOST}:${PORT}`);
   console.log(`Provider data: ${PROVIDERS_FILE}`);console.log(`Persistent store: ${path.join(DATA_DIR,'canvas.sqlite')}`);processTaskQueue();
 });
