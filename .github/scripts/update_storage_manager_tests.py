@@ -13,7 +13,10 @@ p.write_text(s.replace(old,new),encoding='utf-8')
 # Text node: dynamic bootstrap owns the plugin load after IndexedDB hydration.
 p=root/'tests'/'text-node-v23.test.mjs'
 s=p.read_text(encoding='utf-8')
-s=s.replace("  const html = read('index.html');\n", "  const html = read('index.html');\n  const bootstrap = read('browser-bootstrap.js');\n", 1)
+anchor="""  const app = read('app.js');\n  const css = read('styles/text-node.css');\n  const dblclick = read('text-node-doubleclick-v1.js');\n  const html = read('index.html');\n\n  assert.match(app, /textInputMode/);\n"""
+replacement="""  const app = read('app.js');\n  const css = read('styles/text-node.css');\n  const dblclick = read('text-node-doubleclick-v1.js');\n  const html = read('index.html');\n  const bootstrap = read('browser-bootstrap.js');\n\n  assert.match(app, /textInputMode/);\n"""
+if anchor not in s: raise SystemExit('text node bootstrap declaration pattern missing')
+s=s.replace(anchor,replacement,1)
 s=s.replace("  assert.match(html, /text-node-doubleclick-v1\\.js/);\n", "  assert.match(html, /browser-bootstrap\\.js/);\n  assert.match(bootstrap, /text-node-doubleclick-v1\\.js/);\n  assert.ok(bootstrap.indexOf('text-node-doubleclick-v1.js')>bootstrap.indexOf('app.js'));\n", 1)
 p.write_text(s,encoding='utf-8')
 
