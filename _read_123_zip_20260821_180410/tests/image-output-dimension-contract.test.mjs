@@ -38,8 +38,8 @@ test('browser runtime validates real generated pixels and corrects mismatches',(
   assert.match(runtime,/finalImageSize/);
 });
 
-test('dimension helper loads before browser runtime',()=>{
-  const helper=index.indexOf('image-output-dimensions.js?v=20260828-image-dimension-contract-1');
-  const runtimePos=index.indexOf('browser-runtime.js?v=20260828-image-dimension-contract-1');
+test('dimension helper loads before browser runtime regardless of independent cache versions',()=>{
+  const helper=index.indexOf('image-output-dimensions.js?v=');
+  const runtimePos=index.indexOf('browser-runtime.js?v=');
   assert.ok(helper>=0&&runtimePos>helper);
 });
