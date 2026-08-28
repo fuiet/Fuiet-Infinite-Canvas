@@ -1,6 +1,6 @@
 /* Shared provider adapter contract.
- * Loaded as a side-effect by both Node (require) and Cloudflare Worker (import).
- * Keep this file free of Node-only and Worker-only APIs.
+ * Loaded as a side-effect by both the local Node runtime and browser/preview runtime.
+ * Keep this file free of Node-only and Cloudflare-only APIs.
  */
 (()=>{
 'use strict';
@@ -25,6 +25,9 @@ function providerLooksOpenAIStyle(provider={}){
     return /(?:^|\/)v\d+(?:\/|$)/.test(path)||/openai|api/.test(url.hostname);
   }catch{return false}
 }
+function providerHost(provider={}){
+  try{return new URL(String(provider.baseUrl||'')).hostname.toLowerCase()}catch{return ''}
+}
 function modelHint(model={}){
   return `${model.id||''} ${model.name||''}`.trim().toLowerCase();
 }
@@ -47,7 +50,7 @@ function normalizeModelModality(value,model={}){
   if(canonical&&canonical!=='text')return canonical;
   const hint=modelHint(model);
   if(/gpt[-_. ]?image|dall[-_. ]?e|(?:^|[-_. ])flux(?:[-_. ]|$)|imagen|ideogram|stable[-_. ]?diffusion|sdxl|(?:^|[-_. ])image(?:[-_. ]|$)/.test(hint))return'image';
-  if(/sora|seedance|veo(?:[-_. ]|$)|kling|hailuo|vidu|hunyuan[-_. ]?video|(?:^|[-_. ])video(?:[-_. ]|$)|(?:^|[-_. ])t2v(?:[-_. ]|$)|(?:^|[-_. ])i2v(?:[-_. ]|$)/.test(hint))return'video';
+  if(/sora|seedance|veo(?:[-_. ]|$)|kling|hailuo|minimax|vidu|hunyuan[-_. ]?video|(?:^|[-_. ])video(?:[-_. ]|$)|(?:^|[-_. ])t2v(?:[-_. ]|$)|(?:^|[-_. ])i2v(?:[-_. ]|$)/.test(hint))return'video';
   if(/(?:^|[-_. ])tts(?:[-_. ]|$)|speech|voice|whisper/.test(hint))return'audio';
   return canonical||'text';
 }
@@ -70,18 +73,12 @@ function inferAdapterKey(provider={},model={}){
   if(mod==='video'&&provider.videoProtocol==='standard-video-async-v1')return 'standard-video-async-v1';
   if(route)return (model.responseMode==='async'||model.operationRoutes?.generate?.responseMode==='async')?'generic-async':'generic-sync';
 
-  // Imported models must be immediately usable. When the provider did not expose
-  // enough protocol metadata, infer the common execution contract from modality,
-  // model family and an OpenAI-style /v1 Base URL instead of forcing the user into
-  // advanced configuration.
   const hint=modelHint(model), openAIStyle=providerLooksOpenAIStyle(provider);
   if(mod==='image'&&(/gpt[-_. ]?image|dall[-_. ]?e|flux|imagen|ideogram|stable[-_. ]?diffusion|sdxl/.test(hint)||openAIStyle))return 'openai-image';
   if((mod==='text'||mod==='script')&&(/^(gpt|o1|o3|o4)|claude|gemini|qwen|deepseek|llama|mistral|glm|doubao|moonshot|kimi/.test(hint)||openAIStyle))return 'openai-chat';
   if(mod==='audio'&&(/tts|speech|voice|audio/.test(hint)||openAIStyle))return 'openai-audio-speech';
   if(mod==='video'&&(/sora|seedance|veo|kling|hailuo|minimax|vidu|wan|hunyuan|video/.test(hint)||openAIStyle))return 'standard-video-async-v1';
 
-  // Final zero-config fallback: choose the conventional route for the selected
-  // modality. A custom route can still override this automatically later.
   if(mod==='image')return 'openai-image';
   if(mod==='audio')return 'openai-audio-speech';
   if(mod==='video')return 'standard-video-async-v1';
@@ -94,14 +91,20 @@ function adapterDefaults(key,nodeType){
   if(key==='openai-image')return{createPath:'/v1/images/generations',method:'POST',responseMode:'sync',outputPath:'data.0.url'};
   if(key==='openai-audio-speech')return{createPath:'/v1/audio/speech',method:'POST',responseMode:'sync',outputPath:''};
   if(key==='comfyui-workflow')return{createPath:'/prompt',method:'POST',responseMode:'async',taskIdPath:'prompt_id',pollPath:'/history/{{taskId}}',pollMethod:'GET'};
-  // Current OpenAI Videos API and the growing set of compatible gateways use
-  // POST /v1/videos, GET /v1/videos/{id}, and a content endpoint when the final
-  // status object does not itself contain a CDN URL. Older/custom routes remain
-  // supported when explicitly configured by a provider/model.
   if(key==='standard-video-async-v1')return{createPath:'/v1/videos',method:'POST',responseMode:'async',taskIdPath:'',pollPath:'/v1/videos/{{taskId}}',pollMethod:'GET',contentPath:'/v1/videos/{{taskId}}/content',statusPath:'',progressPath:'',outputPath:'',successValues:SUCCESS,failureValues:FAILURE,allowOutputWithoutTerminalStatus:true,pollIntervalMs:1500,timeoutMs:1200000};
   if(key==='generic-async')return{createPath:'',method:'POST',responseMode:'async',pollMethod:'GET',successValues:SUCCESS,failureValues:FAILURE,pollIntervalMs:1500,timeoutMs:1200000};
   if(key==='generic-sync')return{createPath:'',method:'POST',responseMode:'sync'};
   return{createPath:'',method:'POST',responseMode:nodeType==='video'?'async':'sync',pollMethod:'GET',successValues:SUCCESS,failureValues:FAILURE,pollIntervalMs:1500,timeoutMs:1200000};
+}
+function knownVideoResultProfile(provider={},model={}){
+  const host=providerHost(provider),hint=modelHint(model);
+  // DataEyes Hailuo/MiniMax H3 returns a terminal task object whose video is at
+  // task.content.url. Keep this as a result-profile only: explicit/custom create
+  // and poll routes still win, and we do not guess a provider request body.
+  if((host==='platform.dataeyes.ai'||host.endsWith('.dataeyes.ai'))&&/hailuo|minimax|\bh3\b/.test(hint)){
+    return{taskIdPath:'task_id',statusPath:'task.status',outputPath:'task.content.url',contentPath:'',pollIntervalMs:2000,timeoutMs:3600000};
+  }
+  return{};
 }
 function looksLikeLegacyAutoVideoRoute(value={}){
   const create=String(value.createPath||'').trim(), poll=String(value.pollPath||'').trim();
@@ -123,6 +126,7 @@ function routeIsExplicit(model={}){
 function resolveRoute(provider={},model={},nodeType='',operation='generate'){
   const adapterKey=inferAdapterKey(provider,model);
   const defaults=adapterDefaults(adapterKey,nodeType);
+  const knownVideo=nodeType==='video'?knownVideoResultProfile(provider,model):{};
   const providerVideo=nodeType==='video'?migrateLegacyAutoVideoRoute(compact(provider.videoProtocolConfig||{})):{};
   const {explicitAdapter,hasExplicitRoute,autoDefaults}=routeIsExplicit(model);
   const direct=compact({
@@ -145,7 +149,7 @@ function resolveRoute(provider={},model={},nodeType='',operation='generate'){
     allowOutputWithoutTerminalStatus:autoDefaults?undefined:model.allowOutputWithoutTerminalStatus
   });
   const op=compact(model.operationRoutes?.[operation]||model.operationRoutes?.generate||{});
-  const route={...defaults,...providerVideo,...direct,...op,adapterKey};
+  const route={...defaults,...knownVideo,...providerVideo,...direct,...op,adapterKey};
   route.method=String(route.method||'POST').toUpperCase();
   route.pollMethod=String(route.pollMethod||'GET').toUpperCase();
   route.successValues=Array.isArray(route.successValues)&&route.successValues.length?route.successValues:SUCCESS;
@@ -174,8 +178,6 @@ function finalizeModel(provider={},model={},nodeType=''){
     next.failureValues=route.failureValues||FAILURE;
     next.pollIntervalMs=route.pollIntervalMs||1500;
     next.timeoutMs=route.timeoutMs||1200000;
-    // Generic import placeholders are not adapter-specific. Clearing them lets
-    // the runtime build the correct request body for text/image/video/audio.
     next.requestTemplate={};
   }
   next.adapterResolved={key:route.adapterKey||'auto',ready,auto:!before.explicitAdapter,createPath:route.createPath||'',responseMode:route.responseMode||''};
@@ -198,5 +200,5 @@ function detectModelListProtocol(data,endpoint=''){
   if(objects.length>0&&withIds/objects.length>=.8&&/\/models(?:$|\?)/i.test(String(endpoint||'')))return{protocol:'openai-compatible',confidence:.9,reason:'models endpoint + model ids'};
   return{protocol:'',confidence:0,reason:`generic-model-list:${endpoint||'unknown'}`};
 }
-globalThis.CanvasProviderAdapters=Object.freeze({SUCCESS,FAILURE,normalizeReferenceTransport,normalizeModelModality,providerLooksOpenAIStyle,inferAdapterKey,adapterDefaults,resolveRoute,finalizeModel,finalizeProvider,detectModelListProtocol});
+globalThis.CanvasProviderAdapters=Object.freeze({SUCCESS,FAILURE,normalizeReferenceTransport,normalizeModelModality,providerLooksOpenAIStyle,inferAdapterKey,adapterDefaults,knownVideoResultProfile,resolveRoute,finalizeModel,finalizeProvider,detectModelListProtocol});
 })();
