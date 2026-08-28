@@ -23,8 +23,9 @@ test('image task records model capability, selected dimensions and upstream retu
   assert.match(runtime,/data\.0\.size/);
 });
 
-test('model capability resolver and image runtime are cache busted together',()=>{
-  assert.match(index,/image-request-parameters\.js\?v=20260828-model-capabilities-1/);
-  assert.match(index,/model-image-capabilities\.js\?v=20260828-model-capabilities-1/);
-  assert.match(index,/browser-runtime\.js\?v=20260828-model-capabilities-1/);
+test('model capability resolver, output validator and image runtime are cache busted together',()=>{
+  assert.match(index,/image-request-parameters\.js\?v=20260828-image-dimension-contract-1/);
+  assert.match(index,/model-image-capabilities\.js\?v=20260828-image-dimension-contract-1/);
+  assert.match(index,/image-output-dimensions\.js\?v=20260828-image-dimension-contract-1/);
+  assert.match(index,/browser-runtime\.js\?v=20260828-image-dimension-contract-1/);
 });
