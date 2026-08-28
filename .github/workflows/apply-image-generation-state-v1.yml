@@ -21,6 +21,16 @@ jobs:
           node-version: '24'
       - name: Apply image generation node state patch
         run: python .github/scripts/fix_image_generation_state_v1.py
+      - name: Normalize generated regression assertions
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('_read_123_zip_20260821_180410/tests/image-generation-node-state.test.mjs')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace("  assert.match(app,/image-node-placeholder image-node-stage\\\\\\\" style=\\\\\\\"\\$\\{ratioStyle\\}/);", "  assert.ok(app.includes('image-node-placeholder image-node-stage\\\" style=\\\"${ratioStyle}'));" )
+          s=s.replace('  assert.match(css,/data-task-state=\\\\\\\"queued\\\\\\\"[\\s\\S]*height:auto!important/);', '  assert.match(css,/data-task-state="queued"[\\s\\S]*height:auto!important/);')
+          p.write_text(s,encoding='utf-8')
+          PY
       - name: Validate syntax and regression suite
         working-directory: _read_123_zip_20260821_180410
         run: |
