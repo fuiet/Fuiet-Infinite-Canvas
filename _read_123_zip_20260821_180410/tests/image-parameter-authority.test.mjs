@@ -19,14 +19,14 @@ test('quality selection is promoted to node state',()=>{
   assert.match(app,/node\.imageQuality=value/);
 });
 
-test('third-party image gateway receives exact dimension aliases with strict fallback',()=>{
-  assert.match(runtime,/function imageRichRequestBody/);
+test('third-party image gateway uses provider-specific dimension dialects instead of mixed aliases',()=>{
+  assert.match(runtime,/function imageProviderProfile/);
+  assert.match(runtime,/profile==='siliconflow'/);
   assert.match(runtime,/image_size:p\.size/);
-  assert.match(runtime,/width:Number\(p\.width\)/);
-  assert.match(runtime,/height:Number\(p\.height\)/);
-  assert.match(runtime,/aspect_ratio:p\.aspectRatio/);
-  assert.match(runtime,/resolution:p\.resolution/);
-  assert.match(runtime,/image_quality:p\.quality/);
-  assert.match(runtime,/function imageRequestBodies/);
+  assert.match(runtime,/profile==='seedream'/);
+  assert.match(runtime,/size:p\.size,sequential_image_generation:'disabled'/);
+  assert.match(runtime,/profile==='diffusion'/);
+  assert.match(runtime,/width:Number\(p\.width\),height:Number\(p\.height\)/);
+  assert.match(runtime,/requestDiagnostics:imageRequestDiagnostics/);
   assert.match(runtime,/\[400,405,415,422\]/);
 });
