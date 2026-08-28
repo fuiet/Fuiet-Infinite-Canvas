@@ -1,0 +1,19 @@
+name: Audit Browser API Surface
+
+on:
+  push:
+    branches: [audit/api-map-20260828]
+    paths: ['.github/workflows/audit-api-map-20260828.yml']
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Print browser API references
+        run: |
+          cd _read_123_zip_20260821_180410
+          echo '=== APP API REFERENCES ==='
+          grep -nE "['\"](/api/[^'\"]+)" app.js models.js ui-*.js *.js 2>/dev/null | grep -v '^server.js:' | sort -u || true
+          echo '=== FETCH REFERENCES ==='
+          grep -nE "fetch\(|api\(" app.js models.js ui-*.js *.js 2>/dev/null | grep -v '^server.js:' | head -n 500 || true
