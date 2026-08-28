@@ -24,9 +24,26 @@ function hostedSingleUserNoAuth(env) {
   return String(env?.CANVAS_SINGLE_USER_NO_AUTH || '0') === '1';
 }
 
+function envOverlay(env, overrides) {
+  // Cloudflare bindings are runtime-owned properties. Do not copy them with
+  // object spread: secret bindings may be non-enumerable in some runtimes and
+  // would disappear from the downstream env. Inherit directly from the real
+  // binding object and define only the few application-mode overrides locally.
+  const source = env && typeof env === 'object' ? env : null;
+  const overlay = Object.create(source);
+  for (const [key, value] of Object.entries(overrides || {})) {
+    Object.defineProperty(overlay, key, {
+      value,
+      enumerable: true,
+      configurable: true,
+      writable: false
+    });
+  }
+  return overlay;
+}
+
 function desktopEnv(env) {
-  return {
-    ...env,
+  return envOverlay(env, {
     // Desktop/single-user builds must work out of the box without asking users
     // to configure server secrets. Keep an explicitly configured secret when
     // present; otherwise use the desktop-only fallback for provider-key encryption.
@@ -36,21 +53,21 @@ function desktopEnv(env) {
     CANVAS_OWNER_ID: '',
     CANVAS_ALLOW_UNAUTHENTICATED_OWNER: '0',
     CANVAS_AUTO_SINGLE_SUPABASE_OWNER: '0'
-  };
+  });
 }
 
 function hostedSingleUserEnv(env) {
-  return {
-    ...env,
+  return envOverlay(env, {
     // Hosted single-user mode is intentionally account-free, but unlike the
     // desktop mode it must never synthesize a public fallback encryption key.
-    // PROVIDER_SECRET_KEY remains whatever the deployment configured.
+    // All Cloudflare bindings, including PROVIDER_SECRET_KEY, remain inherited
+    // directly from the original runtime env object.
     CANVAS_ADMIN_PASSWORD: '',
     CANVAS_ENFORCE_OWNER: '0',
     CANVAS_OWNER_ID: '',
     CANVAS_ALLOW_UNAUTHENTICATED_OWNER: '0',
     CANVAS_AUTO_SINGLE_SUPABASE_OWNER: '0'
-  };
+  });
 }
 
 function parseCookies(request) {
@@ -220,6 +237,19 @@ async function route(request, env, ctx) {
   // owner isolation. It still keeps the deployment's real PROVIDER_SECRET_KEY so
   // saved supplier API keys remain encrypted at rest.
   if (hostedSingleUserNoAuth(env)) {
+    // Safe deployment diagnostic: expose presence only, never secret values.
+    if (pathname === '/api/runtime/env-status' && request.method === 'GET') {
+      const providerSecret = String(env?.PROVIDER_SECRET_KEY || '').trim();
+      const canvasSecret = String(env?.CANVAS_SECRET_KEY || '').trim();
+      const legacyEncryptionSecret = String(env?.API_KEY_ENCRYPTION_KEY || '').trim();
+      const supabaseServiceRole = String(env?.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+      return json({
+        mode: 'hosted-single-user-no-auth',
+        providerSecretConfigured: Boolean(providerSecret),
+        supabaseServiceRoleConfigured: Boolean(supabaseServiceRole),
+        encryptionSecretConfigured: Boolean(providerSecret || canvasSecret || legacyEncryptionSecret || supabaseServiceRole)
+      });
+    }
     const singleEnv = hostedSingleUserEnv(env);
     if (pathname === '/api/auth/status' && request.method === 'GET') {
       return json({ enabled: false, authenticated: true, mode: 'hosted-single-user-no-auth' });
