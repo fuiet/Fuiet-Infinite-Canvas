@@ -30,7 +30,7 @@ test('electron-builder places generated media tools outside app.asar as executab
 });
 
 test('Windows build downloads pinned FFmpeg and official portable ImageMagick and validates packaged copies', () => {
-  assert.match(fetcher, /ffmpeg-9\.0-essentials_build\.zip/);
+  assert.match(fetcher, /ffmpeg-release-essentials\.zip/);
   assert.match(fetcher, /e6b54767a6065919048f1a098eb27211ca4e12b4348a05d88777a5855d0b6e71/i);
   assert.match(fetcher, /ImageMagick-7\.1\.2-30-portable-Q16-HDRI-x64\.7z/);
   assert.match(fetcher, /Get-FileHash[\s\S]{0,120}SHA256/);
