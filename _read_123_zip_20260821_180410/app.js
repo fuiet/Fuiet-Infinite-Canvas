@@ -2085,7 +2085,7 @@
 
   function resolveGeneratedOutputUrl(output){
     if(!output)return '';
-    if(typeof output==='string')return /^(https?:\/\/|data:|\/media\/)/i.test(output.trim())?output.trim():'';
+    if(typeof output==='string')return /^(https?:\/\/|data:|blob:|\/media\/|\/__browser_media\/)/i.test(output.trim())?output.trim():'';
     if(Array.isArray(output))return resolveGeneratedOutputUrl(output.find(Boolean));
     if(typeof output==='object'){
       const directKeys=['value','url','uri','href','file_url','fileUrl','fileURL','download_url','downloadUrl','video_url','videoUrl','image_url','imageUrl','audio_url','audioUrl','source_url','sourceUrl'];

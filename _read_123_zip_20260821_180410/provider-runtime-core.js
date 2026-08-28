@@ -59,7 +59,7 @@ function extractProgress(response,config={}){
   return firstPath(response,[config.progressPath,'progress','data.progress','percent','data.percent','task.progress','job.progress','result.progress']);
 }
 function outputPaths(modality='video'){
-  if(modality==='image')return ['data.0.url','images.0.url','output.url','result.url','data.url','url'];
+  if(modality==='image')return ['data.0.url','data.0.image_url','data.0.imageUrl','images.0.url','images.0.image_url','images.0.imageUrl','output.0.url','output.url','result.images.0.url','result.image.url','result.url','data.url','url'];
   if(modality==='audio')return ['audio.0.url','output.url','result.url','data.audio_url','audio_url','data.url','url'];
   if(modality==='text'||modality==='script')return ['choices.0.message.content','output_text','output.0.content.0.text','result.text','data.text','text','content'];
   return [
@@ -68,7 +68,48 @@ function outputPaths(modality='video'){
     'data.result.url','data.result.video_url','url','data.url','output.0.url','data.output.0.url','videos.0.url'
   ];
 }
+function normalizeImageCandidate(value){
+  if(value===undefined||value===null||value==='')return undefined;
+  if(typeof value==='object'){
+    const nested=firstPath(value,['url','image_url','imageUrl','b64_json','base64','image_base64','image']);
+    return nested===value?undefined:normalizeImageCandidate(nested);
+  }
+  const text=String(value).trim();
+  if(!text)return undefined;
+  if(/^(https?:\/\/|data:image\/|blob:|\/\/)/i.test(text))return text;
+  if(text.startsWith('/'))return text;
+  // Values reaching this helper from explicit base64/image fields are image bytes,
+  // not arbitrary response text. Keep them browser-renderable as a data URL.
+  if(text.length>=16)return `data:image/png;base64,${text.replace(/\s+/g,'')}`;
+  return undefined;
+}
+function extractImageOutput(response,config={}){
+  if(config.outputPath){
+    const explicit=normalizeImageCandidate(getPath(response,config.outputPath));
+    if(explicit)return explicit;
+  }
+  const urlLike=firstPath(response,[
+    'data.0.url','data.0.image_url','data.0.imageUrl','images.0.url','images.0.image_url','images.0.imageUrl',
+    'output.0.url','output.url','result.images.0.url','result.image.url','result.url','data.url','url',
+    'images.0','output.0'
+  ]);
+  const normalizedUrl=normalizeImageCandidate(urlLike);
+  if(normalizedUrl)return normalizedUrl;
+  const encoded=firstPath(response,[
+    'data.0.b64_json','data.0.base64','data.0.image_base64','images.0.b64_json','images.0.base64','images.0.image_base64',
+    'output.0.b64_json','output.0.base64','result.images.0.b64_json','result.images.0.base64','result.image_base64',
+    'data.image_base64','image_base64','b64_json','base64'
+  ]);
+  const normalizedEncoded=normalizeImageCandidate(encoded);
+  if(normalizedEncoded)return normalizedEncoded;
+  const genericImage=firstPath(response,['data.0.image','images.0.image','output.image','result.image','data.image','image']);
+  return normalizeImageCandidate(genericImage);
+}
 function extractOutput(response,config={},modality='video'){
+  if(modality==='image'){
+    const image=extractImageOutput(response,config);
+    if(image!==undefined&&image!==null&&image!=='')return image;
+  }
   if(config.outputPath){
     const explicit=getPath(response,config.outputPath);
     if(explicit!==undefined&&explicit!==null&&explicit!=='')return explicit;
@@ -113,7 +154,7 @@ function formatFailure(assessment,prefix='上游任务失败'){
 }
 
 globalThis.CanvasProviderRuntimeCore=Object.freeze({
-  DEFAULT_SUCCESS,DEFAULT_FAILURE,getPath,firstPath,extractTaskId,extractStatus,extractProgress,extractOutput,
+  DEFAULT_SUCCESS,DEFAULT_FAILURE,getPath,firstPath,extractTaskId,extractStatus,extractProgress,extractImageOutput,extractOutput,
   classifyAsyncPoll,nextPollDelay,formatFailure
 });
 })();

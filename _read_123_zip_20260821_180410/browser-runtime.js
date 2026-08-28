@@ -156,6 +156,18 @@ function outputObject(value,modality='text'){
   if(modality==='text')return{type:'text',value:String(value),text:String(value)};
   return{type:'url',value:String(value),url:String(value),sourceUrl:String(value)};
 }
+function validMediaOutput(value){const text=String(value||'').trim();return /^(https?:\/\/|data:|blob:|\/\/|\/media\/|\/__browser_media\/)/i.test(text)}
+async function normalizeGeneratedOutput(value,modality,provider){
+  if(value==null)return value;
+  let text=typeof value==='string'?value.trim():value;
+  if(modality==='image'&&typeof text==='string'&&/^data:image\//i.test(text)){
+    try{const blob=await (await rawFetch(text)).blob(),stored=await storeMediaBlob(blob,{name:'generated-image'});return stored.url}catch{}
+  }
+  if(typeof text==='string'&&text.startsWith('/')&&!text.startsWith('/__browser_media/')&&!text.startsWith('/media/')){
+    try{return joinUrl(provider?.baseUrl||location.origin,text)}catch{}
+  }
+  return text;
+}
 function refsForRequest(refs=[]){return (Array.isArray(refs)?refs:[]).map(r=>({role:r.role||r.semanticRole||r.kind||'reference',type:r.type||r.kind||'',url:r.url||r.outputUrl||'',text:r.text||'',title:r.title||''})).filter(r=>r.url||r.text)}
 async function blobToDataUrl(blob){return new Promise((resolve,reject)=>{const fr=new FileReader();fr.onload=()=>resolve(fr.result);fr.onerror=reject;fr.readAsDataURL(blob)})}
 async function referenceBlob(url){const value=String(url||'');if(!value)return null;try{if(value.startsWith('data:')){const res=await rawFetch(value);return await res.blob()}if(value.startsWith('blob:')||value.startsWith('/__browser_media/')){const res=await rawFetch(value);if(res.ok)return await res.blob()}if(/^https?:\/\//i.test(value)){try{const res=await rawFetch(value,{mode:'cors'});if(res.ok)return await res.blob()}catch{}const proxied=await proxyFetch(value,{method:'GET'});if(proxied.ok)return await proxied.blob()}}catch{}return null}
@@ -258,9 +270,11 @@ async function executeTask(task){
   if(!created)throw lastCreateError||new Error('视频创建接口不可用');
   if(route.responseMode!=='async'){
     if(created.kind==='blob')return updateTask(task.id,{status:'succeeded',progress:100,output:outputObject(created.value,task.nodeType)});
-    const raw=created.value,extracted=Core?.extractOutput?Core.extractOutput(raw,route,normalizeMod(task.nodeType)):undefined;
-    const value=extracted!==undefined?extracted:(normalizeMod(task.nodeType)==='text'?(raw?.choices?.[0]?.message?.content??raw?.text??raw?.content??JSON.stringify(raw)):raw?.url??raw?.data?.url??JSON.stringify(raw));
-    return updateTask(task.id,{status:'succeeded',progress:100,output:outputObject(value,normalizeMod(task.nodeType))});
+    const raw=created.value,modality=normalizeMod(task.nodeType),extracted=Core?.extractOutput?Core.extractOutput(raw,route,modality):undefined;
+    let value=extracted!==undefined?extracted:(modality==='text'?(raw?.choices?.[0]?.message?.content??raw?.text??raw?.content??JSON.stringify(raw)):raw?.url??raw?.data?.url);
+    value=await normalizeGeneratedOutput(value,modality,provider);
+    if(modality==='image'&&!validMediaOutput(value))throw new Error('上游已返回成功响应，但未识别到图片结果字段');
+    return updateTask(task.id,{status:'succeeded',progress:100,output:outputObject(value,modality)});
   }
   if(created.kind!=='json')throw new Error('异步创建接口没有返回 JSON 任务信息');
   const taskId=Core?.extractTaskId?Core.extractTaskId(created.value,route):created.value?.id;
@@ -280,7 +294,9 @@ async function executeTask(task){
       let output=assessment.output;
       if((output==null||output==='')&&route.contentPath){const contentUrl=joinUrl(provider.baseUrl,fillTemplate(route.contentPath,{taskId}));const content=await fetchWithAuth(provider,contentUrl,{method:'GET'});if(!content.ok)throw new Error(`结果下载失败 ${content.status}`);const parsed=await readResponse(content);output=parsed.value}
       if(output==null||output==='')throw new Error('任务成功但没有找到输出结果');
-      return updateTask(task.id,{status:'succeeded',progress:100,output:outputObject(output,normalizeMod(task.nodeType))});
+      const modality=normalizeMod(task.nodeType);output=await normalizeGeneratedOutput(output,modality,provider);
+      if(modality==='image'&&!validMediaOutput(output))throw new Error('上游任务已成功，但未识别到图片结果字段');
+      return updateTask(task.id,{status:'succeeded',progress:100,output:outputObject(output,modality)});
     }
     attempt++;
   }
