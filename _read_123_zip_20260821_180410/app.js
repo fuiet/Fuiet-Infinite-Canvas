@@ -337,13 +337,22 @@
   }
   function modelForNode(n){const p=providerById(n.providerId);return p?.models?.find(m=>m.id===n.modelId&&normalizeClientModality(m.modality)===n.type)||null}
   function modelRuntimeReady(p,m){
-    if(!m||m.enabled===false)return false;
-    if(m.adapterResolved&&m.adapterResolved.ready===false)return false;
-    if(m.adapterResolved&&m.adapterResolved.ready===true)return true;
+    if(!m||m.enabled===false||!String(m.id||'').trim())return false;
+    const modality=normalizeClientModality(m.modality);
+    try{
+      const Contract=globalThis.CanvasProviderAdapters;
+      if(Contract?.resolveRoute){
+        const route=Contract.resolveRoute(p||{},m,modality,'generate');
+        if(route?.adapterKey&&route.adapterKey!=='auto'&&String(route.createPath||'').trim())return true;
+      }
+    }catch{}
+    // adapterResolved is cached diagnostic metadata. A historical ready=false must
+    // not hide a model that the current Provider Core can execute successfully.
+    if(m.adapterResolved?.ready===true)return true;
     if(p?.protocol==='comfyui')return true;
-    if(p?.protocol==='openai-compatible'&&['text','image','audio'].includes(normalizeClientModality(m.modality)))return true;
-    if(normalizeClientModality(m.modality)==='video'&&p?.protocol!=='comfyui'&&(p?.videoProtocol==='standard-video-async-v1'||providerHasApiKey(p)))return true;
-    return Boolean(String(m.createPath||'').trim()) || normalizeClientModality(m.modality)==='text';
+    if(p?.protocol==='openai-compatible'&&['text','image','audio'].includes(modality))return true;
+    if(modality==='video'&&p?.protocol!=='comfyui'&&(p?.videoProtocol==='standard-video-async-v1'||providerHasApiKey(p)))return true;
+    return Boolean(String(m.createPath||'').trim()) || modality==='text';
   }
   function allModelsForType(type){
     const wanted=normalizeClientModality(type);
@@ -2529,7 +2538,7 @@
   }
 
   function scriptPromptsHtml(n,d){const dirtyCount=(d.shots||[]).filter(s=>s.promptDirty).length;return `<div class="prompt-compose-head"><div><b>最终提示词</b><span>综合当前 shot、角色 / 场景 / 道具与全局风格。${dirtyCount?` <span class="script-impact-note">${dirtyCount} 个镜头需要重新合成</span>`:' <span class="script-impact-note clean">全部已同步</span>'}</span></div><label>全局风格 <input id="scriptStyle" value="${escapeAttr(d.style||'')}"></label><button id="synthesizeAgain">规则合成</button><button id="aiSynthesizePrompts" class="primary">AI 专业合成</button></div><div class="final-prompt-list">${d.shots.map(s=>`<article class="${s.promptDirty?'dirty':''}" data-final-shot="${s.id}"><header><b>Shot ${s.no}</b><span>${escapeHtml(s.shotSize)} · ${Number(s.duration)}s${s.promptDirty?`<i class="dirty-badge">${escapeHtml(s.dirtyReason||'待同步')}</i>`:''}</span></header><label>图像提示词<textarea data-final-image rows="4">${escapeHtml(s.imagePrompt||'')}</textarea></label><label>视频提示词<textarea data-final-video rows="4">${escapeHtml(s.videoPrompt||'')}</textarea></label></article>`).join('')}</div>`}
-  function providerModelSelectHtml(modality,pid,mid,prefix){const eligible=providers.filter(p=>(p.models||[]).some(m=>m.enabled!==false&&m.modality===modality&&modelRuntimeReady(p,m)));const p=(providerById(pid)&&eligible.find(x=>x.id===pid))||eligible[0];const models=(p?.models||[]).filter(m=>m.enabled!==false&&m.modality===modality&&modelRuntimeReady(p,m));return `<select id="${prefix}Provider"><option value="">选择 API 供应商</option>${eligible.map(x=>`<option value="${x.id}" ${x.id===(p?.id||pid)?'selected':''}>${escapeHtml(x.name)}</option>`).join('')}</select><select id="${prefix}Model"><option value="">选择模型</option>${models.map(m=>`<option value="${m.id}" ${m.id===mid?'selected':''}>${escapeHtml(m.name||m.id)}</option>`).join('')}</select>`}
+  function providerModelSelectHtml(modality,pid,mid,prefix){const eligible=providers.filter(p=>(p.models||[]).some(m=>m.enabled!==false&&normalizeClientModality(m.modality)===normalizeClientModality(modality)&&modelRuntimeReady(p,m)));const p=(providerById(pid)&&eligible.find(x=>x.id===pid))||eligible[0];const models=(p?.models||[]).filter(m=>m.enabled!==false&&normalizeClientModality(m.modality)===normalizeClientModality(modality)&&modelRuntimeReady(p,m));return `<select id="${prefix}Provider"><option value="">选择 API 供应商</option>${eligible.map(x=>`<option value="${x.id}" ${x.id===(p?.id||pid)?'selected':''}>${escapeHtml(x.name)}</option>`).join('')}</select><select id="${prefix}Model"><option value="">选择模型</option>${models.map(m=>`<option value="${m.id}" ${m.id===mid?'selected':''}>${escapeHtml(m.name||m.id)}</option>`).join('')}</select>`}
   function scriptBatchHtml(n,d,defaultType){const type=defaultType||'image',auto=n.scriptAutoFlow!==false;return `<div class="batch-panel"><div class="batch-flow-banner"><div><b>脚本 → 分镜组 → 批量生成</b><span>无需先手动创建空节点；确认后直接生成分镜组，并按队列优先级运行。</span></div><label class="toggle-row"><input id="scriptAutoFlow" type="checkbox" ${auto?'checked':''}>创建后立即进入生成队列</label></div><div class="batch-config"><label>生成类型<select id="batchType"><option value="image" ${type==='image'?'selected':''}>批量生分镜图</option><option value="video" ${type==='video'?'selected':''}>批量生视频</option></select></label><div id="batchProviderModels">${providerModelSelectHtml(type,n.batchProviderId||'',n.batchModelId||'','batch')}</div><label>画幅比<select id="batchRatio"><option>16:9</option><option>9:16</option><option>1:1</option><option>4:3</option></select></label><label>队列优先级<select id="batchPriority"><option value="90">高 · 90</option><option value="50" selected>普通 · 50</option><option value="10">低 · 10</option></select></label><label>范围<select id="batchRange"><option>全部镜头</option><option>已勾选镜头</option></select></label></div><div class="batch-shot-list">${d.shots.map(s=>`<label><input type="checkbox" data-batch-shot="${s.id}" checked><span>Shot ${s.no}</span><b>${escapeHtml(s.action)}</b><small>${escapeHtml((type==='image'?s.imagePrompt:s.videoPrompt)||'尚未合成提示词')}</small></label>`).join('')}</div><div id="batchCostPreview" class="batch-cost-preview"></div><div class="feature-actions"><button id="batchCreateGroup">仅创建节点</button><button id="batchAutoRun" class="primary">一键创建并生成</button></div></div>`}
 
   function bindScriptTab(n,d,tab,rerender,batchType){
