@@ -3,84 +3,154 @@ const fs = require('fs');
 const { DatabaseSync } = require('node:sqlite');
 
 const RECOVERABLE_ACTIVE_STATUSES = ['running','polling','result_pending','persisting','provider_succeeded'];
+const CURRENT_SCHEMA_VERSION = 2;
 
 function nowIso(){ return new Date().toISOString(); }
 function safeJson(text,fallback){try{return text==null?fallback:JSON.parse(text)}catch{return fallback}}
+function quoteSqlString(value){return `'${String(value).replace(/'/g,"''")}'`;}
 
 class CanvasStore {
   constructor(dataDir) {
     fs.mkdirSync(dataDir, { recursive: true });
-    this.db = new DatabaseSync(path.join(dataDir, 'canvas.sqlite'));
-    this.db.exec(`
-      PRAGMA journal_mode=WAL;
-      PRAGMA synchronous=NORMAL;
-      CREATE TABLE IF NOT EXISTS tasks (
-        id TEXT PRIMARY KEY,
-        status TEXT NOT NULL,
-        progress REAL NOT NULL DEFAULT 0,
-        provider_id TEXT NOT NULL,
-        model_id TEXT NOT NULL,
-        node_type TEXT NOT NULL,
-        payload_json TEXT NOT NULL,
-        output_json TEXT,
-        error TEXT,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        attempt INTEGER NOT NULL DEFAULT 0,
-        max_retries INTEGER NOT NULL DEFAULT 1,
-        cancel_requested INTEGER NOT NULL DEFAULT 0,
-        logs_json TEXT NOT NULL DEFAULT '[]'
-      );
-      CREATE INDEX IF NOT EXISTS idx_tasks_status_created ON tasks(status, created_at);
-      CREATE TABLE IF NOT EXISTS projects (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        data_json TEXT NOT NULL,
-        current_version INTEGER NOT NULL DEFAULT 1,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS project_versions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        project_id TEXT NOT NULL,
-        version INTEGER NOT NULL,
-        data_json TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        UNIQUE(project_id, version)
-      );
-      CREATE INDEX IF NOT EXISTS idx_project_versions ON project_versions(project_id, version DESC);
-    `);
-
-    this.ensureTaskColumns();
-    this.db.prepare("CREATE INDEX IF NOT EXISTS idx_tasks_queue_priority ON tasks(status, priority DESC, created_at ASC)").run();
-    this.db.prepare("CREATE INDEX IF NOT EXISTS idx_tasks_upstream_id ON tasks(upstream_task_id)").run();
+    this.dataDir = path.resolve(dataDir);
+    this.dbPath = path.join(this.dataDir, 'canvas.sqlite');
+    this.backupDir = path.join(this.dataDir, 'backups');
+    fs.mkdirSync(this.backupDir, { recursive: true });
+    this.db = new DatabaseSync(this.dbPath);
+    this.db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON;');
+    this.runMigrations();
     this.recoverInterruptedTasks();
   }
 
-  ensureTaskColumns(){
-    const cols=new Set(this.db.prepare('PRAGMA table_info(tasks)').all().map(x=>x.name));
-    const additions={
-      priority:"INTEGER NOT NULL DEFAULT 50",
-      provider_status:"TEXT NOT NULL DEFAULT ''",
-      result_status:"TEXT NOT NULL DEFAULT ''",
-      upstream_task_id:"TEXT",
-      provider_output_json:"TEXT",
-      provider_succeeded_at:"TEXT",
-      result_saved_at:"TEXT",
-      last_poll_at:"TEXT",
-      last_error:"TEXT"
-    };
-    for(const [name,ddl] of Object.entries(additions)){
-      if(!cols.has(name))this.db.exec(`ALTER TABLE tasks ADD COLUMN ${name} ${ddl}`);
+  migrationList(){
+    return [
+      {
+        version:1,
+        name:'base-project-task-schema',
+        up:()=>this.db.exec(`
+          CREATE TABLE IF NOT EXISTS tasks (
+            id TEXT PRIMARY KEY,
+            status TEXT NOT NULL,
+            progress REAL NOT NULL DEFAULT 0,
+            provider_id TEXT NOT NULL,
+            model_id TEXT NOT NULL,
+            node_type TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            output_json TEXT,
+            error TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            attempt INTEGER NOT NULL DEFAULT 0,
+            max_retries INTEGER NOT NULL DEFAULT 1,
+            cancel_requested INTEGER NOT NULL DEFAULT 0,
+            logs_json TEXT NOT NULL DEFAULT '[]'
+          );
+          CREATE INDEX IF NOT EXISTS idx_tasks_status_created ON tasks(status, created_at);
+          CREATE TABLE IF NOT EXISTS projects (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            data_json TEXT NOT NULL,
+            current_version INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+          );
+          CREATE TABLE IF NOT EXISTS project_versions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id TEXT NOT NULL,
+            version INTEGER NOT NULL,
+            data_json TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE(project_id, version)
+          );
+          CREATE INDEX IF NOT EXISTS idx_project_versions ON project_versions(project_id, version DESC);
+        `)
+      },
+      {
+        version:2,
+        name:'provider-result-lifecycle-and-queue',
+        up:()=>{
+          const cols=new Set(this.db.prepare('PRAGMA table_info(tasks)').all().map(x=>x.name));
+          const additions={
+            priority:"INTEGER NOT NULL DEFAULT 50",
+            provider_status:"TEXT NOT NULL DEFAULT ''",
+            result_status:"TEXT NOT NULL DEFAULT ''",
+            upstream_task_id:"TEXT",
+            provider_output_json:"TEXT",
+            provider_succeeded_at:"TEXT",
+            result_saved_at:"TEXT",
+            last_poll_at:"TEXT",
+            last_error:"TEXT"
+          };
+          for(const [name,ddl] of Object.entries(additions)){
+            if(!cols.has(name))this.db.exec(`ALTER TABLE tasks ADD COLUMN ${name} ${ddl}`);
+          }
+          this.db.exec(`
+            CREATE INDEX IF NOT EXISTS idx_tasks_queue_priority ON tasks(status, priority DESC, created_at ASC);
+            CREATE INDEX IF NOT EXISTS idx_tasks_upstream_id ON tasks(upstream_task_id);
+          `);
+        }
+      }
+    ];
+  }
+
+  appliedMigrationVersions(){
+    this.db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
+      version INTEGER PRIMARY KEY,
+      name TEXT NOT NULL,
+      applied_at TEXT NOT NULL
+    )`);
+    return new Set(this.db.prepare('SELECT version FROM schema_migrations ORDER BY version').all().map(row=>Number(row.version)));
+  }
+
+  createPreMigrationBackup(pending){
+    if(!fs.existsSync(this.dbPath) || fs.statSync(this.dbPath).size===0)return null;
+    const stamp=new Date().toISOString().replace(/[:.]/g,'-');
+    const fromVersion=Math.max(0,...this.db.prepare('SELECT version FROM schema_migrations').all().map(row=>Number(row.version)||0));
+    const target=path.join(this.backupDir,`canvas-before-v${fromVersion}-to-v${pending.at(-1).version}-${stamp}.sqlite`);
+    this.db.exec(`VACUUM INTO ${quoteSqlString(target)}`);
+    this.pruneMigrationBackups(5);
+    return target;
+  }
+
+  pruneMigrationBackups(limit=5){
+    let files=[];
+    try{files=fs.readdirSync(this.backupDir).filter(name=>/^canvas-before-v.*\.sqlite$/i.test(name)).map(name=>{
+      const file=path.join(this.backupDir,name);return{file,mtime:fs.statSync(file).mtimeMs};
+    }).sort((a,b)=>b.mtime-a.mtime);}catch{return;}
+    for(const item of files.slice(Math.max(1,limit))){try{fs.unlinkSync(item.file)}catch{}}
+  }
+
+  runMigrations(){
+    const applied=this.appliedMigrationVersions();
+    const migrations=this.migrationList().filter(m=>!applied.has(m.version)).sort((a,b)=>a.version-b.version);
+    if(!migrations.length){this.db.exec(`PRAGMA user_version=${CURRENT_SCHEMA_VERSION}`);return;}
+    this.createPreMigrationBackup(migrations);
+    for(const migration of migrations){
+      this.db.exec('BEGIN IMMEDIATE');
+      try{
+        migration.up();
+        this.db.prepare('INSERT OR REPLACE INTO schema_migrations(version,name,applied_at) VALUES(?,?,?)').run(migration.version,migration.name,nowIso());
+        this.db.exec(`PRAGMA user_version=${migration.version}`);
+        this.db.exec('COMMIT');
+      }catch(error){
+        try{this.db.exec('ROLLBACK')}catch{}
+        throw new Error(`本地数据库迁移 v${migration.version} (${migration.name}) 失败：${error?.message||error}`);
+      }
     }
+  }
+
+  schemaVersion(){
+    const row=this.db.prepare('PRAGMA user_version').get();
+    return Number(row?.user_version||0);
+  }
+
+  listMigrations(){
+    return this.db.prepare('SELECT version,name,applied_at FROM schema_migrations ORDER BY version').all().map(row=>({version:Number(row.version),name:row.name,appliedAt:row.applied_at}));
   }
 
   recoverInterruptedTasks(){
     const now=nowIso();
-    // A user-requested cancellation must stay cancelled after a restart.
     this.db.prepare("UPDATE tasks SET status='canceled', cancel_requested=1, updated_at=? WHERE status='cancelling'").run(now);
-    // Everything else is resumable from SQLite. runTask reads payload._upstream and
-    // continues polling the already-created provider task instead of creating a new one.
     const marks=RECOVERABLE_ACTIVE_STATUSES.map(()=>'?').join(',');
     this.db.prepare(`UPDATE tasks SET status='queued', progress=MIN(progress, 20), cancel_requested=0, updated_at=? WHERE status IN (${marks})`).run(now,...RECOVERABLE_ACTIVE_STATUSES);
   }
@@ -136,11 +206,7 @@ class CanvasStore {
 
   guardedStatus(current, requested, patch={}){
     if(!requested)return current.status;
-    // Success is terminal. A stale poller, timeout handler or retry callback must
-    // never be able to turn a completed task back into failed/running/polling.
     if(current.status==='succeeded'&&requested!=='succeeded'&&patch.forceStatusReset!==true)return 'succeeded';
-    // Once the provider has succeeded, later local/download/persistence problems
-    // are result-processing problems, not generation failures.
     if(current.providerStatus==='succeeded'&&requested==='failed')return 'result_pending';
     return requested;
   }
@@ -235,4 +301,4 @@ class CanvasStore {
   }
 }
 
-module.exports={CanvasStore};
+module.exports={CanvasStore,CURRENT_SCHEMA_VERSION};
