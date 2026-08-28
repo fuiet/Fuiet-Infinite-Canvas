@@ -10,6 +10,7 @@ const rawFetch=window.fetch.bind(window);
 const Adapters=globalThis.CanvasProviderAdapters;
 const Core=globalThis.CanvasProviderRuntimeCore;
 const ImageParams=globalThis.CanvasImageRequestParameters;
+const VideoParams=globalThis.CanvasVideoRequestParameters;
 const LEGACY_KEYS={
   providers:'fuiet-browser-providers-v1',
   projects:'fuiet-browser-projects-v1',
@@ -122,10 +123,12 @@ function joinUrl(base,path){if(/^https?:\/\//i.test(String(path||'')))return Str
 function authCandidates(provider){const key=String(provider?.apiKey||'').trim(),list=[];if(!key)return[{}];const configured=String(provider?.authHeader||'').trim();if(configured){const scheme=String(provider?.authScheme||'').trim();list.push({[configured]:scheme?`${scheme} ${key}`:key})}list.push({Authorization:`Bearer ${key}`},{'x-api-key':key},{'api-key':key});const seen=new Set();return list.filter(x=>{const s=JSON.stringify(x);if(seen.has(s))return false;seen.add(s);return true})}
 function cleanHeaders(headers={}){const h={};for(const [k,v] of Object.entries(headers||{})){const n=String(k).toLowerCase();if(['host','cookie','set-cookie','content-length','connection','transfer-encoding','cf-connecting-ip','x-forwarded-for'].includes(n))continue;h[k]=String(v)}return h}
 
+async function blobToBase64(blob){const bytes=new Uint8Array(await blob.arrayBuffer());let out='';const step=0x8000;for(let i=0;i<bytes.length;i+=step)out+=String.fromCharCode(...bytes.subarray(i,i+step));return btoa(out)}
+async function serializeProxyBody(body){if(body==null)return{bodyType:'none',body:null};if(typeof body==='string')return{bodyType:'text',body};if(body instanceof FormData){const entries=[];for(const [name,value] of body.entries()){if(value instanceof Blob){if(value.size>25*1024*1024)throw new Error('在线预览的单个代理文件不能超过 25MB');entries.push({name,kind:'file',filename:value.name||'upload.bin',type:value.type||'application/octet-stream',base64:await blobToBase64(value)})}else entries.push({name,kind:'text',value:String(value)})}return{bodyType:'form-data',formData:entries}}throw new Error('在线代理不支持此请求体类型')}
 async function proxyFetch(url,init={}){
-  const headers=cleanHeaders(init.headers||{});let body=init.body;
-  if(body!=null&&typeof body!=='string')throw new Error('在线代理当前只接受文本/JSON 请求体');
-  const res=await rawFetch('/api/proxy',{method:'POST',headers:{'content-type':'application/json','x-canvas-proxy':'1'},body:JSON.stringify({url,method:String(init.method||'GET').toUpperCase(),headers,body:body??null})});
+  const headers=cleanHeaders(init.headers||{}),packed=await serializeProxyBody(init.body);
+  if(packed.bodyType==='form-data'){delete headers['content-type'];delete headers['Content-Type']}
+  const res=await rawFetch('/api/proxy',{method:'POST',headers:{'content-type':'application/json','x-canvas-proxy':'1'},body:JSON.stringify({url,method:String(init.method||'GET').toUpperCase(),headers,...packed})});
   if(!res.ok){let d={};try{d=await res.clone().json()}catch{}if(res.status>=500||d.error)throw new Error(d.error||`代理请求失败 ${res.status}`)}
   return res;
 }
@@ -154,9 +157,11 @@ function outputObject(value,modality='text'){
   return{type:'url',value:String(value),url:String(value),sourceUrl:String(value)};
 }
 function refsForRequest(refs=[]){return (Array.isArray(refs)?refs:[]).map(r=>({role:r.role||r.semanticRole||r.kind||'reference',type:r.type||r.kind||'',url:r.url||r.outputUrl||'',text:r.text||'',title:r.title||''})).filter(r=>r.url||r.text)}
-async function makePortableReferences(refs=[]){const out=[];for(const r of refsForRequest(refs)){let url=r.url;if(url&&url.startsWith('blob:')){try{const res=await rawFetch(url),blob=await res.blob();if(blob.size<=15*1024*1024){url=await new Promise((resolve,reject)=>{const fr=new FileReader();fr.onload=()=>resolve(fr.result);fr.onerror=reject;fr.readAsDataURL(blob)})}}catch{}}out.push({...r,url})}return out}
+async function blobToDataUrl(blob){return new Promise((resolve,reject)=>{const fr=new FileReader();fr.onload=()=>resolve(fr.result);fr.onerror=reject;fr.readAsDataURL(blob)})}
+async function referenceBlob(url){const value=String(url||'');if(!value)return null;try{if(value.startsWith('data:')){const res=await rawFetch(value);return await res.blob()}if(value.startsWith('blob:')||value.startsWith('/__browser_media/')){const res=await rawFetch(value);if(res.ok)return await res.blob()}if(/^https?:\/\//i.test(value)){try{const res=await rawFetch(value,{mode:'cors'});if(res.ok)return await res.blob()}catch{}const proxied=await proxyFetch(value,{method:'GET'});if(proxied.ok)return await proxied.blob()}}catch{}return null}
+async function makePortableReferences(refs=[]){const out=[];for(const r of refsForRequest(refs)){let url=r.url;if(url&&(url.startsWith('blob:')||url.startsWith('/__browser_media/'))){try{const blob=await referenceBlob(url);if(blob&&blob.size<=20*1024*1024)url=await blobToDataUrl(blob)}catch{}}out.push({...r,url})}return out}
 function defaultRequestBody(provider,model,task,route,refs){
-  const mod=normalizeMod(task.nodeType||model.modality),rawParams=task.parameters||{},p=mod==='image'?(ImageParams?.normalize?.(rawParams)||rawParams):rawParams,prompt=String(task.prompt||''),modelId=model.id;
+  const mod=normalizeMod(task.nodeType||model.modality),rawParams=task.parameters||{},p=mod==='image'?(ImageParams?.normalize?.(rawParams)||rawParams):mod==='video'?(VideoParams?.normalize?.(rawParams)||rawParams):rawParams,prompt=String(task.prompt||''),modelId=model.id;
   const ctx={model:modelId,prompt,references:refs,parameters:p,task};
   if(route.requestTemplate&&Object.keys(route.requestTemplate).length)return fillTemplate(route.requestTemplate,ctx);
   if(route.adapterKey==='openai-chat'){
@@ -168,14 +173,15 @@ function defaultRequestBody(provider,model,task,route,refs){
   if(route.adapterKey==='openai-image')return{model:modelId,prompt,n:Number(p.count||1),...(p.size?{size:p.size}:{}),...(p.quality?{quality:p.quality}:{}),...(p.aspectRatio?{aspect_ratio:p.aspectRatio}:{})};
   if(route.adapterKey==='openai-audio-speech')return{model:modelId,input:prompt,voice:p.voice||'alloy',...(p.format?{format:p.format}:{})};
   if(route.adapterKey==='comfyui-workflow')return{prompt:p.workflow||p.promptGraph||{},client_id:uid('browser_')};
-  if(mod==='video'){
-    const first=refs.find(r=>['first_frame','image','image_reference'].includes(r.role)||r.type==='image');
-    const last=refs.find(r=>r.role==='last_frame');
-    return{model:modelId,prompt,...(p.duration?{duration:p.duration}:{}),...(p.resolution?{resolution:p.resolution}:{}),...(p.aspectRatio?{aspect_ratio:p.aspectRatio}:{}),...(first?.url?{image:first.url,first_frame:first.url}:{}),...(last?.url?{last_frame:last.url}:{}),...(refs.length?{references:refs}:{})};
-  }
+  if(mod==='video'){const first=refs.find(r=>['first_frame','image','image_reference'].includes(r.role)||r.type==='image');const last=refs.find(r=>r.role==='last_frame');return{model:modelId,prompt,...p,seconds:String(p.seconds||p.duration||''),...(p.size?{size:p.size}:{}),...(first?.url?{image:first.url,first_frame:first.url,input_reference:first.url}:{}),...(last?.url?{last_frame:last.url}:{}),...(refs.length?{references:refs}:{})};}
+
   return{model:modelId,prompt,...p,...(refs.length?{references:refs}:{})};
 }
-async function providerJson(provider,url,init){const res=await fetchWithAuth(provider,url,init);const parsed=await readResponse(res);if(!res.ok){const detail=parsed.kind==='json'?(parsed.value?.error?.message||parsed.value?.message||JSON.stringify(parsed.value)):String(parsed.value||'');throw new Error(`供应商 HTTP ${res.status}${detail?`：${detail.slice(0,500)}`:''}`)}return parsed}
+async function buildStandardVideoForm(model,task,refs){const p=VideoParams?.normalize?.(task.parameters||{})||task.parameters||{},form=new FormData();form.append('model',String(model.id||''));form.append('prompt',String(task.prompt||''));if(p.seconds)form.append('seconds',String(p.seconds));if(p.size)form.append('size',String(p.size));const first=refs.find(r=>['first_frame','image','image_reference'].includes(r.role)||r.type==='image');if(first?.url){const blob=await referenceBlob(first.url);if(!blob)throw new Error('首帧/参考图无法读取，无法提交图生视频');if(blob.size>25*1024*1024)throw new Error('首帧/参考图超过 25MB，在线预览暂不支持');form.append('input_reference',blob,'input-reference.'+((blob.type||'image/png').split('/')[1]||'png'))}return form}
+function autoVideoRoute(model,route){return route?.adapterKey==='standard-video-async-v1'&&(model?.routeOrigin==='auto'||model?.adapterResolved?.auto===true||!String(model?.createPath||'').trim())}
+function alternateVideoCreatePaths(route,model){const first=String(route.createPath||'/v1/videos');if(!autoVideoRoute(model,route))return[first];return[...new Set([first,'/v1/videos','/v1/video/generations','/v1/videos/generations'])]}
+function matchingPollPath(createPath,taskId,route){if(createPath==='/v1/video/generations')return `/v1/video/generations/${taskId}`;if(createPath==='/v1/videos/generations')return `/v1/videos/generations/${taskId}`;return fillTemplate(route.pollPath||'/v1/videos/{{taskId}}',{taskId})}
+async function providerJson(provider,url,init){const res=await fetchWithAuth(provider,url,init);const parsed=await readResponse(res);if(!res.ok){const detail=parsed.kind==='json'?(parsed.value?.error?.message||parsed.value?.message||JSON.stringify(parsed.value)):String(parsed.value||'');const err=new Error(`供应商 HTTP ${res.status}${detail?`：${detail.slice(0,500)}`:''}`);err.status=res.status;err.detail=detail;throw err}return parsed}
 
 async function discover(provider){
   const endpoints=['/v1/models','/models','/api/v1/models','/api/models'];let last='';
@@ -213,9 +219,11 @@ async function executeTask(task){
   const operation=task.parameters?.operation||'generate';
   const route=Adapters?.resolveRoute?Adapters.resolveRoute(provider,model,task.nodeType,operation):{createPath:model.createPath,method:model.method||'POST',responseMode:model.responseMode||'sync',outputPath:model.outputPath||''};
   if(!route.createPath)throw new Error('无法自动确定供应商创建接口');
-  const refs=await makePortableReferences(task.references||[]),body=defaultRequestBody(provider,model,task,route,refs),createUrl=joinUrl(provider.baseUrl,route.createPath);
+  const refs=await makePortableReferences(task.references||[]),body=defaultRequestBody(provider,model,task,route,refs);
   updateTask(task.id,{status:'running',progress:2,error:null});
-  const created=await providerJson(provider,createUrl,{method:route.method||'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+  let created=null,usedCreatePath=route.createPath,lastCreateError=null;const paths=normalizeMod(task.nodeType)==='video'?alternateVideoCreatePaths(route,model):[route.createPath];
+  for(const createPath of paths){const createUrl=joinUrl(provider.baseUrl,createPath);try{if(route.adapterKey==='standard-video-async-v1'){try{const form=await buildStandardVideoForm(model,task,refs);created=await providerJson(provider,createUrl,{method:route.method||'POST',headers:{},body:form})}catch(error){if(![400,404,405,415,422].includes(Number(error?.status)))throw error;lastCreateError=error;created=await providerJson(provider,createUrl,{method:route.method||'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)})}}else created=await providerJson(provider,createUrl,{method:route.method||'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});usedCreatePath=createPath;break}catch(error){lastCreateError=error;if(!autoVideoRoute(model,route)||![404,405].includes(Number(error?.status)))throw error}}
+  if(!created)throw lastCreateError||new Error('视频创建接口不可用');
   if(route.responseMode!=='async'){
     if(created.kind==='blob')return updateTask(task.id,{status:'succeeded',progress:100,output:outputObject(created.value,task.nodeType)});
     const raw=created.value,extracted=Core?.extractOutput?Core.extractOutput(raw,route,normalizeMod(task.nodeType)):undefined;
@@ -229,7 +237,7 @@ async function executeTask(task){
   const started=Date.now();let attempt=0;
   while(Date.now()-started<Number(route.timeoutMs||1200000)){
     const current=findTask(task.id);if(current?.cancelRequested)return updateTask(task.id,{status:'canceled',error:'已取消'});
-    const pollPath=fillTemplate(route.pollPath||'/v1/videos/{{taskId}}',{taskId}),pollUrl=joinUrl(provider.baseUrl,pollPath);
+    const pollPath=matchingPollPath(usedCreatePath,taskId,route),pollUrl=joinUrl(provider.baseUrl,pollPath);
     await sleep(attempt?Math.min(30000,Core?.nextPollDelay?Core.nextPollDelay(route.pollIntervalMs||1500,attempt):route.pollIntervalMs||1500):Math.max(500,Number(route.pollIntervalMs||1500)));
     const polled=await providerJson(provider,pollUrl,{method:route.pollMethod||'GET',headers:{'content-type':'application/json'}});
     if(polled.kind!=='json')throw new Error('轮询接口没有返回 JSON');

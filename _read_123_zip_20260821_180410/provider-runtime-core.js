@@ -4,8 +4,8 @@
  */
 (()=>{
 'use strict';
-const DEFAULT_SUCCESS=['completed','succeeded','success','done','finished'];
-const DEFAULT_FAILURE=['failed','error','canceled','cancelled'];
+const DEFAULT_SUCCESS=['completed','succeeded','success','done','finished','ready'];
+const DEFAULT_FAILURE=['failed','failure','error','canceled','cancelled','rejected','expired'];
 
 function getPath(obj,path){
   if(!path)return obj;
@@ -48,12 +48,12 @@ function extractTaskId(response,config={}){
   const common=firstPath(response,[
     'id','task_id','taskId','request_id','requestId','job_id','jobId',
     'data.id','data.task_id','data.taskId','data.request_id','data.job_id',
-    'task.id','job.id','result.id'
+    'task.id','job.id','result.id','video.id','data.video.id','data.task.id','result.task_id','result.taskId'
   ]);
   return common!==undefined&&common!==null&&common!==''?String(common):findStringByPrefix(response,'video_task_');
 }
 function extractStatus(response,config={}){
-  return firstPath(response,[config.statusPath,'status','data.status','state','data.state','task.status','job.status','result.status']);
+  return firstPath(response,[config.statusPath,'status','data.status','state','data.state','task.status','data.task.status','job.status','result.status','video.status','data.video.status']);
 }
 function extractProgress(response,config={}){
   return firstPath(response,[config.progressPath,'progress','data.progress','percent','data.percent','task.progress','job.progress','result.progress']);
@@ -64,7 +64,7 @@ function outputPaths(modality='video'){
   if(modality==='text'||modality==='script')return ['choices.0.message.content','output_text','output.0.content.0.text','result.text','data.text','text','content'];
   return [
     'output.url','output.video_url','output.videoUrl','data.output.url','data.output.video_url','data.output.videoUrl',
-    'data.video_url','data.videoUrl','video_url','videoUrl','result.url','result.video_url','result.videoUrl',
+    'data.video_url','data.videoUrl','video_url','videoUrl','video.url','data.video.url','result.url','result.video.url','result.video_url','result.videoUrl','content_url','download_url','data.content_url','data.download_url',
     'data.result.url','data.result.video_url','url','data.url','output.0.url','data.output.0.url','videos.0.url'
   ];
 }

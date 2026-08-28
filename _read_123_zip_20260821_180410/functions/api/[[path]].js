@@ -68,7 +68,21 @@ async function proxy(request){
   if(!['GET','POST','PUT','PATCH','DELETE','HEAD'].includes(method))return json({error:'不支持的上游请求方法'},405);
   const headers=sanitizeHeaders(body?.headers||{});
   let payload=body?.body;
-  if(payload!==null&&payload!==undefined&&typeof payload!=='string')return json({error:'代理请求体必须是文本或 JSON 字符串'},400);
+  const bodyType=String(body?.bodyType||'text');
+  if(bodyType==='form-data'){
+    const form=new FormData();
+    for(const item of Array.isArray(body?.formData)?body.formData:[]){
+      if(item?.kind==='file'){
+        try{
+          const bytes=Uint8Array.from(atob(String(item.base64||'')),c=>c.charCodeAt(0));
+          form.append(String(item.name||'file'),new Blob([bytes],{type:String(item.type||'application/octet-stream')}),String(item.filename||'upload.bin'));
+        }catch{return json({error:'代理 multipart 文件编码无效'},400)}
+      }else form.append(String(item?.name||'field'),String(item?.value||''));
+    }
+    headers.delete('content-type');
+    headers.delete('content-length');
+    payload=form;
+  }else if(payload!==null&&payload!==undefined&&typeof payload!=='string')return json({error:'代理请求体必须是文本、JSON 字符串或 multipart'},400);
   if(['GET','HEAD'].includes(method))payload=undefined;
 
   const originalOrigin=current.origin;

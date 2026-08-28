@@ -1642,7 +1642,7 @@
     if(modality==='image')return{modality,aspectRatios:['1:1','16:9','9:16','4:3','3:4','21:9'],resolutions:['1K','2K','4K'],maxImages:/edit|reference|seedream|navo|qwen/.test(t)?4:1,supportsImageReference:true,supportsMask:/edit|inpaint|seedream|navo|qwen/.test(t),supportsOutpaint:true,supportsCamera:true,supportsStyle:true};
     if(modality==='video'){
       const frameCap=/seedance|h3|minimax|kling|vidu|wan|hailuo|pixverse|runway|sora|veo|luma/.test(t);
-      const resolutions=/kling/.test(t)?['720p','1080p','2160p']:/h3|minimax/.test(t)?['768p','1440p']:['480p','720p','1080p'];
+      const resolutions=/kling/.test(t)?['720p','1080p','2160p']:/h3|minimax/.test(t)?['768p','1440p']:/sora/.test(t)?['720p','1080p']:['480p','720p','1080p'];
       const supportsImageReference=true;
       const supportsAudioReference=/seedance|h3|minimax|kling|wan/.test(t);
       const supportsNativeAudio=/seedance|h3|minimax|kling.?3|wan|pixverse/.test(t);
@@ -1653,7 +1653,7 @@
       if(supportsImageReference)generationModes.push('image2video');
       if(supportsAudioReference||supportsNativeAudio)generationModes.push('audio2video');
       if(supportsFirstFrame||supportsLastFrame)generationModes.push('frame2video');
-      return{modality,durations:/seedance.*2.5/.test(t)?[4,5,10,15,30]:/h3|minimax/.test(t)?[4,5,6,8,10,12,15]:[4,5,10],resolutions,aspectRatios:['16:9','9:16','1:1','4:3','3:4'],maxImages:/seedance.*2.5/.test(t)?30:/h3|minimax/.test(t)?9:7,maxVideos:/seedance.*2.5/.test(t)?10:/h3|minimax/.test(t)?3:1,maxAudios:/seedance.*2.5/.test(t)?10:/h3|minimax/.test(t)?3:1,maxReferences:/seedance.*2.5/.test(t)?50:/h3|minimax/.test(t)?12:12,supportsTextToVideo,supportsFirstFrame,supportsLastFrame,supportsImageReference,supportsVideoReference:/seedance|h3|minimax|kling|wan|vidu|edit/.test(t),supportsAudioReference,supportsNativeAudio,supportsVideoEdit:/seedance|h3|minimax|kling.?o|edit/.test(t),supportsExtend:/seedance|h3|minimax|extend/.test(t),supportsReshoot:/seedance|h3|minimax|edit/.test(t),supportsSubjects:/kling|vidu|subject/.test(t),generationModes};
+      return{modality,durations:/seedance.*2.5/.test(t)?[4,5,10,15,30]:/h3|minimax/.test(t)?[4,5,6,8,10,12,15]:/sora/.test(t)?[4,8,12]:[4,5,10],resolutions,aspectRatios:/sora/.test(t)?['16:9','9:16']:['16:9','9:16','1:1','4:3','3:4'],maxImages:/seedance.*2.5/.test(t)?30:/h3|minimax/.test(t)?9:7,maxVideos:/seedance.*2.5/.test(t)?10:/h3|minimax/.test(t)?3:1,maxAudios:/seedance.*2.5/.test(t)?10:/h3|minimax/.test(t)?3:1,maxReferences:/seedance.*2.5/.test(t)?50:/h3|minimax/.test(t)?12:12,supportsTextToVideo,supportsFirstFrame,supportsLastFrame,supportsImageReference,supportsVideoReference:/seedance|h3|minimax|kling|wan|vidu|edit/.test(t),supportsAudioReference,supportsNativeAudio,supportsVideoEdit:/seedance|h3|minimax|kling.?o|edit/.test(t),supportsExtend:/seedance|h3|minimax|extend/.test(t),supportsReshoot:/seedance|h3|minimax|edit/.test(t),supportsSubjects:/kling|vidu|subject/.test(t),generationModes};
     }
     if(modality==='text')return{modality,supportsVision:/vl|vision|cvlm|gvlm|multimodal/.test(t),supportsVideoUnderstanding:/vl|vision|gvlm/.test(t),supportsJson:true};
     return{modality,tts:/speech|tts|eleven|minimax/.test(t),music:/music|mureka|suno|udio/.test(t),voiceClone:/minimax|clone|speech/.test(t)};

@@ -4,8 +4,8 @@
  */
 (()=>{
 'use strict';
-const SUCCESS=['completed','succeeded','success','done','finished'];
-const FAILURE=['failed','error','canceled','cancelled'];
+const SUCCESS=['completed','succeeded','success','done','finished','ready'];
+const FAILURE=['failed','failure','error','canceled','cancelled','rejected','expired'];
 const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
 const compact=o=>{const out={};for(const [k,v] of Object.entries(o||{}))if(v!==undefined&&v!==null&&v!=='')out[k]=v;return out};
 const clamp=(v,min,max,fallback)=>{const n=Number(v);return Number.isFinite(n)?Math.max(min,Math.min(max,n)):fallback};
@@ -179,6 +179,7 @@ function finalizeModel(provider={},model={},nodeType=''){
     next.requestTemplate={};
   }
   next.adapterResolved={key:route.adapterKey||'auto',ready,auto:!before.explicitAdapter,createPath:route.createPath||'',responseMode:route.responseMode||''};
+  if(before.autoDefaults&&ready)next.routeOrigin='auto';
   return next;
 }
 function finalizeProvider(provider={}){
