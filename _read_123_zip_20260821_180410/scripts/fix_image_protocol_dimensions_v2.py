@@ -1,7 +1,7 @@
 from pathlib import Path
 import re
 
-# trigger v2
+# trigger v3
 ROOT = Path(__file__).resolve().parents[1]
 runtime_path = ROOT / 'browser-runtime.js'
 index_path = ROOT / 'index.html'
@@ -37,8 +37,9 @@ function imageRequestBodies(provider,model,task,route,refs){
   if(route.adapterKey!=='openai-image')return[{profile:'generic',body:strict}];
   const profile=imageProviderProfile(provider,model), primary=imageProfileBody(profile,provider,model,task,strict);
   const list=[{profile,body:primary}];
-  if(profile==='seedream')list.push({profile:'seedream-width-height',body:{model:model.id,prompt:String(task.prompt||''),width:Number((ImageParams?.normalize?.(task.parameters||{})||{}).width),height:Number((ImageParams?.normalize?.(task.parameters||{})||{}).height),response_format:'url'}});
-  if(profile==='openai-compatible')list.push({profile:'width-height',body:{model:model.id,prompt:String(task.prompt||''),width:Number((ImageParams?.normalize?.(task.parameters||{})||{}).width),height:Number((ImageParams?.normalize?.(task.parameters||{})||{}).height),n:Math.max(1,Number(task.parameters?.count||1))}});
+  const p=ImageParams?.normalize?.(task.parameters||{})||task.parameters||{};
+  if(profile==='seedream')list.push({profile:'seedream-width-height',body:{model:model.id,prompt:String(task.prompt||''),width:Number(p.width),height:Number(p.height),response_format:'url'}});
+  if(profile==='openai-compatible')list.push({profile:'width-height',body:{model:model.id,prompt:String(task.prompt||''),width:Number(p.width),height:Number(p.height),n:Math.max(1,Number(p.count||1))}});
   return list;
 }
 function imageResponseSize(raw){
@@ -59,8 +60,8 @@ if old not in runtime:
     raise SystemExit('image candidate loop not found')
 runtime = runtime.replace(old,new,1)
 
-old_success = "const raw=created.value,extracted=Core?.extractOutput?Core.extractOutput(raw,route,normalizeMod(task.nodeType)):undefined;\n    const value=extracted!==undefined?extracted:(normalizeMod(task.nodeType)==='text'?(raw?.choices?.[0]?.message?.content??raw?.text??raw?.content??JSON.stringify(raw)):raw?.url??raw?.data?.url??JSON.stringify(raw));\n    return updateTask(task.id,{status:'succeeded',progress:100,output:outputObject(value,normalizeMod(task.nodeType))});"
-new_success = "const raw=created.value,extracted=Core?.extractOutput?Core.extractOutput(raw,route,normalizeMod(task.nodeType)):undefined;\n    const value=extracted!==undefined?extracted:(normalizeMod(task.nodeType)==='text'?(raw?.choices?.[0]?.message?.content??raw?.text??raw?.content??JSON.stringify(raw)):raw?.url??raw?.data?.url??JSON.stringify(raw));\n    const upstreamSize=normalizeMod(task.nodeType)==='image'?imageResponseSize(raw):'';\n    return updateTask(task.id,{status:'succeeded',progress:100,output:outputObject(value,normalizeMod(task.nodeType)),...(upstreamSize?{upstreamSize}:{})});"
+old_success = "const raw=created.value,modality=normalizeMod(task.nodeType),extracted=Core?.extractOutput?Core.extractOutput(raw,route,modality):undefined;\n    let value=extracted!==undefined?extracted:(modality==='text'?(raw?.choices?.[0]?.message?.content??raw?.text??raw?.content??JSON.stringify(raw)):raw?.url??raw?.data?.url);\n    value=await normalizeGeneratedOutput(value,modality,provider);\n    if(modality==='image'&&!validMediaOutput(value))throw new Error('上游已返回成功响应，但未识别到图片结果字段');\n    return updateTask(task.id,{status:'succeeded',progress:100,output:outputObject(value,modality)});"
+new_success = "const raw=created.value,modality=normalizeMod(task.nodeType),extracted=Core?.extractOutput?Core.extractOutput(raw,route,modality):undefined;\n    let value=extracted!==undefined?extracted:(modality==='text'?(raw?.choices?.[0]?.message?.content??raw?.text??raw?.content??JSON.stringify(raw)):raw?.url??raw?.data?.url);\n    value=await normalizeGeneratedOutput(value,modality,provider);\n    if(modality==='image'&&!validMediaOutput(value))throw new Error('上游已返回成功响应，但未识别到图片结果字段');\n    const upstreamSize=modality==='image'?imageResponseSize(raw):'';\n    return updateTask(task.id,{status:'succeeded',progress:100,output:outputObject(value,modality),...(upstreamSize?{upstreamSize}:{})});"
 if old_success not in runtime:
     raise SystemExit('sync success block not found')
 runtime = runtime.replace(old_success,new_success,1)
@@ -68,9 +69,9 @@ runtime = runtime.replace(old_success,new_success,1)
 runtime_path.write_text(runtime,encoding='utf-8')
 
 index = index_path.read_text(encoding='utf-8')
-index = re.sub(r'image-request-parameters\.js\?v=[^"\']+', 'image-request-parameters.js?v=20260828-image-profiles-2', index)
-index = re.sub(r'browser-runtime\.js\?v=[^"\']+', 'browser-runtime.js?v=20260828-image-profiles-2', index)
-index = re.sub(r'browser-bootstrap\.js\?v=[^"\']+', 'browser-bootstrap.js?v=20260828-image-profiles-2', index)
+index = re.sub(r'image-request-parameters\.js\?v=[^"\']+', 'image-request-parameters.js?v=20260828-image-profiles-3', index)
+index = re.sub(r'browser-runtime\.js\?v=[^"\']+', 'browser-runtime.js?v=20260828-image-profiles-3', index)
+index = re.sub(r'browser-bootstrap\.js\?v=[^"\']+', 'browser-bootstrap.js?v=20260828-image-profiles-3', index)
 index_path.write_text(index,encoding='utf-8')
 
 test_path.write_text(r'''import test from 'node:test';
@@ -89,14 +90,14 @@ test('image runtime uses provider-specific request profiles instead of mixed ali
   assert.match(runtime,/width:Number\(p\.width\),height:Number\(p\.height\)/);
 });
 
-test('image task records the exact upstream request profile and returned size',()=>{
+test('image task records exact upstream request profile and returned size',()=>{
   assert.match(runtime,/requestDiagnostics:imageRequestDiagnostics/);
   assert.match(runtime,/upstreamSize/);
   assert.match(runtime,/data\.0\.size/);
 });
 
 test('image protocol runtime is cache busted',()=>{
-  assert.match(index,/image-request-parameters\.js\?v=20260828-image-profiles-2/);
-  assert.match(index,/browser-runtime\.js\?v=20260828-image-profiles-2/);
+  assert.match(index,/image-request-parameters\.js\?v=20260828-image-profiles-3/);
+  assert.match(index,/browser-runtime\.js\?v=20260828-image-profiles-3/);
 });
 ''',encoding='utf-8')
