@@ -10,6 +10,7 @@ const rawFetch=window.fetch.bind(window);
 const Adapters=globalThis.CanvasProviderAdapters;
 const Core=globalThis.CanvasProviderRuntimeCore;
 const ImageParams=globalThis.CanvasImageRequestParameters;
+const ImageCapabilities=globalThis.CanvasModelImageCapabilities;
 const VideoParams=globalThis.CanvasVideoRequestParameters;
 const LEGACY_KEYS={
   providers:'fuiet-browser-providers-v1',
@@ -174,34 +175,17 @@ async function referenceBlob(url){const value=String(url||'');if(!value)return n
 async function makePortableReferences(refs=[]){const out=[];for(const r of refsForRequest(refs)){let url=r.url;if(url&&(url.startsWith('blob:')||url.startsWith('/__browser_media/'))){try{const blob=await referenceBlob(url);if(blob&&blob.size<=20*1024*1024)url=await blobToDataUrl(blob)}catch{}}out.push({...r,url})}return out}
 function providerHost(provider){try{return new URL(String(provider?.baseUrl||'')).hostname.toLowerCase()}catch{return''}}
 function officialOpenAIImageProvider(provider){const h=providerHost(provider);return h==='api.openai.com'||h.endsWith('.openai.com')}
-function imageProviderProfile(provider={},model={}){
-  const host=providerHost(provider), hint=`${provider?.name||''} ${host} ${model?.id||''} ${model?.name||''}`.toLowerCase();
-  if(officialOpenAIImageProvider(provider))return'openai';
-  if(/siliconflow|silicon-flow/.test(hint))return'siliconflow';
-  if(/seedream|doubao|jimeng|volcengine|volces|ark\.cn-/.test(hint))return'seedream';
-  if(/flux|qwen[-_/ ]?image|stable[-_/ ]?diffusion|sdxl|kolors/.test(hint))return'diffusion';
-  return'openai-compatible';
-}
-function imageProfileBody(profile,provider,model,task,strictBody){
-  const p=ImageParams?.normalize?.(task.parameters||{})||task.parameters||{}, count=Math.max(1,Number(p.count||strictBody?.n||1));
-  const common={model:model.id,prompt:String(task.prompt||'')};
-  if(profile==='openai')return{...common,n:count,...(p.size?{size:p.size}:{}),...(p.quality?{quality:p.quality}:{})};
-  if(profile==='siliconflow')return{...common,image_size:p.size,batch_size:count};
-  if(profile==='seedream')return{...common,size:p.size,sequential_image_generation:'disabled',stream:false,response_format:'url'};
-  if(profile==='diffusion')return{...common,width:Number(p.width),height:Number(p.height),aspect_ratio:p.aspectRatio,image_size:p.size,batch_size:count,...(p.quality?{quality:p.quality}:{})};
-  return{...common,n:count,size:p.size,...(p.quality?{quality:p.quality}:{})};
-}
 function imageRequestBodies(provider,model,task,route,refs){
   const strict=defaultRequestBody(provider,model,task,route,refs);
-  if(route.requestTemplate&&Object.keys(route.requestTemplate).length)return[{profile:'template',body:strict}];
-  if(route.adapterKey!=='openai-image')return[{profile:'generic',body:strict}];
-  const profile=imageProviderProfile(provider,model), primary=imageProfileBody(profile,provider,model,task,strict);
-  const list=[{profile,body:primary}];
-  const p=ImageParams?.normalize?.(task.parameters||{})||task.parameters||{};
-  if(profile==='seedream')list.push({profile:'seedream-width-height',body:{model:model.id,prompt:String(task.prompt||''),width:Number(p.width),height:Number(p.height),response_format:'url'}});
-  if(profile==='openai-compatible')list.push({profile:'width-height',body:{model:model.id,prompt:String(task.prompt||''),width:Number(p.width),height:Number(p.height),n:Math.max(1,Number(p.count||1))}});
-  return list;
+  if(route.requestTemplate&&Object.keys(route.requestTemplate).length)return[{profile:'template',body:strict,capability:null,selection:null}];
+  if(route.adapterKey!=='openai-image')return[{profile:'generic',body:strict,capability:null,selection:null}];
+  if(ImageCapabilities?.mapRequest){
+    const mapped=ImageCapabilities.mapRequest(provider,model,task.parameters||{},String(task.prompt||''),Number(task.parameters?.count||1));
+    return[{profile:mapped.profile,body:mapped.body,capability:{family:mapped.capability?.family||'',source:mapped.capability?.source||'',confidence:mapped.capability?.confidence??0,requestMode:mapped.capability?.requestMode||''},selection:{aspectRatio:mapped.selection?.aspectRatio||'',resolution:mapped.selection?.resolution||'',imageQuality:mapped.selection?.imageQuality||'',size:mapped.selection?.size||''}}];
+  }
+  return[{profile:'openai-fallback',body:strict,capability:null,selection:null}];
 }
+
 function imageResponseSize(raw){
   const value=Core?.firstPath?Core.firstPath(raw,['data.0.size','images.0.size','output.0.size','output.size','result.size','size']):undefined;
   return value==null?'':String(value);
@@ -250,7 +234,8 @@ async function discover(provider){
         const rawModality=String(raw.modality||raw.type||raw.mode||'').trim();
         const candidate={id,name,modality:rawModality,adapterKey:'auto',createPath:String(raw.createPath||'')};
         const modality=Adapters?.normalizeModelModality?Adapters.normalizeModelModality(rawModality,candidate):String(rawModality||'text').toLowerCase();
-        return{id,name,modality,modalitySource:rawModality?'provider':'inferred',enabled:true,adapterKey:'auto',...(raw.owned_by?{ownedBy:String(raw.owned_by)}:{})};
+        const base={id,name,modality,modalitySource:rawModality?'provider':'inferred',enabled:true,adapterKey:'auto',...(raw.owned_by?{ownedBy:String(raw.owned_by)}:{})};
+        return ImageCapabilities?.decorateDiscoveredModel?ImageCapabilities.decorateDiscoveredModel({...provider,protocol:resolvedProtocol},raw,base):base;
       }).filter(Boolean);
       const merged={...provider,protocol:resolvedProtocol,models};
       const finalized=Adapters?.finalizeProvider?Adapters.finalizeProvider(merged):merged;
@@ -277,7 +262,7 @@ async function executeTask(task){
   for(const createPath of paths){const createUrl=joinUrl(provider.baseUrl,createPath);try{if(route.adapterKey==='standard-video-async-v1'){try{const form=await buildStandardVideoForm(model,task,refs);created=await providerJson(provider,createUrl,{method:route.method||'POST',headers:{},body:form})}catch(error){if(![400,404,405,415,422].includes(Number(error?.status)))throw error;lastCreateError=error;created=await providerJson(provider,createUrl,{method:route.method||'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)})}}else if(normalizeMod(task.nodeType)==='image'&&route.adapterKey==='openai-image'){
           const candidates=imageRequestBodies(provider,model,task,route,refs);let imageError=null;
           for(let bi=0;bi<candidates.length;bi++){
-            const candidate=candidates[bi];updateTask(task.id,{requestDiagnostics:imageRequestDiagnostics(candidate.profile,candidate.body,createPath)});
+            const candidate=candidates[bi];updateTask(task.id,{requestDiagnostics:{...imageRequestDiagnostics(candidate.profile,candidate.body,createPath),selection:candidate.selection||null},capabilityDiagnostics:candidate.capability||null});
             try{created=await providerJson(provider,createUrl,{method:route.method||'POST',headers:{'content-type':'application/json'},body:JSON.stringify(candidate.body)});imageError=null;break}
             catch(error){imageError=error;if(bi===candidates.length-1||![400,405,415,422].includes(Number(error?.status)))throw error}
           }

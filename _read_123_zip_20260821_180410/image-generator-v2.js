@@ -69,11 +69,18 @@ function setNativeSelect(id,value){
   syncSummary();
   return true;
 }
+function availableQualities(){
+  try{const v=JSON.parse(generator.dataset.imageQualities||'[]');if(Array.isArray(v)&&v.length)return v.map(String)}catch{}
+  return ['模型默认'];
+}
 function qualityForNode(){
-  const id=activeNodeId();const map=readMap(QUALITY_KEY);return map[id]||'标准画质';
+  const direct=String(generator.dataset.imageQuality||'').trim();if(direct)return direct;
+  const id=activeNodeId();const map=readMap(QUALITY_KEY),allowed=availableQualities(),saved=map[id];return allowed.includes(saved)?saved:allowed[0];
 }
 function setQuality(value){
   const id=activeNodeId();if(!id)return;
+  const allowed=availableQualities();if(!allowed.includes(value))value=allowed[0];
+  generator.dataset.imageQuality=value;
   const map=readMap(QUALITY_KEY);map[id]=value;writeMap(QUALITY_KEY,map);
   window.dispatchEvent(new CustomEvent('canvas:image-quality-change',{detail:{nodeId:id,value}}));
   syncSummary();
@@ -141,7 +148,7 @@ function openSettings(anchor){
   const ratioVals=selectValues(ratio),resVals=selectValues(resolution),countVals=selectValues(count);
   const pop=document.createElement('div');pop.className='image-generator-popover image-settings-popover';
   pop.innerHTML=`
-    <section><div class="image-pop-title">画质</div><div class="image-setting-grid quality-grid">${['低画质','标准画质','高画质'].map(x=>`<button type="button" data-quality="${x}" class="${qualityForNode()===x?'active':''}">${x}</button>`).join('')}</div></section>
+    <section><div class="image-pop-title">画质</div><div class="image-setting-grid quality-grid">${availableQualities().map(x=>`<button type="button" data-quality="${esc(x)}" class="${qualityForNode()===x?'active':''}">${esc(x)}</button>`).join('')}</div></section>
     <section><div class="image-pop-title">清晰度</div><div class="image-setting-grid resolution-grid">${settingButtons(resVals,resolution?.value,'resolution-value')}</div></section>
     <section><div class="image-pop-title">比例</div><div class="image-ratio-grid">${settingButtons(ratioVals,ratio?.value,'ratio-value')}</div></section>
     <section><div class="image-pop-title">生成数量</div><div class="image-setting-grid count-grid">${settingButtons(countVals,count?.value,'count-value')}</div></section>`;

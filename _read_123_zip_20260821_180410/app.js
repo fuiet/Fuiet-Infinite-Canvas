@@ -359,12 +359,24 @@
     return providers.flatMap(p=>(p.models||[]).filter(m=>m.enabled!==false&&normalizeClientModality(m.modality)===wanted).map(m=>({...m,modality:wanted,providerId:p.id,providerName:p.name||'API',runtimeReady:modelRuntimeReady(p,m)})));
   }
   function availableModels(type){ return allModelsForType(type).filter(m=>m.runtimeReady!==false); }
+  function imageCapabilitiesFor(provider,model){
+    try{return globalThis.CanvasModelImageCapabilities?.resolve?.(provider||{},model||{})||null}catch{return null}
+  }
+  function syncImageNodeCapabilities(n,cap,{reset=false}={}){
+    if(!n||n.type!=='image'||!cap)return;
+    const ratios=cap.aspectRatios?.length?cap.aspectRatios:['1:1'],resolutions=cap.resolutions?.length?cap.resolutions:['1K'],qualities=cap.qualityLabels?.length?cap.qualityLabels:['模型默认'];
+    if(reset||!ratios.includes(String(n.aspectRatio||'')))n.aspectRatio=ratios[0];
+    if(reset||!resolutions.includes(String(n.resolution||'')))n.resolution=resolutions[0];
+    if(reset||!qualities.includes(String(n.imageQuality||'')))n.imageQuality=qualities[0];
+    const max=Math.max(1,Number(cap.maxImages||1));n.count=Math.max(1,Math.min(max,Number(n.count||1)));
+    n.imageCapabilityFamily=cap.family||'';n.imageCapabilitySource=cap.source||'';n.imageCapabilityConfidence=Number(cap.confidence||0);
+  }
   function setNodeModel(n,item){
     if(!n||!item)return;
     n.providerId=item.providerId;n.modelId=item.id;n.modelName=item.name||item.id;
     const c={...defaultCapabilities(n.type,item.id,item.name),...(item.capabilities||{})};
     if(n.type==='video'){n.duration=n.duration||c.durations?.[0]||5;n.resolution=n.resolution||c.resolutions?.[0]||'720p';n.aspectRatio=n.aspectRatio||c.aspectRatios?.[0]||'16:9';syncVideoNodeCapabilities(n,c)}
-    if(n.type==='image')n.aspectRatio=n.aspectRatio||c.aspectRatios?.[0]||'1:1';
+    if(n.type==='image'){const cap=imageCapabilitiesFor(providerById(item.providerId),item);if(cap)syncImageNodeCapabilities(n,cap,{reset:true});else n.aspectRatio=n.aspectRatio||c.aspectRatios?.[0]||'1:1'}
   }
   function ensureDefaultModel(n){
     if(!n||!['image','video','audio','text'].includes(n.type))return null;
@@ -1079,7 +1091,7 @@
       const targetRatio=String(n.aspectRatio||n.cropRatio||'1:1').trim()||'1:1';
       const ratioCss=targetRatio.replace(':','/');
       const ratioStyle=imageGenerating?`aspect-ratio:${escapeAttr(ratioCss)};height:auto;min-height:0;`:n.cropRatio&&!n.h?`aspect-ratio:${escapeAttr(n.cropRatio.replace(':','/'))};height:auto;min-height:130px;`:'';
-      const targetParams=globalThis.CanvasImageRequestParameters?.normalize?.({resolution:n.resolution||'1K',aspectRatio:targetRatio})||{};
+      const targetProvider=providerById(n.providerId),targetModel=modelForNode(n),targetParams=targetProvider&&targetModel&&globalThis.CanvasModelImageCapabilities?.normalizeSelection?globalThis.CanvasModelImageCapabilities.normalizeSelection(targetProvider,targetModel,{resolution:n.resolution||'1K',aspectRatio:targetRatio,imageQuality:n.imageQuality||''}):(globalThis.CanvasImageRequestParameters?.normalize?.({resolution:n.resolution||'1K',aspectRatio:targetRatio})||{});
       const targetSize=targetParams.width&&targetParams.height?`${targetParams.width} × ${targetParams.height}`:'';
       const emptyImage=contentState==='empty'&&!imageGenerating;
       const quick=emptyImage?`<div class="image-node-try"><div class="image-node-try-label">尝试：</div><button type="button" data-image-quick="repaint"><span class="image-quick-icon">↥</span><b>图生图</b></button><button type="button" data-image-quick="upscale"><span class="image-quick-icon">HD</span><b>图片高清</b></button></div>`:'';
@@ -1804,7 +1816,8 @@
       return;
     }
 
-    const m=ensureDefaultModel(n),caps=modelCapabilities(n),hints=getAutoLinkHints(n.prompt||'',n.id),refs=collectReferences(n.id),contextCandidates=creativeContextCandidates(n),contextHigh=contextCandidates.filter(x=>x.score>=80).length;
+    const m=ensureDefaultModel(n),baseCaps=modelCapabilities(n),imageCaps=n.type==='image'&&m?imageCapabilitiesFor(providerById(n.providerId),m):null,caps=imageCaps?{...baseCaps,aspectRatios:imageCaps.aspectRatios,resolutions:imageCaps.resolutions,imageQualities:imageCaps.qualityLabels,maxImages:imageCaps.maxImages}:baseCaps,hints=getAutoLinkHints(n.prompt||'',n.id),refs=collectReferences(n.id),contextCandidates=creativeContextCandidates(n),contextHigh=contextCandidates.filter(x=>x.score>=80).length;
+    if(n.type==='image'&&imageCaps)syncImageNodeCapabilities(n,imageCaps);
     if(n.type==='video')syncVideoNodeCapabilities(n,caps);
     const ratios=caps.aspectRatios||['16:9','9:16','1:1'],durations=caps.durations||[4,5,10],resolutions=caps.resolutions||['720p'],videoModes=videoModeOptions(caps);
     const modelLabel=m?.name||m?.id||'选择模型';
@@ -1814,7 +1827,10 @@
       const imageRefs=refs.filter(r=>r.type==='image');
       const refFor=role=>imageRefs.find(r=>r.role===role)||null;
       const slot=(role,label,glyph)=>{const ref=refFor(role);return `<button type="button" class="image-ref-slot ${ref?'has-ref':''}" data-image-ref-slot="${role}" title="${escapeAttr(ref?`${label} · ${ref.title}`:`添加${label}参考`)}">${ref?.url?`<img src="${escapeAttr(ref.url)}" alt="">`:`<span class="slot-icon">${glyph}</span><span>${label}</span>`}</button>`};
-      const imageResolutions=caps.resolutions||['1K','2K','4K'];
+      const imageResolutions=caps.resolutions||['1K'];
+      const imageQualities=imageCaps?.qualityLabels||['模型默认'];
+      const imageCountMax=Math.max(1,Math.min(4,Number(imageCaps?.maxImages||4)));
+      generator.dataset.imageCapabilityManaged='1';generator.dataset.imageRatios=JSON.stringify(ratios);generator.dataset.imageResolutions=JSON.stringify(imageResolutions);generator.dataset.imageQualities=JSON.stringify(imageQualities);generator.dataset.imageQuality=n.imageQuality||imageQualities[0];generator.dataset.imageCapabilityFamily=imageCaps?.family||'';generator.dataset.imageCapabilitySource=imageCaps?.source||'';
       generator.innerHTML=`<div class="lib-gen-main image-generator-main">
         <div class="image-gen-top">${slot('style_reference','风格','◇')}${slot('character_reference','标记','⌾')}${slot('image_reference','聚焦','◎')}<button type="button" class="image-gen-expand" id="imageGenExpand" title="打开图像工作台">↗</button></div>
         <div class="prompt-box image-prompt-box"><textarea id="promptInput" placeholder="描述你想要生成的画面内容，按 / 呼出指令，@引用素材" ${frozen?'disabled':''}>${escapeHtml(n.prompt||'')}</textarea></div>
@@ -1824,7 +1840,7 @@
           <select id="resolutionSelect" class="image-gen-select" title="分辨率">${optionList(imageResolutions,n.resolution||imageResolutions[0])}</select>
           <button type="button" class="image-gen-action" id="imageCameraBtn">${uiIcon('reframe')}<span>摄像机控制</span></button>
           <div class="image-gen-spacer"></div>
-          <select id="countSelect" class="image-gen-select" title="生成张数">${[1,2,3,4].map(x=>`<option value="${x}" ${Number(n.count||1)===x?'selected':''}>${x}张</option>`).join('')}</select>
+          <select id="countSelect" class="image-gen-select" title="生成张数">${Array.from({length:imageCountMax},(_,i)=>i+1).map(x=>`<option value="${x}" ${Number(n.count||1)===x?'selected':''}>${x}张</option>`).join('')}</select>
           ${costBadgeHtml(n)}
           <button type="button" class="image-generate-btn" id="generateBtn" ${noModel||frozen?'disabled':''} title="生成">${uiIcon('next')}</button>
         </div>
@@ -2065,7 +2081,10 @@
       resolution:n.resolution||caps.resolutions?.[0]||'1K',
       count:Math.max(1,Number(n.count||1))
     };
-    return globalThis.CanvasImageRequestParameters?.normalize?.(raw)||raw;
+    const normalized=globalThis.CanvasImageRequestParameters?.normalize?.(raw)||raw;
+    const provider=providerById(n.providerId),model=modelForNode(n),resolver=globalThis.CanvasModelImageCapabilities;
+    if(provider&&model&&resolver?.normalizeSelection){const selected=resolver.normalizeSelection(provider,model,normalized),{imageCapabilities,...clean}=selected;return clean}
+    return normalized;
   }
 
   window.addEventListener('canvas:image-quality-change',event=>{

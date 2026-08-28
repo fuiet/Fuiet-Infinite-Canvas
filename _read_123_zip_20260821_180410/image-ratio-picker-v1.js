@@ -16,6 +16,7 @@ function shapeSize(value){
 function ensureRatioOptions(){
   const select=generator.querySelector('#ratioSelect');
   if(!select)return;
+  if(generator.dataset.imageCapabilityManaged==='1')return;
   const current=String(select.value||'1:1');
   const existing=new Map([...select.options].map(option=>[String(option.value),option]));
   RATIOS.forEach(ratio=>{

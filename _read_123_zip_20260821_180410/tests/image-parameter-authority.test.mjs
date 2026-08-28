@@ -19,14 +19,9 @@ test('quality selection is promoted to node state',()=>{
   assert.match(app,/node\.imageQuality=value/);
 });
 
-test('third-party image gateway uses provider-specific dimension dialects instead of mixed aliases',()=>{
-  assert.match(runtime,/function imageProviderProfile/);
-  assert.match(runtime,/profile==='siliconflow'/);
-  assert.match(runtime,/image_size:p\.size/);
-  assert.match(runtime,/profile==='seedream'/);
-  assert.match(runtime,/size:p\.size,sequential_image_generation:'disabled'/);
-  assert.match(runtime,/profile==='diffusion'/);
-  assert.match(runtime,/width:Number\(p\.width\),height:Number\(p\.height\)/);
-  assert.match(runtime,/requestDiagnostics:imageRequestDiagnostics/);
-  assert.match(runtime,/\[400,405,415,422\]/);
+test('image request runtime delegates dimensions to the shared model capability resolver',()=>{
+  assert.match(runtime,/CanvasModelImageCapabilities/);
+  assert.match(runtime,/ImageCapabilities\.mapRequest/);
+  assert.match(runtime,/capabilityDiagnostics/);
+  assert.doesNotMatch(runtime,/function imageProviderProfile/);
 });
