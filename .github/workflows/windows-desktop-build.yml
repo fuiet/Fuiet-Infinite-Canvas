@@ -11,6 +11,7 @@ on:
       - '_read_123_zip_20260821_180410/models.js'
       - '_read_123_zip_20260821_180410/provider-adapter-contract.js'
       - '_read_123_zip_20260821_180410/provider-runtime-core.js'
+      - '_read_123_zip_20260821_180410/scripts/fetch-windows-media-tools.ps1'
       - '.github/workflows/windows-desktop-build.yml'
   workflow_dispatch:
 
@@ -20,7 +21,7 @@ permissions:
 jobs:
   build-windows-x64:
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     defaults:
       run:
         working-directory: _read_123_zip_20260821_180410
@@ -40,10 +41,46 @@ jobs:
       - name: Regression tests
         run: npm test
 
+      - name: Prepare bundled FFmpeg and ImageMagick
+        shell: powershell
+        run: powershell -ExecutionPolicy Bypass -File scripts/fetch-windows-media-tools.ps1
+
+      - name: Verify prepared media tools
+        shell: powershell
+        run: |
+          & .\runtime-tools\ffmpeg\bin\ffmpeg.exe -version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & .\runtime-tools\ffmpeg\bin\ffprobe.exe -version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & .\runtime-tools\imagemagick\magick.exe -version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Build NSIS installer
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npm run dist:win
+
+      - name: Verify packaged media tools
+        shell: powershell
+        run: |
+          $root = '.\release\win-unpacked\resources\tools'
+          $required = @(
+            "$root\ffmpeg\bin\ffmpeg.exe",
+            "$root\ffmpeg\bin\ffprobe.exe",
+            "$root\imagemagick\magick.exe",
+            "$root\tool-manifest.json",
+            "$root\THIRD_PARTY_NOTICES.txt"
+          )
+          foreach ($file in $required) {
+            if (!(Test-Path $file)) { throw "Packaged runtime is missing: $file" }
+          }
+          & "$root\ffmpeg\bin\ffmpeg.exe" -version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & "$root\ffmpeg\bin\ffprobe.exe" -version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:MAGICK_HOME = (Resolve-Path "$root\imagemagick").Path
+          & "$root\imagemagick\magick.exe" -version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
