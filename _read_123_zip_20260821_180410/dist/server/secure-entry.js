@@ -56,7 +56,7 @@ function base64Url(bytes) {
 }
 
 async function cryptoKey(env) {
-  const secret = String(env?.PROVIDER_SECRET_KEY || env?.CANVAS_SECRET_KEY || env?.API_KEY_ENCRYPTION_KEY || '').trim();
+  const secret = String(env?.PROVIDER_SECRET_KEY || env?.CANVAS_SECRET_KEY || env?.API_KEY_ENCRYPTION_KEY || env?.SUPABASE_SERVICE_ROLE_KEY || '').trim();
   if (!secret) return null;
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(secret));
   return crypto.subtle.importKey('raw', digest, { name: 'AES-GCM' }, false, ['encrypt']);

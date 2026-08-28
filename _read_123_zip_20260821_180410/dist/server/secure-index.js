@@ -224,7 +224,7 @@ function fromBase64Url(value) {
   return Uint8Array.from(binary, c => c.charCodeAt(0));
 }
 async function encryptionKey(env) {
-  const secret = String(env?.PROVIDER_SECRET_KEY || env?.CANVAS_SECRET_KEY || env?.API_KEY_ENCRYPTION_KEY || '').trim();
+  const secret = String(env?.PROVIDER_SECRET_KEY || env?.CANVAS_SECRET_KEY || env?.API_KEY_ENCRYPTION_KEY || env?.SUPABASE_SERVICE_ROLE_KEY || '').trim();
   if (!secret) throw new Error('服务器未配置 PROVIDER_SECRET_KEY，拒绝明文保存 API Key');
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(secret));
   return crypto.subtle.importKey('raw', digest, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
