@@ -1,8 +1,12 @@
 const { app, BrowserWindow, dialog, shell } = require('electron');
+const fs = require('fs');
 const path = require('path');
 const net = require('net');
 const http = require('http');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
 
+const execFileAsync = promisify(execFile);
 const APP_NAME = 'Fuiet Infinite Canvas';
 const HOST = '127.0.0.1';
 let mainWindow = null;
@@ -12,6 +16,51 @@ let serverStarted = false;
 app.setName(APP_NAME);
 const userDataRoot = path.join(app.getPath('appData'), APP_NAME);
 app.setPath('userData', userDataRoot);
+
+function bundledToolsRoot() {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'tools')
+    : path.join(__dirname, 'runtime-tools');
+}
+
+function configureBundledMediaTools() {
+  const root = bundledToolsRoot();
+  const imageMagickRoot = path.join(root, 'imagemagick');
+  const tools = {
+    ffmpeg: path.join(root, 'ffmpeg', 'bin', 'ffmpeg.exe'),
+    ffprobe: path.join(root, 'ffmpeg', 'bin', 'ffprobe.exe'),
+    magick: path.join(imageMagickRoot, 'magick.exe')
+  };
+
+  const missing = Object.entries(tools).filter(([, file]) => !fs.existsSync(file));
+  if (app.isPackaged && missing.length) {
+    throw new Error(`安装包缺少内置媒体工具：${missing.map(([name]) => name).join('、')}`);
+  }
+
+  if (fs.existsSync(tools.ffmpeg)) process.env.FFMPEG_PATH = tools.ffmpeg;
+  if (fs.existsSync(tools.ffprobe)) process.env.FFPROBE_PATH = tools.ffprobe;
+  if (fs.existsSync(tools.magick)) {
+    process.env.MAGICK_PATH = tools.magick;
+    process.env.MAGICK_HOME = imageMagickRoot;
+  }
+  return tools;
+}
+
+async function verifyBundledMediaTools(tools) {
+  if (!app.isPackaged) return;
+  for (const [name, file] of Object.entries(tools)) {
+    try {
+      await execFileAsync(file, ['-version'], {
+        timeout: 12000,
+        windowsHide: true,
+        maxBuffer: 1024 * 1024,
+        env: process.env
+      });
+    } catch (error) {
+      throw new Error(`内置媒体工具 ${name} 无法运行：${error?.message || error}`);
+    }
+  }
+}
 
 function getFreePort() {
   return new Promise((resolve, reject) => {
@@ -51,6 +100,8 @@ async function startLocalServer() {
   process.env.PORT = String(serverPort);
   process.env.CANVAS_DATA_DIR = path.join(userDataRoot, 'data');
   process.env.CANVAS_DESKTOP = '1';
+  const bundledTools = configureBundledMediaTools();
+  await verifyBundledMediaTools(bundledTools);
   require('./server.js');
   serverStarted = true;
   if (!(await waitForServer(serverPort))) throw new Error('本地服务启动失败');
