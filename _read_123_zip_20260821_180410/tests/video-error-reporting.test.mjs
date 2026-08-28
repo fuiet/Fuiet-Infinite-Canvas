@@ -25,8 +25,11 @@ test('task failure persistence keeps status and detail',()=>{
   assert.match(runtime,/errorDetail:detail/);
 });
 
-test('all adaptive video protocol assets are actually cache busted',()=>{
-  for(const file of ['provider-adapter-contract.js','provider-runtime-core.js','video-request-parameters.js','browser-runtime.js','browser-bootstrap.js']){
+test('adaptive video protocol assets have explicit cache versions and reconciled runtime is fresh',()=>{
+  for(const file of ['provider-adapter-contract.js','provider-runtime-core.js','video-request-parameters.js']){
     assert.ok(index.includes(`${file}?v=20260828-video-error-reporting-1`),file);
+  }
+  for(const file of ['browser-runtime.js','browser-bootstrap.js']){
+    assert.ok(index.includes(`${file}?v=20260828-video-result-reconciliation-1`),file);
   }
 });
