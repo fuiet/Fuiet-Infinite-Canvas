@@ -1,0 +1,44 @@
+name: Model Image Capability Resolver
+
+on:
+  push:
+    branches:
+      - feature/model-image-capability-resolver
+    paths:
+      - '_read_123_zip_20260821_180410/scripts/apply_model_image_capability_resolver.py'
+      - '.github/workflows/model-image-capability-resolver.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-test-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/model-image-capability-resolver
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply shared capability integration
+        run: python3 _read_123_zip_20260821_180410/scripts/apply_model_image_capability_resolver.py
+      - name: Validate
+        working-directory: _read_123_zip_20260821_180410
+        run: |
+          npm run check
+          npm test
+      - name: Commit validated product changes
+        run: |
+          rm -f _read_123_zip_20260821_180410/scripts/apply_model_image_capability_resolver.py
+          rm -f .github/workflows/model-image-capability-resolver.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "Add model-aware image capability resolver"
+          git push origin HEAD:feature/model-image-capability-resolver
