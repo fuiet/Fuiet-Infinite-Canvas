@@ -1,0 +1,32 @@
+name: Run Image Protocol Dimensions V2
+on:
+  push:
+    branches: [fix-image-protocol-dimensions-v2]
+    paths:
+      - '_read_123_zip_20260821_180410/.github/workflows/run-image-protocol-dimensions-v2.yml'
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: _read_123_zip_20260821_180410
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix-image-protocol-dimensions-v2
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python3 scripts/fix_image_protocol_dimensions_v2.py
+      - run: npm run check
+      - run: npm test
+      - run: |
+          rm -f scripts/fix_image_protocol_dimensions_v2.py .github/workflows/fix-image-protocol-dimensions-v2.yml .github/workflows/run-image-protocol-dimensions-v2.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Fix provider-specific image dimension requests'
+          git push origin HEAD:fix-image-protocol-dimensions-v2
