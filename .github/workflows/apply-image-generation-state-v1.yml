@@ -1,0 +1,39 @@
+name: Apply Image Generation State V1
+
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-image-generation-state-v1.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Apply image generation node state patch
+        run: python .github/scripts/fix_image_generation_state_v1.py
+      - name: Validate syntax and regression suite
+        working-directory: _read_123_zip_20260821_180410
+        run: |
+          npm run check
+          npm test
+      - name: Commit validated product changes and remove temporary migration files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/scripts/fix_image_generation_state_v1.py .github/workflows/apply-image-generation-state-v1.yml
+          git add _read_123_zip_20260821_180410/app.js \
+                  _read_123_zip_20260821_180410/styles/image-node.css \
+                  _read_123_zip_20260821_180410/browser-bootstrap.js \
+                  _read_123_zip_20260821_180410/tests/image-generation-node-state.test.mjs
+          git commit -m "Show image generation nodes at their target aspect ratio"
+          git push origin HEAD:main
