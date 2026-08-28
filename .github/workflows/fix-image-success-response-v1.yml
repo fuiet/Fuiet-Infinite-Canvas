@@ -1,0 +1,42 @@
+name: Fix Image Success Response V1
+
+on:
+  push:
+    branches:
+      - fix-image-success-response-parsing
+    paths:
+      - '.github/workflows/fix-image-success-response-v1.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: _read_123_zip_20260821_180410
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix-image-success-response-parsing
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Apply image success response patch
+        run: python3 tools/fix_image_success_response_v1.py
+      - name: Validate syntax and regression suite
+        run: |
+          npm run check
+          npm test
+      - name: Commit validated product changes and remove temporary migration files
+        run: |
+          cd ..
+          rm -f _read_123_zip_20260821_180410/tools/fix_image_success_response_v1.py
+          rm -f .github/workflows/fix-image-success-response-v1.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Fix successful image response parsing'
+          git push origin HEAD:fix-image-success-response-parsing
