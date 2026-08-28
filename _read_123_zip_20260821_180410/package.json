@@ -1,8 +1,8 @@
 {
   "name": "fuiet-infinite-canvas-local",
-  "version": "4.1.0",
+  "version": "4.2.0",
   "private": true,
-  "description": "Fuiet Infinite Canvas Windows 桌面单机版：内置 Electron/Node，本地 SQLite、本地媒体与本机加密供应商密钥。",
+  "description": "Fuiet Infinite Canvas Windows 桌面单机版：内置 Electron/Node、FFmpeg/FFprobe/ImageMagick，本地 SQLite、本地媒体与本机加密供应商密钥。",
   "scripts": {
     "start": "node server.js",
     "start:local": "node server.js",
@@ -33,7 +33,17 @@
       "!tests/**",
       "!scripts/**",
       "!.data/**",
+      "!runtime-tools/**",
       "!start-local.bat"
+    ],
+    "extraResources": [
+      {
+        "from": "runtime-tools",
+        "to": "tools",
+        "filter": [
+          "**/*"
+        ]
+      }
     ],
     "win": {
       "target": [
