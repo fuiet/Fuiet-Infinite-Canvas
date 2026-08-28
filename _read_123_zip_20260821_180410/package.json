@@ -1,15 +1,59 @@
 {
   "name": "fuiet-infinite-canvas-local",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "private": true,
-  "description": "Fuiet Infinite Canvas 单机版：本地 Node 服务、本地 SQLite、本地媒体与本机加密供应商密钥。",
+  "description": "Fuiet Infinite Canvas Windows 桌面单机版：内置 Electron/Node，本地 SQLite、本地媒体与本机加密供应商密钥。",
   "scripts": {
     "start": "node server.js",
     "start:local": "node server.js",
-    "check": "node --check app.js && node --check provider-adapter-contract.js && node --check provider-runtime-core.js && node --check server.js && node --check store.js && node --check models.js && node --check three-runtime.js && node --check ui-zh.js && node --check ui-v23.js && node --check ui-connect-v23.js",
-    "test": "node --test tests/*.test.mjs"
+    "check": "node --check app.js && node --check provider-adapter-contract.js && node --check provider-runtime-core.js && node --check server.js && node --check store.js && node --check models.js && node --check three-runtime.js && node --check ui-zh.js && node --check ui-v23.js && node --check ui-connect-v23.js && node --check electron-main.cjs",
+    "test": "node --test tests/*.test.mjs",
+    "desktop": "electron .",
+    "dist:win": "electron-builder --win nsis --x64"
   },
   "engines": {
     "node": ">=22"
+  },
+  "productName": "Fuiet Infinite Canvas",
+  "main": "electron-main.cjs",
+  "devDependencies": {
+    "electron": "44.0.0",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "com.fuiet.infinitecanvas",
+    "productName": "Fuiet Infinite Canvas",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "**/*",
+      "!release/**",
+      "!tests/**",
+      "!scripts/**",
+      "!.data/**",
+      "!start-local.bat"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "Fuiet-Infinite-Canvas-Setup-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Fuiet Infinite Canvas",
+      "deleteAppDataOnUninstall": false
+    }
   }
 }

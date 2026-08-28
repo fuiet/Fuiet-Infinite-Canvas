@@ -15,7 +15,7 @@ const ProviderRuntimeCore = globalThis.CanvasProviderRuntimeCore;
 const execFileAsync = promisify(execFile);
 
 const ROOT = __dirname;
-const DATA_DIR = path.join(ROOT, '.data');
+const DATA_DIR = path.resolve(process.env.CANVAS_DATA_DIR || path.join(ROOT, '.data'));
 const PROVIDERS_FILE = path.join(DATA_DIR, 'providers.json');
 const SECRET_FILE = path.join(DATA_DIR, 'secret.key');
 const BLENDER_TOKEN_FILE = path.join(DATA_DIR, 'blender-bridge.token');

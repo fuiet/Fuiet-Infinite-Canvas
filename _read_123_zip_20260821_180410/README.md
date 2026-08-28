@@ -46,3 +46,37 @@ npm start
 npm run check
 npm test
 ```
+
+## Windows 桌面安装版
+
+仓库现在支持生成真正的 Windows x64 安装程序：
+
+```text
+Fuiet-Infinite-Canvas-Setup-4.1.0-x64.exe
+```
+
+安装后从桌面快捷方式直接启动，不需要单独安装 Node.js，也不需要打开命令行。Electron 自带运行所需的 Node/Chromium。
+
+桌面版数据目录：
+
+```text
+%APPDATA%\Fuiet Infinite Canvas\data
+```
+
+其中包含 `secret.key`、`providers.json`、`canvas.sqlite` 和 `media/`。卸载程序默认不会删除这些创作数据。
+
+本地 API 每次启动自动选择一个空闲的 `127.0.0.1` 端口，只允许本机访问。
+
+开发模式：
+
+```bash
+npm install
+npm run desktop
+```
+
+构建 Windows 安装包：
+
+```bash
+npm install
+npm run dist:win
+```

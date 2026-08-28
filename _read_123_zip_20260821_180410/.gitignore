@@ -5,3 +5,5 @@ dist/
 site-archive.tgz
 *.log
 .DS_Store
+
+release/
