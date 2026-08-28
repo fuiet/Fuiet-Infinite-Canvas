@@ -3,6 +3,8 @@ name: Desktop Windows Build
 on:
   workflow_dispatch:
   push:
+    branches:
+      - 'desktop-build-verify-20260828'
     tags:
       - 'v*'
 
