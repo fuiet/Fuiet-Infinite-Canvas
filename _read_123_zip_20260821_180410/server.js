@@ -802,7 +802,9 @@ function taskPublic(t) {
   return {
     id:t.id,status:t.status,progress:t.progress,nodeType:t.nodeType,providerId:t.providerId,modelId:t.modelId,
     output:t.output||null,error:t.error||null,createdAt:t.createdAt,updatedAt:t.updatedAt,attempt:t.attempt||0,
-    maxRetries:t.maxRetries||0,cancelRequested:Boolean(t.cancelRequested),priority:Number(t.priority??50),logs:t.logs||[]
+    maxRetries:t.maxRetries||0,cancelRequested:Boolean(t.cancelRequested),priority:Number(t.priority??50),logs:t.logs||[],
+    providerStatus:t.providerStatus||'',resultStatus:t.resultStatus||'',upstreamTaskId:t.upstreamTaskId||'',
+    providerSucceededAt:t.providerSucceededAt||null,resultSavedAt:t.resultSavedAt||null,lastPollAt:t.lastPollAt||null,lastError:t.lastError||null
   };
 }
 function updateTask(task, patch) {
@@ -1050,15 +1052,32 @@ async function executeStandardVideoAsync(task,provider,model,payload){
     const polled=await fetchJson(joinUrl(provider.baseUrl,pollPath),{method:pollMethod,headers:providerHeaders(provider),body:['GET','HEAD'].includes(pollMethod)?undefined:(pollBody===undefined?undefined:JSON.stringify(pollBody)),timeoutMs:60000,provider});
     const assessment=ProviderRuntimeCore.classifyAsyncPoll(polled,config,'video');
     const status=assessment.status,progressRaw=assessment.progress;
-    updateTask(task,{status:'polling',progress:Number.isFinite(progressRaw)?Math.max(20,Math.min(96,progressRaw)):Math.min(94,20+checks*4)});
+    const pollPatch={status:'polling',lastPollAt:new Date().toISOString(),progress:Number.isFinite(progressRaw)?Math.max(20,Math.min(96,progressRaw)):Math.min(94,20+checks*4)};
+    if(assessment.providerSucceeded){
+      Object.assign(pollPatch,{status:'provider_succeeded',providerStatus:'succeeded',resultStatus:assessment.output!=null?'available':'pending',providerOutput:polled,providerSucceededAt:new Date().toISOString()});
+    }
+    updateTask(task,pollPatch);
     if(assessment.state==='failure')throw new Error(ProviderRuntimeCore.formatFailure(assessment,'上游视频任务失败'));
     const output=assessment.output;
     if(assessment.state==='success'){
       if(output!=null)return normalizeOutput(output,'video',provider);
-      const content=await downloadStandardVideoContent(task,provider,config,taskId);
-      if(content)return content;
-      throw new Error(`视频任务状态为 ${status||'成功'}，但没有解析到视频结果 URL，且未配置可用的 contentPath。`);
+      try{
+        const content=await downloadStandardVideoContent(task,provider,config,taskId);
+        if(content)return content;
+      }catch(contentError){
+        taskLog(task,`上游已成功，结果文件暂未可取：${contentError?.message||contentError}`,'warn');
+        updateTask(task,{status:'result_pending',providerStatus:'succeeded',resultStatus:'pending',lastError:contentError?.message||String(contentError)});
+      }
+      // Some providers publish `succeeded` before the CDN/result URL becomes visible.
+      // Continue querying the same upstream task instead of turning success into failure.
+      continue;
     }
+  }
+  const fresh=store.getTask(task.id)||task;
+  if(fresh.providerStatus==='succeeded'){
+    const pending=new Error('上游视频已生成成功，结果地址仍在同步；将继续追取，不会重新生成。');
+    pending.code='RESULT_PENDING';
+    throw pending;
   }
   throw new Error('标准异步视频任务超时');
 }
@@ -1150,6 +1169,12 @@ async function runTaskById(id){
   catch(err){
     const fresh=store.getTask(id)||task;
     if(err?.code==='TASK_CANCELLED'||fresh.cancelRequested){updateTask(fresh,{status:'canceled',error:null,progress:fresh.progress});taskLog(fresh,'任务已取消','warn');return}
+    if(err?.code==='RESULT_PENDING'||fresh.providerStatus==='succeeded'){
+      updateTask(fresh,{status:'queued',providerStatus:'succeeded',resultStatus:'pending',error:null,lastError:err?.message||String(err),progress:Math.max(20,Number(fresh.progress||0)),cancelRequested:false});
+      taskLog(fresh,`上游已成功，等待结果同步后继续追取：${err?.message||err}`,'warn');
+      setTimeout(processTaskQueue,5000);
+      return;
+    }
     const attempt=Number(fresh.attempt||0)+1;
     if(attempt<=Number(fresh.maxRetries||0)){updateTask(fresh,{status:'queued',attempt,error:err?.message||String(err),progress:0});taskLog(fresh,`执行失败，准备第 ${attempt+1} 次尝试：${err?.message||err}`,'warn');setTimeout(processTaskQueue,300);return}
     updateTask(fresh,{status:'failed',attempt,error:err?.message||String(err)});taskLog(fresh,`任务失败：${err?.message||err}`,'error');
