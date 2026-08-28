@@ -269,12 +269,25 @@
     next.nodes=next.nodes.map(n=>{const x={rotation:0,mirrorX:false,mirrorY:false,cropRatio:'',toolParams:{},scriptData:null,directorData:null,resultVersions:[],activeResultVersionId:'',h:null,locked:false,frozen:false,queuePriority:null,fallbackModels:[],lastUsedProviderId:'',lastUsedModelId:'',lastUsedModelName:'',...n,toolParams:n.toolParams||{},resultVersions:Array.isArray(n.resultVersions)?n.resultVersions:[],fallbackModels:Array.isArray(n.fallbackModels)?n.fallbackModels:[]};if(x.type==='text'){x.textInputMode=x.textInputMode==='manual'?'manual':(x.textInputMode||'ai');x.textEditing=false;if(x.textInputMode==='manual'){if(!x.w||Number(x.w)===700)x.w=560;if(!x.h||Number(x.h)===400)x.h=320}else{x.textEditorExpanded=false;delete x.textEditorExpandedBackup}}if(x.type==='script'&&(!x.w||x.w===470||x.w===500))x.w=310;if(!x.resultVersions.length&&x.taskStatus==='succeeded'&&(x.outputUrl||x.generatedText||x.generatedResult)){x.resultVersions=[{id:`legacy_${x.id}`,outputUrl:x.outputUrl||'',text:x.type==='text'?(x.text||x.generatedText||''):(x.generatedText||''),generatedResult:x.generatedResult??null,prompt:x.prompt||'',modelName:x.modelName||'',createdAt:x.updatedAt||new Date(0).toISOString()}];x.activeResultVersionId=x.resultVersions[0].id}return x;});
     return next;
   }
-  function errorText(value){
-    if(value==null)return'';
-    if(typeof value==='string')return value;
-    if(value instanceof Error)return value.message||String(value);
-    if(typeof value==='object')return String(value.message||value.error||value.detail||value.reason||value.msg||value.title||'').trim()||JSON.stringify(value);
+  function errorText(value,depth=0){
+    if(value==null||depth>8)return'';
+    if(typeof value==='string'){const text=value.trim();return text==='[object Object]'?'':text}
+    if(value instanceof Error){return errorText(value.message,depth+1)||errorText(value.cause,depth+1)||String(value.name||'Error')}
+    if(Array.isArray(value))return value.map(item=>errorText(item,depth+1)).filter(Boolean).join('；');
+    if(typeof value==='object'){
+      for(const key of ['message','error','detail','reason','msg','title','body','response','data']){const text=errorText(value[key],depth+1);if(text)return text}
+      try{return JSON.stringify(value)}catch{return''}
+    }
     return String(value);
+  }
+  function taskFailureText(task){
+    if(!task)return'';
+    const base=errorText(task.error)||errorText(task.errorDetail)||errorText(task.detail);
+    const request=task.videoRequestDiagnostics||{},protocol=task.videoProtocolDiagnostics||{};
+    let stage='';
+    if(protocol.pollUrl){try{stage=`轮询 ${new URL(protocol.pollUrl,location.href).pathname}`}catch{stage='轮询视频任务'}}
+    else if(request.createPath)stage=`创建 ${request.createPath}${request.transport?` · ${request.transport}`:''}`;
+    return base&&stage?`${base} [${stage}]`:(base||stage);
   }
   async function apiJson(url,options={}){
     const res=await fetch(url,{headers:{'Content-Type':'application/json',...(options.headers||{})},credentials:'same-origin',...options});
@@ -2139,10 +2152,10 @@
       // GETing the server-owned task is cross-runtime: Node keeps its own worker loop,
       // while Cloudflare GET triggers the persisted server queue/poller via kickQueue.
       info=(await apiJson('/api/tasks/'+encodeURIComponent(taskId))).task;
-      n.taskStatus=info.status;n.taskProgress=info.progress||0;n.taskError=info.error||'';saveState();scheduleWorkflowVisualUpdate();
+      n.taskStatus=info.status;n.taskProgress=info.progress||0;n.taskError=taskFailureText(info);saveState();scheduleWorkflowVisualUpdate();
       if(expandedNodeId===n.id)renderGenerator();
       if(info.status==='succeeded')return info;
-      if(['failed','canceled'].includes(info.status))throw new Error(info.status==='canceled'?'任务已取消':info.error||'生成失败');
+      if(['failed','canceled'].includes(info.status))throw new Error(info.status==='canceled'?'任务已取消':taskFailureText(info)||'生成失败');
     }
   }
   async function generateForNode(n,{silent=false,forceFrozen=false}={}){
@@ -2155,7 +2168,7 @@
       const attempt=chain[ai],check=validateSemanticInputs(n,{provider:attempt.provider,model:attempt.model}),caps=check.caps,refs=check.refs;if(check.errors.length){lastError=new Error(check.errors.join('；'));if(ai===0&&!chain.slice(1).length)break;continue}if(ai>0){n.taskStatus='fallback';n.fallbackAttempt=ai;n.taskError=`主模型失败，正在切换备用模型：${attempt.modelName}`;saveState();render();workflowLog(latestWorkflowRunForNode(n.id)||{logs:[]},`切换备用模型：${attempt.modelName}`,'warn')}
       try{
         let info=null;const canAdopt=n.taskId&&n.taskProviderId===attempt.providerId&&n.taskModelId===attempt.modelId&&['queued','running','polling','retrying'].includes(n.taskStatus);if(canAdopt){try{const existing=(await apiJson('/api/tasks/'+encodeURIComponent(n.taskId))).task;if(existing&&!['failed','canceled','succeeded'].includes(existing.status))info=await monitorNodeTask(n,n.taskId,attempt)}catch{}}
-        if(!info){const created=await apiJson('/api/tasks',{method:'POST',body:JSON.stringify({providerId:attempt.providerId,modelId:attempt.modelId,providerSnapshot:snapshotProviderForTask(attempt.provider),modelSnapshot:attempt.model,nodeType:n.type,prompt:n.prompt||'',references:refs,maxRetries:state.workflowSettings?.maxRetries??1,priority:nodePriority(n),parameters:n.type==='image'?imageGenerationParameters(n,caps):{aspectRatio:n.aspectRatio||caps.aspectRatios?.[0]||'16:9',count:n.count||1,duration:n.duration||caps.durations?.[0]||5,resolution:n.resolution||caps.resolutions?.[0]||'720p',capabilities:caps,creativeContext:buildCreativeContextPacket(n),...(n.toolParams||{})}})});n.taskId=created.task.id;n.taskProviderId=attempt.providerId;n.taskModelId=attempt.modelId;n.taskStatus=created.task.status;n.taskProgress=created.task.progress||0;saveState();render();if(created.task.status==='succeeded')info=created.task;else if(['failed','canceled'].includes(created.task.status))throw new Error(created.task.error||'生成失败');else info=await monitorNodeTask(n,n.taskId,attempt,created.task)}
+        if(!info){const created=await apiJson('/api/tasks',{method:'POST',body:JSON.stringify({providerId:attempt.providerId,modelId:attempt.modelId,providerSnapshot:snapshotProviderForTask(attempt.provider),modelSnapshot:attempt.model,nodeType:n.type,prompt:n.prompt||'',references:refs,maxRetries:state.workflowSettings?.maxRetries??1,priority:nodePriority(n),parameters:n.type==='image'?imageGenerationParameters(n,caps):{aspectRatio:n.aspectRatio||caps.aspectRatios?.[0]||'16:9',count:n.count||1,duration:n.duration||caps.durations?.[0]||5,resolution:n.resolution||caps.resolutions?.[0]||'720p',capabilities:caps,creativeContext:buildCreativeContextPacket(n),...(n.toolParams||{})}})});n.taskId=created.task.id;n.taskProviderId=attempt.providerId;n.taskModelId=attempt.modelId;n.taskStatus=created.task.status;n.taskProgress=created.task.progress||0;saveState();render();if(created.task.status==='succeeded')info=created.task;else if(['failed','canceled'].includes(created.task.status))throw new Error(taskFailureText(created.task)||'生成失败');else info=await monitorNodeTask(n,n.taskId,attempt,created.task)}
         const out=info.output||{};const resolvedUrl=resolveGeneratedOutputUrl(out.value??out);if(resolvedUrl)n.outputUrl=resolvedUrl;
         if(out.type==='url'&&!n.outputUrl)n.outputUrl=String(out.value||'').trim();
         else if(out.type==='text'){if(n.type==='text')n.text=out.value;else n.generatedText=out.value}
@@ -2163,7 +2176,7 @@
         if(!n.outputUrl&&n.type==='video'){const fallbackUrl=resolveGeneratedOutputUrl(n.generatedResult)||resolveGeneratedOutputUrl(n.toolParams?.output)||resolveGeneratedOutputUrl(n.toolParams?.result);if(fallbackUrl)n.outputUrl=fallbackUrl}
         n.taskStatus='succeeded';n.taskProgress=100;n.taskError='';n.outputSourceUrl=out.sourceUrl||'';n.lastUsedProviderId=attempt.providerId;n.lastUsedModelId=attempt.modelId;n.lastUsedModelName=attempt.modelName;n.fallbackAttempt=ai;
         const h={id:uid('h'),sourceNodeId:n.id,title:`${labelForType(n.type)}生成_${String(state.history.length+1).padStart(2,'0')}`,kind:labelForType(n.type),type:n.type,theme:n.content||'city',outputUrl:n.outputUrl||'',text:n.text||n.generatedText||'',prompt:n.prompt||'',providerId:attempt.providerId,modelId:attempt.modelId,modelName:attempt.modelName,createdAt:new Date().toISOString(),parameters:{imageQuality:imageQualityForNode(n),aspectRatio:n.aspectRatio,duration:n.duration,resolution:n.resolution,videoMode:n.videoMode,...(n.toolParams||{})}};state.history.unshift(h);recordNodeResultVersion(n,{historyId:h.id,providerId:attempt.providerId,modelId:attempt.modelId,modelName:attempt.modelName});syncGeneratedAssetResult(n,h);saveState();render();if(!silent)showToast(ai?`备用模型生成完成 · ${attempt.modelName}`:`生成完成 · 已保留 ${n.resultVersions.length} 个结果版本`);return n;
-      }catch(err){lastError=err;n.taskStatus=err.message==='任务已取消'?'canceled':'failed';n.taskError=err.message;saveState();render();if(err.message==='任务已取消')break;if(ai<chain.length-1){if(!silent)showToast(`${attempt.modelName} 失败，自动切换备用模型…`);continue}break}
+      }catch(err){const errMsg=errorText(err)||'生成失败';lastError=new Error(errMsg);n.taskStatus=errMsg==='任务已取消'?'canceled':'failed';n.taskError=errMsg;saveState();render();if(errMsg==='任务已取消')break;if(ai<chain.length-1){if(!silent)showToast(`${attempt.modelName} 失败，自动切换备用模型…`);continue}break}
     }
     const err=lastError||new Error('所有模型均生成失败');const msg=errorText(err)||'所有模型均生成失败';n.taskStatus=msg==='任务已取消'?'canceled':'failed';n.taskError=msg;saveState();render();if(!silent)showToast('生成失败：'+msg);throw new Error(msg);
   }

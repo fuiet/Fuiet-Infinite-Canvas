@@ -25,6 +25,17 @@ const STORES={providers:'providers',projects:'projects',tasks:'tasks',media:'med
 const cache={providers:[],projects:[],tasks:[],queue:{paused:false,concurrency:2}};
 const runtime={running:0,pumping:false,controllers:new Map(),objectUrls:new Set(),persistChain:Promise.resolve(),db:null,ready:null,swReady:null};
 const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
+function runtimeErrorText(value,depth=0){
+  if(value==null||depth>8)return'';
+  if(typeof value==='string'){const text=value.trim();return text==='[object Object]'?'':text}
+  if(value instanceof Error)return runtimeErrorText(value.message,depth+1)||runtimeErrorText(value.cause,depth+1)||String(value.name||'Error');
+  if(Array.isArray(value))return value.map(item=>runtimeErrorText(item,depth+1)).filter(Boolean).join('；');
+  if(typeof value==='object'){
+    for(const key of ['message','error','detail','reason','msg','title','body','response','data']){const text=runtimeErrorText(value[key],depth+1);if(text)return text}
+    try{return JSON.stringify(value)}catch{return''}
+  }
+  return String(value);
+}
 const now=()=>new Date().toISOString();
 const uid=p=>`${p}${crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2)+Date.now().toString(36)}`;
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -131,7 +142,9 @@ async function proxyFetch(url,init={}){
   const headers=cleanHeaders(init.headers||{}),packed=await serializeProxyBody(init.body);
   if(packed.bodyType==='form-data'){delete headers['content-type'];delete headers['Content-Type']}
   const res=await rawFetch('/api/proxy',{method:'POST',headers:{'content-type':'application/json','x-canvas-proxy':'1'},body:JSON.stringify({url,method:String(init.method||'GET').toUpperCase(),headers,...packed})});
-  if(!res.ok){let d={};try{d=await res.clone().json()}catch{}if(res.status>=500||d.error)throw new Error(d.error||`代理请求失败 ${res.status}`)}
+  // Do not throw on upstream HTTP errors here. The proxy intentionally mirrors the
+  // upstream status/body; providerJson must receive that status so protocol fallback
+  // can react to 400/404/405/415/422 instead of losing it inside a generic Error.
   return res;
 }
 async function providerFetch(url,init={}){
@@ -277,7 +290,7 @@ async function fetchVideoContent(provider,createdRaw,taskId,route,activePollUrl=
   let last=null;for(const url of candidates){const res=await fetchWithAuth(provider,url,{method:'GET'});if(!res.ok){last=new Error(`结果下载失败 ${res.status}`);if([404,405].includes(res.status))continue;throw last}const parsed=await readResponse(res);return parsed.value}throw last||new Error('任务成功但没有找到视频结果下载接口');
 }
 function videoRequestDiagnostics(model,task,refs,createPath,transport){const p=VideoParams?.normalize?.(task.parameters||{})||task.parameters||{};return{createPath,transport,modelId:String(model?.id||''),duration:Number(p.duration||p.seconds||0),resolution:String(p.resolution||''),aspectRatio:String(p.aspectRatio||p.aspect_ratio||''),size:String(p.size||''),referenceCount:refs.length,hasFirstFrame:refs.some(r=>['first_frame','image','image_reference'].includes(r.role)||r.type==='image')}}
-async function providerJson(provider,url,init){const res=await fetchWithAuth(provider,url,init);const parsed=await readResponse(res);if(!res.ok){const detail=parsed.kind==='json'?(parsed.value?.error?.message||parsed.value?.message||JSON.stringify(parsed.value)):String(parsed.value||'');const err=new Error(`供应商 HTTP ${res.status}${detail?`：${detail.slice(0,500)}`:''}`);err.status=res.status;err.detail=detail;throw err}return parsed}
+async function providerJson(provider,url,init){const res=await fetchWithAuth(provider,url,init);const parsed=await readResponse(res);if(!res.ok){const detail=runtimeErrorText(parsed.value);const err=new Error(`供应商 HTTP ${res.status}${detail?`：${detail.slice(0,500)}`:''}`);err.status=res.status;err.detail=detail;throw err}return parsed}
 
 async function discover(provider){
   const endpoints=['/v1/models','/models','/api/v1/models','/api/models'];let last='';
@@ -374,7 +387,7 @@ async function executeTask(task){
   throw new Error('供应商任务轮询超时');
 }
 async function runTask(task){
-  try{return await executeTask(task)}catch(error){const current=findTask(task.id)||task,attempt=Number(current.attempt||0),max=Number(current.maxRetries??1);if(!current.cancelRequested&&attempt<max){updateTask(task.id,{status:'queued',attempt:attempt+1,error:String(error.message||error)});pump();return}return updateTask(task.id,{status:current.cancelRequested?'canceled':'failed',error:String(error.message||error),progress:current.progress||0})}
+  try{return await executeTask(task)}catch(error){const current=findTask(task.id)||task,attempt=Number(current.attempt||0),max=Number(current.maxRetries??1),message=runtimeErrorText(error)||'生成失败',detail=runtimeErrorText(error?.detail);const failurePatch={error:message,...(Number.isFinite(Number(error?.status))?{errorStatus:Number(error.status)}:{}),...(detail?{errorDetail:detail}:{})};if(!current.cancelRequested&&attempt<max){updateTask(task.id,{status:'queued',attempt:attempt+1,...failurePatch});pump();return}return updateTask(task.id,{status:current.cancelRequested?'canceled':'failed',...failurePatch,progress:current.progress||0})}
 }
 async function pump(){if(runtime.pumping)return;runtime.pumping=true;try{while(true){const q=queueState();if(q.paused||runtime.running>=Math.max(1,Math.min(8,Number(q.concurrency||2))))break;const next=tasks().filter(t=>t.status==='queued'&&!t.cancelRequested).sort((a,b)=>(b.priority||0)-(a.priority||0)||String(a.createdAt).localeCompare(String(b.createdAt)))[0];if(!next)break;runtime.running++;updateTask(next.id,{status:'running'});runTask(next).finally(()=>{runtime.running=Math.max(0,runtime.running-1);pump()})}}finally{runtime.pumping=false}}
 
