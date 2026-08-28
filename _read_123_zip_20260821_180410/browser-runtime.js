@@ -133,6 +133,12 @@ function upsertTask(task){const list=tasks(),i=list.findIndex(t=>t.id===task.id)
 function normalizeMod(v,model={}){return Adapters?.normalizeModelModality?Adapters.normalizeModelModality(v,model):(String(v||'text').toLowerCase()==='script'?'text':String(v||'text').toLowerCase())}
 function fillTemplate(value,ctx){if(typeof value==='string')return value.replace(/\{\{\s*([^}]+)\s*\}\}/g,(_,k)=>{const parts=k.trim().split('.');let cur=ctx;for(const p of parts)cur=cur?.[p];return cur==null?'':typeof cur==='object'?JSON.stringify(cur):String(cur)});if(Array.isArray(value))return value.map(v=>fillTemplate(v,ctx));if(value&&typeof value==='object'){const out={};for(const [k,v] of Object.entries(value))out[k]=fillTemplate(v,ctx);return out}return value}
 function joinUrl(base,path){if(/^https?:\/\//i.test(String(path||'')))return String(path);const b=new URL(String(base||location.origin));const root=b.pathname.replace(/\/+$/,'');let p=String(path||'');if(!p.startsWith('/'))p='/'+p;if(root&&root!=='/'&&p.startsWith(root+'/'))b.pathname=p;else b.pathname=(root+p).replace(/\/{2,}/g,'/');b.search='';b.hash='';return b.toString()}
+function providerOrigin(provider){try{return new URL(String(provider?.baseUrl||''),location.href).origin}catch{return''}}
+function isProviderOriginUrl(provider,url){try{const expected=providerOrigin(provider);if(!expected)return false;return new URL(String(url||''),String(provider?.baseUrl||location.href)).origin===expected}catch{return false}}
+function credentialedProviderUrl(provider,url){if(!isProviderOriginUrl(provider,url))throw new Error('安全策略阻止向供应商 Base URL 之外的地址发送 API Key');return String(url)}
+function stripCredentialHeaders(headers={}){const out={};for(const [k,v] of Object.entries(headers||{})){const n=String(k).toLowerCase();if(n==='authorization'||n==='proxy-authorization'||n==='x-api-key'||n==='api-key'||/(^|[-_])(token|secret|api[-_]?key)([-_]|$)/i.test(n))continue;out[k]=v}return out}
+function providerRouteUrl(provider,value){const text=String(value||'').trim();if(!text)return'';try{const url=/^https?:\/\//i.test(text)?text:joinUrl(provider.baseUrl,text);return isProviderOriginUrl(provider,url)?url:''}catch{return''}}
+function providerResourceUrl(provider,value){const text=String(value||'').trim();if(!text)return'';try{if(/^https?:\/\//i.test(text))return new URL(text).toString();if(text.startsWith('/'))return joinUrl(provider.baseUrl,text);return''}catch{return''}}
 function authCandidates(provider){const key=String(provider?.apiKey||'').trim(),list=[];if(!key)return[{}];const configured=String(provider?.authHeader||'').trim();if(configured){const scheme=String(provider?.authScheme||'').trim();list.push({[configured]:scheme?`${scheme} ${key}`:key})}list.push({Authorization:`Bearer ${key}`},{'x-api-key':key},{'api-key':key});const seen=new Set();return list.filter(x=>{const s=JSON.stringify(x);if(seen.has(s))return false;seen.add(s);return true})}
 function cleanHeaders(headers={}){const h={};for(const [k,v] of Object.entries(headers||{})){const n=String(k).toLowerCase();if(['host','cookie','set-cookie','content-length','connection','transfer-encoding','cf-connecting-ip','x-forwarded-for'].includes(n))continue;h[k]=String(v)}return h}
 
@@ -156,6 +162,7 @@ async function providerFetch(url,init={}){
   }
 }
 async function fetchWithAuth(provider,url,init={}){
+  url=credentialedProviderUrl(provider,url);
   let last=null;
   for(const auth of authCandidates(provider)){
     const res=await providerFetch(url,{...init,headers:{accept:'application/json',...(init.headers||{}),...auth}});
@@ -163,6 +170,10 @@ async function fetchWithAuth(provider,url,init={}){
     if(![401,403].includes(res.status))return res;
   }
   return last;
+}
+async function fetchProviderResource(provider,url,init={}){
+  if(isProviderOriginUrl(provider,url))return fetchWithAuth(provider,url,init);
+  return providerFetch(url,{...init,headers:stripCredentialHeaders(init.headers||{})});
 }
 async function readResponse(res){const ct=String(res.headers.get('content-type')||'').toLowerCase();if(ct.includes('application/json')||ct.includes('+json'))return{kind:'json',value:await res.json()};if(ct.startsWith('text/'))return{kind:'text',value:await res.text()};const blob=await res.blob(),stored=await storeMediaBlob(blob,{name:'provider-output'});return{kind:'blob',value:stored.url,blob,type:ct,mediaId:stored.id,persistent:true}}
 function outputObject(value,modality='text'){
@@ -272,9 +283,10 @@ function alternateVideoCreatePaths(route,model){
   return[...new Set([first,'/v1/videos','/v1/video/generations','/v1/videos/generations','/v1/video/generation','/video/generations','/videos/generations','/api/v1/videos','/api/v1/video/generations'])];
 }
 function matchingPollPath(createPath,taskId,route){if(createPath==='/v1/video/generations'||createPath==='/api/v1/video/generations')return `${createPath}/${taskId}`;if(createPath==='/v1/videos/generations'||createPath==='/video/generations'||createPath==='/videos/generations')return `${createPath}/${taskId}`;return fillTemplate(route.pollPath||'/v1/videos/{{taskId}}',{taskId})}
-function videoUrlCandidate(provider,value){const text=String(value||'').trim();if(!text)return'';if(/^https?:\/\//i.test(text))return text;if(text.startsWith('/'))return joinUrl(provider.baseUrl,text);return''}
+function videoRouteCandidate(provider,value){return providerRouteUrl(provider,value)}
+function videoResourceCandidate(provider,value){return providerResourceUrl(provider,value)}
 function videoPollUrlCandidates(provider,createdRaw,createPath,taskId,route){
-  const out=[],add=value=>{const url=videoUrlCandidate(provider,value);if(url&&!out.includes(url))out.push(url)};
+  const out=[],add=value=>{const url=videoRouteCandidate(provider,value);if(url&&!out.includes(url))out.push(url)};
   const responseUrl=Core?.firstPath?Core.firstPath(createdRaw,['poll_url','pollUrl','status_url','statusUrl','task_url','taskUrl','data.poll_url','data.pollUrl','data.status_url','data.statusUrl','data.task_url','data.taskUrl','links.status','links.poll','links.self','task.status_url','task.poll_url']):'';add(responseUrl);
   add(joinUrl(provider.baseUrl,matchingPollPath(createPath,taskId,route)));
   for(const path of [`/v1/tasks/${taskId}`,`/v1/video/tasks/${taskId}`,`/v1/videos/${taskId}`,`/v1/video/generations/${taskId}`,`/v1/videos/generations/${taskId}`,`/api/v1/tasks/${taskId}`,`/api/v1/video/generations/${taskId}`])add(joinUrl(provider.baseUrl,path));
@@ -282,12 +294,12 @@ function videoPollUrlCandidates(provider,createdRaw,createPath,taskId,route){
 }
 async function pollVideoJson(provider,candidates,route){let last=null;for(const url of candidates){try{return{parsed:await providerJson(provider,url,{method:route.pollMethod||'GET',headers:{'content-type':'application/json'}}),url}}catch(error){last=error;if(![404,405].includes(Number(error?.status)))throw error}}throw last||new Error('没有可用的视频任务轮询接口')}
 async function fetchVideoContent(provider,createdRaw,taskId,route,activePollUrl=''){
-  const candidates=[],add=value=>{const url=videoUrlCandidate(provider,value);if(url&&!candidates.includes(url))candidates.push(url)};
+  const candidates=[],add=value=>{const url=videoResourceCandidate(provider,value);if(url&&!candidates.includes(url))candidates.push(url)};
   const explicit=Core?.firstPath?Core.firstPath(createdRaw,['content_url','contentUrl','download_url','downloadUrl','links.content','links.download']):'';add(explicit);
   if(route.contentPath)add(joinUrl(provider.baseUrl,fillTemplate(route.contentPath,{taskId})));
   if(activePollUrl)add(activePollUrl.replace(/\/$/,'')+'/content');
   for(const path of [`/v1/videos/${taskId}/content`,`/v1/video/generations/${taskId}/content`,`/v1/videos/generations/${taskId}/content`])add(joinUrl(provider.baseUrl,path));
-  let last=null;for(const url of candidates){const res=await fetchWithAuth(provider,url,{method:'GET'});if(!res.ok){last=new Error(`结果下载失败 ${res.status}`);if([404,405].includes(res.status))continue;throw last}const parsed=await readResponse(res);return parsed.value}throw last||new Error('任务成功但没有找到视频结果下载接口');
+  let last=null;for(const url of candidates){const res=await fetchProviderResource(provider,url,{method:'GET'});if(!res.ok){last=new Error(`结果下载失败 ${res.status}`);if([404,405].includes(res.status))continue;throw last}const parsed=await readResponse(res);return parsed.value}throw last||new Error('任务成功但没有找到视频结果下载接口');
 }
 function videoRequestDiagnostics(model,task,refs,createPath,transport){const p=VideoParams?.normalize?.(task.parameters||{})||task.parameters||{};return{createPath,transport,modelId:String(model?.id||''),duration:Number(p.duration||p.seconds||0),resolution:String(p.resolution||''),aspectRatio:String(p.aspectRatio||p.aspect_ratio||''),size:String(p.size||''),referenceCount:refs.length,hasFirstFrame:refs.some(r=>['first_frame','image','image_reference'].includes(r.role)||r.type==='image')}}
 async function providerJson(provider,url,init){const res=await fetchWithAuth(provider,url,init);const parsed=await readResponse(res);if(!res.ok){const detail=runtimeErrorText(parsed.value);const err=new Error(`供应商 HTTP ${res.status}${detail?`：${detail.slice(0,500)}`:''}`);err.status=res.status;err.detail=detail;throw err}return parsed}
