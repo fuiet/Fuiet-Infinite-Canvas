@@ -41,9 +41,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add _read_123_zip_20260821_180410/browser-bootstrap.js \
-                  _read_123_zip_20260821_180410/browser-runtime.js \
                   _read_123_zip_20260821_180410/app.js \
-                  _read_123_zip_20260821_180410/tests/node-model-visibility.test.mjs
+                  _read_123_zip_20260821_180410/tests/browser-storage-manager.test.mjs \
+                  _read_123_zip_20260821_180410/tests/node-model-availability-runtime.test.mjs
           git diff --cached --check
-          git commit -m "Fix provider models missing from canvas nodes"
+          git commit -m "Make configured provider models visible to canvas nodes"
           git push origin HEAD:fix-node-model-visibility
