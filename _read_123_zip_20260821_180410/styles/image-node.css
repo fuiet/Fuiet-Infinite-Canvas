@@ -135,6 +135,99 @@
   content:'+';color:#c6c6c6;font:400 15px/1 var(--ui-font-sans);
 }
 
+
+/* Image generation skeleton: every selected aspect ratio is represented by the
+   node itself before the result arrives, so there is no collapsed strip/jump. */
+.node.node-image[data-task-state="queued"],
+.node.node-image[data-task-state="running"]{
+  height:auto!important;
+  min-height:0!important;
+  border:0!important;
+  border-radius:8px!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  overflow:visible!important;
+}
+.node.node-image[data-task-state="queued"]>.node-body,
+.node.node-image[data-task-state="running"]>.node-body{
+  height:auto!important;
+  min-height:0!important;
+  padding:0!important;
+  overflow:visible!important;
+  border-radius:8px!important;
+  background:transparent!important;
+}
+.node.node-image[data-task-state="queued"] .image-node-shell.is-generating,
+.node.node-image[data-task-state="running"] .image-node-shell.is-generating{
+  position:relative;
+  height:auto!important;
+  min-height:0!important;
+  padding:0!important;
+  overflow:visible!important;
+  border-radius:8px!important;
+  background:transparent!important;
+}
+.node.node-image[data-task-state="queued"] .image-node-placeholder.image-node-stage,
+.node.node-image[data-task-state="running"] .image-node-placeholder.image-node-stage{
+  position:relative;
+  width:100%!important;
+  height:auto!important;
+  min-height:0!important;
+  margin:0!important;
+  overflow:hidden!important;
+  border:1px solid #4a4a4a!important;
+  border-radius:8px!important;
+  background:linear-gradient(110deg,#202020 20%,#272727 38%,#202020 56%)!important;
+  background-size:220% 100%!important;
+  box-shadow:none!important;
+  animation:imageNodeGeneratingShimmer 1.8s linear infinite;
+}
+.node.node-image[data-task-state="queued"] .image-node-placeholder .big-icon,
+.node.node-image[data-task-state="running"] .image-node-placeholder .big-icon{display:none!important}
+.node.node-image[data-task-state="queued"] .image-node-try,
+.node.node-image[data-task-state="running"] .image-node-try,
+.node.node-image[data-task-state="queued"] .image-node-upload,
+.node.node-image[data-task-state="running"] .image-node-upload{display:none!important}
+.image-node-generating-size{
+  position:absolute;
+  right:0;
+  top:-24px;
+  z-index:5;
+  color:#666;
+  font:400 11px/16px var(--ui-font-sans);
+  letter-spacing:.01em;
+  pointer-events:none;
+}
+.image-node-generating-overlay{
+  position:absolute;
+  inset:0;
+  z-index:6;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+  color:#a9a9a9;
+  pointer-events:none;
+}
+.image-node-generating-overlay b{font:500 12px/16px var(--ui-font-sans);color:#aaa}
+.image-node-generating-overlay small{font:400 11px/16px var(--ui-font-mono);color:#777}
+.image-node-generating-spinner{
+  width:13px;height:13px;
+  border:1.5px solid #555;
+  border-top-color:#aaa;
+  border-radius:50%;
+  animation:imageNodeGeneratingSpin .85s linear infinite;
+}
+.node.node-image[data-task-state="queued"] .ui-v23-result-progress,
+.node.node-image[data-task-state="running"] .ui-v23-result-progress{display:none!important}
+@keyframes imageNodeGeneratingSpin{to{transform:rotate(360deg)}}
+@keyframes imageNodeGeneratingShimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}
+@media (prefers-reduced-motion:reduce){
+  .node.node-image[data-task-state="queued"] .image-node-placeholder.image-node-stage,
+  .node.node-image[data-task-state="running"] .image-node-placeholder.image-node-stage,
+  .image-node-generating-spinner{animation:none}
+}
+
 /* Generated/uploaded image: the media itself is the node. */
 .node.node-image[data-content-state="result"]{
   min-height:0;

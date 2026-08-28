@@ -1075,12 +1075,19 @@
     const lowDetail=state.viewport.zoom<.34&&n.id!==selectedId&&n.id!==expandedNodeId;
     if(lowDetail&&['image','video'].includes(n.type)){body=`<div class="node-low-detail ${n.type}"><i>${n.type==='video'?'▶':'▧'}</i><span>${escapeHtml(nodeTitleBase(n))}</span></div>`;}
     else if(n.type==='image'){
-      const ratioStyle=n.cropRatio&&!n.h?`aspect-ratio:${escapeAttr(n.cropRatio.replace(':','/'))};height:auto;min-height:130px;`:'';
-      const emptyImage=contentState==='empty';
+      const imageGenerating=['queued','running'].includes(String(n.taskStatus||''));
+      const targetRatio=String(n.aspectRatio||n.cropRatio||'1:1').trim()||'1:1';
+      const ratioCss=targetRatio.replace(':','/');
+      const ratioStyle=imageGenerating?`aspect-ratio:${escapeAttr(ratioCss)};height:auto;min-height:0;`:n.cropRatio&&!n.h?`aspect-ratio:${escapeAttr(n.cropRatio.replace(':','/'))};height:auto;min-height:130px;`:'';
+      const targetParams=globalThis.CanvasImageRequestParameters?.normalize?.({resolution:n.resolution||'1K',aspectRatio:targetRatio})||{};
+      const targetSize=targetParams.width&&targetParams.height?`${targetParams.width} × ${targetParams.height}`:'';
+      const emptyImage=contentState==='empty'&&!imageGenerating;
       const quick=emptyImage?`<div class="image-node-try"><div class="image-node-try-label">尝试：</div><button type="button" data-image-quick="repaint"><span class="image-quick-icon">↥</span><b>图生图</b></button><button type="button" data-image-quick="upscale"><span class="image-quick-icon">HD</span><b>图片高清</b></button></div>`:'';
       const uploadAction=emptyImage&&interactionState==='selected'?`<button type="button" class="image-node-upload" data-image-node-upload>${uiIcon('plus')}<span>上传</span></button>`:'';
-      const media=n.outputUrl?`<div class="media-clip image-node-stage" style="${ratioStyle}"><img class="node-media-img" loading="lazy" decoding="async" style="${mediaTransformStyle(n)}" src="${escapeAttr(n.outputUrl)}" alt="${escapeAttr(n.title||'图片')}"/></div>`:n.content?`<div class="node-content-img image-node-stage" style="background:${themeBg(n.content)};${mediaTransformStyle(n)}"><div class="job-badge">image</div></div>`:`<div class="image-node-placeholder image-node-stage"><div class="big-icon">▧</div></div>`;
-      body=`<div class="image-node-shell ${emptyImage?'is-empty':'has-output'}">${uploadAction}${media}${quick}</div>`;
+      const generatingMeta=imageGenerating&&targetSize?`<div class="image-node-generating-size">${escapeHtml(targetSize)}</div>`:'';
+      const generatingOverlay=imageGenerating?`<div class="image-node-generating-overlay"><span class="image-node-generating-spinner" aria-hidden="true"></span><b>${n.taskStatus==='queued'?'等待生成':'正在生成'}</b>${Number.isFinite(Number(n.taskProgress))&&Number(n.taskProgress)>0?`<small>${Math.max(0,Math.min(100,Math.round(Number(n.taskProgress))))}%</small>`:''}</div>`:'';
+      const media=n.outputUrl?`<div class="media-clip image-node-stage" style="${ratioStyle}"><img class="node-media-img" loading="lazy" decoding="async" style="${mediaTransformStyle(n)}" src="${escapeAttr(n.outputUrl)}" alt="${escapeAttr(n.title||'图片')}"/></div>`:n.content?`<div class="node-content-img image-node-stage" style="background:${themeBg(n.content)};${mediaTransformStyle(n)}"><div class="job-badge">image</div></div>`:`<div class="image-node-placeholder image-node-stage" style="${ratioStyle}"><div class="big-icon">▧</div></div>`;
+      body=`<div class="image-node-shell ${imageGenerating?'is-generating':emptyImage?'is-empty':'has-output'}">${uploadAction}${generatingMeta}${media}${generatingOverlay}${quick}</div>`;
     } else if(n.type==='video'){
       const emptyVideo=contentState==='empty';
       const quick=emptyVideo?`<div class="video-node-try"><div class="video-node-try-label">尝试：</div><button type="button" data-video-quick="text"><span class="video-quick-icon">T</span><b>文生视频</b></button><button type="button" data-video-quick="image"><span class="video-quick-icon">▧</span><b>图生视频</b></button><button type="button" data-video-quick="frame"><span class="video-quick-icon">↔</span><b>首尾帧生视频</b></button></div>`:'';
