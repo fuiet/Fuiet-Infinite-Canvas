@@ -2081,10 +2081,9 @@
       resolution:n.resolution||caps.resolutions?.[0]||'1K',
       count:Math.max(1,Number(n.count||1))
     };
-    const normalized=globalThis.CanvasImageRequestParameters?.normalize?.(raw)||raw;
     const provider=providerById(n.providerId),model=modelForNode(n),resolver=globalThis.CanvasModelImageCapabilities;
-    if(provider&&model&&resolver?.normalizeSelection){const selected=resolver.normalizeSelection(provider,model,normalized),{imageCapabilities,...clean}=selected;return clean}
-    return normalized;
+    if(provider&&model&&resolver?.normalizeSelection){const selected=resolver.normalizeSelection(provider,model,raw),{imageCapabilities,...clean}=selected;return clean}
+    return globalThis.CanvasImageRequestParameters?.normalize?.(raw)||raw;
   }
 
   window.addEventListener('canvas:image-quality-change',event=>{

@@ -11,6 +11,7 @@ const Adapters=globalThis.CanvasProviderAdapters;
 const Core=globalThis.CanvasProviderRuntimeCore;
 const ImageParams=globalThis.CanvasImageRequestParameters;
 const ImageCapabilities=globalThis.CanvasModelImageCapabilities;
+const ImageOutputDimensions=globalThis.CanvasImageOutputDimensions;
 const VideoParams=globalThis.CanvasVideoRequestParameters;
 const LEGACY_KEYS={
   providers:'fuiet-browser-providers-v1',
@@ -169,6 +170,43 @@ async function normalizeGeneratedOutput(value,modality,provider){
   }
   return text;
 }
+function imageTargetSelection(provider,model,parameters={}){
+  const selection=ImageCapabilities?.normalizeSelection?.(provider||{},model||{},parameters||{});
+  const target=ImageOutputDimensions?.parseSize?.(selection?.size||parameters?.size||'');
+  return target?{...target,selection}:null;
+}
+async function generatedImageBlob(value){
+  const text=String(value||'').trim();if(!text)throw new Error('生成图片地址为空，无法校验尺寸');
+  let res;
+  if(/^https?:\/\//i.test(text)||text.startsWith('//')){const url=text.startsWith('//')?`${location.protocol}${text}`:text;res=await providerFetch(url,{method:'GET',headers:{accept:'image/*'}})}
+  else res=await rawFetch(text,{method:'GET',headers:{accept:'image/*'}});
+  if(!res?.ok)throw new Error(`无法读取生成图片以校验尺寸${res?.status?`（HTTP ${res.status}）`:''}`);
+  const blob=await res.blob();if(!String(blob.type||'').toLowerCase().startsWith('image/'))throw new Error('生成结果不是可校验的图片文件');return blob;
+}
+async function decodeGeneratedImage(blob){
+  if(typeof createImageBitmap==='function'){const bitmap=await createImageBitmap(blob);return{image:bitmap,width:bitmap.width,height:bitmap.height,close:()=>bitmap.close?.()}}
+  if(typeof Image!=='function'||typeof URL==='undefined')throw new Error('当前浏览器无法读取生成图片像素尺寸');
+  return await new Promise((resolve,reject)=>{const url=URL.createObjectURL(blob),img=new Image();img.onload=()=>resolve({image:img,width:img.naturalWidth,height:img.naturalHeight,close:()=>URL.revokeObjectURL(url)});img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('生成图片解码失败'))};img.src=url});
+}
+async function encodedCanvasBlob(canvas,type){
+  const mime=ImageOutputDimensions?.outputMimeType?.(type)||'image/png';
+  if(typeof canvas.convertToBlob==='function')return canvas.convertToBlob({type:mime,quality:.95});
+  return await new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('纠正后的图片编码失败')),mime,.95));
+}
+async function enforceGeneratedImageDimensions(value,provider,model,parameters={}){
+  const target=imageTargetSelection(provider,model,parameters);if(!target)return{value,corrected:false,targetSize:'',sourceSize:'',finalSize:'',policy:''};
+  const targetSize=target.size,blob=await generatedImageBlob(value),decoded=await decodeGeneratedImage(blob),sourceSize=`${decoded.width}x${decoded.height}`;
+  try{
+    if(ImageOutputDimensions?.sameSize?.(decoded.width,decoded.height,target))return{value,corrected:false,targetSize,sourceSize,finalSize:sourceSize,policy:'verified'};
+    const crop=ImageOutputDimensions?.cropRect?.(decoded.width,decoded.height,target.width,target.height);if(!crop)throw new Error('无法计算图片尺寸纠正规则');
+    let canvas;if(typeof OffscreenCanvas==='function')canvas=new OffscreenCanvas(target.width,target.height);else{if(typeof document==='undefined')throw new Error('当前浏览器不支持图片尺寸纠正');canvas=document.createElement('canvas');canvas.width=target.width;canvas.height=target.height}
+    const ctx=canvas.getContext('2d',{alpha:true});if(!ctx)throw new Error('无法创建图片尺寸纠正画布');
+    ctx.drawImage(decoded.image,crop.sx,crop.sy,crop.sWidth,crop.sHeight,0,0,target.width,target.height);
+    const corrected=await encodedCanvasBlob(canvas,blob.type),stored=await storeMediaBlob(corrected,{name:`generated-image-${targetSize}`});
+    return{value:stored.url,corrected:true,targetSize,sourceSize,finalSize:targetSize,policy:'center-crop-resize'};
+  }finally{decoded.close?.()}
+}
+function imageDimensionTaskPatch(info){return info?{requestedImageSize:info.targetSize||'',sourceImageSize:info.sourceSize||'',finalImageSize:info.finalSize||'',imageDimensionCorrected:info.corrected===true,imageDimensionPolicy:info.policy||''}:{}}
 function refsForRequest(refs=[]){return (Array.isArray(refs)?refs:[]).map(r=>({role:r.role||r.semanticRole||r.kind||'reference',type:r.type||r.kind||'',url:r.url||r.outputUrl||'',text:r.text||'',title:r.title||''})).filter(r=>r.url||r.text)}
 async function blobToDataUrl(blob){return new Promise((resolve,reject)=>{const fr=new FileReader();fr.onload=()=>resolve(fr.result);fr.onerror=reject;fr.readAsDataURL(blob)})}
 async function referenceBlob(url){const value=String(url||'');if(!value)return null;try{if(value.startsWith('data:')){const res=await rawFetch(value);return await res.blob()}if(value.startsWith('blob:')||value.startsWith('/__browser_media/')){const res=await rawFetch(value);if(res.ok)return await res.blob()}if(/^https?:\/\//i.test(value)){try{const res=await rawFetch(value,{mode:'cors'});if(res.ok)return await res.blob()}catch{}const proxied=await proxyFetch(value,{method:'GET'});if(proxied.ok)return await proxied.blob()}}catch{}return null}
@@ -270,13 +308,18 @@ async function executeTask(task){
         }else created=await providerJson(provider,createUrl,{method:route.method||'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});usedCreatePath=createPath;break}catch(error){lastCreateError=error;if(!autoVideoRoute(model,route)||![404,405].includes(Number(error?.status)))throw error}}
   if(!created)throw lastCreateError||new Error('视频创建接口不可用');
   if(route.responseMode!=='async'){
-    if(created.kind==='blob')return updateTask(task.id,{status:'succeeded',progress:100,output:outputObject(created.value,task.nodeType)});
+    if(created.kind==='blob'){
+      const modality=normalizeMod(task.nodeType);let value=created.value,dimensionInfo=null;
+      if(modality==='image'){dimensionInfo=await enforceGeneratedImageDimensions(value,provider,model,task.parameters||{});value=dimensionInfo.value}
+      return updateTask(task.id,{status:'succeeded',progress:100,output:outputObject(value,modality),...imageDimensionTaskPatch(dimensionInfo)});
+    }
     const raw=created.value,modality=normalizeMod(task.nodeType),extracted=Core?.extractOutput?Core.extractOutput(raw,route,modality):undefined;
     let value=extracted!==undefined?extracted:(modality==='text'?(raw?.choices?.[0]?.message?.content??raw?.text??raw?.content??JSON.stringify(raw)):raw?.url??raw?.data?.url);
     value=await normalizeGeneratedOutput(value,modality,provider);
     if(modality==='image'&&!validMediaOutput(value))throw new Error('上游已返回成功响应，但未识别到图片结果字段');
+    let dimensionInfo=null;if(modality==='image'){dimensionInfo=await enforceGeneratedImageDimensions(value,provider,model,task.parameters||{});value=dimensionInfo.value}
     const upstreamSize=modality==='image'?imageResponseSize(raw):'';
-    return updateTask(task.id,{status:'succeeded',progress:100,output:outputObject(value,modality),...(upstreamSize?{upstreamSize}:{})});
+    return updateTask(task.id,{status:'succeeded',progress:100,output:outputObject(value,modality),...imageDimensionTaskPatch(dimensionInfo),...(upstreamSize?{upstreamSize}:{})});
   }
   if(created.kind!=='json')throw new Error('异步创建接口没有返回 JSON 任务信息');
   const taskId=Core?.extractTaskId?Core.extractTaskId(created.value,route):created.value?.id;
@@ -298,7 +341,8 @@ async function executeTask(task){
       if(output==null||output==='')throw new Error('任务成功但没有找到输出结果');
       const modality=normalizeMod(task.nodeType);output=await normalizeGeneratedOutput(output,modality,provider);
       if(modality==='image'&&!validMediaOutput(output))throw new Error('上游任务已成功，但未识别到图片结果字段');
-      return updateTask(task.id,{status:'succeeded',progress:100,output:outputObject(output,modality)});
+      let dimensionInfo=null;if(modality==='image'){dimensionInfo=await enforceGeneratedImageDimensions(output,provider,model,task.parameters||{});output=dimensionInfo.value}
+      return updateTask(task.id,{status:'succeeded',progress:100,output:outputObject(output,modality),...imageDimensionTaskPatch(dimensionInfo)});
     }
     attempt++;
   }

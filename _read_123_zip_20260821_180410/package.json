@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "start:local": "node server.js",
-    "check": "node --check app.js && node --check browser-runtime.js && node --check image-request-parameters.js && node --check model-image-capabilities.js && node --check video-request-parameters.js && node --check image-ratio-picker-v1.js && node --check browser-storage-manager.js && node --check browser-bootstrap.js && node --check browser-media-sw.js && node --check provider-adapter-contract.js && node --check provider-runtime-core.js && node --check provider-auto-config-v1.js && node --check models.js && node --check server.js && node --check store.js && node --check three-runtime.js && node --check ui-zh.js && node --check ui-v23.js && node --check ui-connect-v23.js",
+    "check": "node --check app.js && node --check browser-runtime.js && node --check image-request-parameters.js && node --check model-image-capabilities.js && node --check image-output-dimensions.js && node --check video-request-parameters.js && node --check image-ratio-picker-v1.js && node --check browser-storage-manager.js && node --check browser-bootstrap.js && node --check browser-media-sw.js && node --check provider-adapter-contract.js && node --check provider-runtime-core.js && node --check provider-auto-config-v1.js && node --check models.js && node --check server.js && node --check store.js && node --check three-runtime.js && node --check ui-zh.js && node --check ui-v23.js && node --check ui-connect-v23.js",
     "test": "node --test tests/*.test.mjs"
   },
   "engines": {
