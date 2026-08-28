@@ -1,0 +1,58 @@
+name: Fix Video Generation Runtime V1
+
+on:
+  push:
+    branches:
+      - fix/video-generation-runtime
+    paths:
+      - .github/scripts/fix_video_generation_runtime.py
+      - .github/workflows/fix-video-generation-runtime-v1.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/video-generation-runtime
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply repair
+        run: python .github/scripts/fix_video_generation_runtime.py
+      - name: Syntax checks
+        working-directory: _read_123_zip_20260821_180410
+        run: |
+          node --check video-request-parameters.js
+          node --check browser-runtime.js
+          node --check provider-runtime-core.js
+          node --check provider-adapter-contract.js
+          node --check app.js
+          node --check functions/api/[[path]].js
+      - name: Full checks
+        working-directory: _read_123_zip_20260821_180410
+        run: |
+          npm run check
+          npm test
+      - name: Commit verified repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add _read_123_zip_20260821_180410/video-request-parameters.js \
+                  _read_123_zip_20260821_180410/browser-runtime.js \
+                  _read_123_zip_20260821_180410/provider-runtime-core.js \
+                  _read_123_zip_20260821_180410/provider-adapter-contract.js \
+                  _read_123_zip_20260821_180410/app.js \
+                  _read_123_zip_20260821_180410/functions/api/[[path]].js \
+                  _read_123_zip_20260821_180410/index.html \
+                  _read_123_zip_20260821_180410/models.html \
+                  _read_123_zip_20260821_180410/browser-bootstrap.js \
+                  _read_123_zip_20260821_180410/package.json \
+                  _read_123_zip_20260821_180410/tests/video-generation-runtime.test.mjs
+          git diff --cached --check
+          git commit -m "Fix browser video generation runtime"
+          git push origin HEAD:fix/video-generation-runtime
