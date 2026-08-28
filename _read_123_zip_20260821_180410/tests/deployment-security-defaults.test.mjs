@@ -13,9 +13,10 @@ function value(name){
   return m?.[1] ?? '';
 }
 
-test('public Cloudflare configuration is owner-isolated and not desktop-account-free by default',()=>{
+test('public Cloudflare configuration uses hosted single-user mode without login or owner isolation',()=>{
+  assert.equal(value('CANVAS_SINGLE_USER_NO_AUTH'),'1');
   assert.equal(value('CANVAS_DESKTOP_SINGLE_USER'),'0');
-  assert.equal(value('CANVAS_ENFORCE_OWNER'),'1');
+  assert.equal(value('CANVAS_ENFORCE_OWNER'),'0');
   assert.equal(value('CANVAS_CLAIM_UNOWNED'),'0');
   assert.equal(value('CANVAS_ALLOW_UNAUTHENTICATED_OWNER'),'0');
   assert.equal(value('CANVAS_ALLOW_PRIVATE_PROVIDER_HOSTS'),'0');
