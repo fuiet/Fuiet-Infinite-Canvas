@@ -6,6 +6,7 @@ on:
       - fix/video-generation-runtime
     paths:
       - .github/scripts/fix_video_generation_runtime.py
+      - .github/scripts/fix_video_proxy_followup.py
       - .github/workflows/fix-video-generation-runtime-v1.yml
 
 permissions:
@@ -23,7 +24,9 @@ jobs:
         with:
           node-version: '22'
       - name: Apply repair
-        run: python .github/scripts/fix_video_generation_runtime.py
+        run: |
+          python .github/scripts/fix_video_generation_runtime.py
+          python .github/scripts/fix_video_proxy_followup.py
       - name: Syntax checks
         working-directory: _read_123_zip_20260821_180410
         run: |
