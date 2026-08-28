@@ -28,11 +28,34 @@ function providerLooksOpenAIStyle(provider={}){
 function modelHint(model={}){
   return `${model.id||''} ${model.name||''}`.trim().toLowerCase();
 }
+function normalizeModelModality(value,model={}){
+  const raw=String(value||'').trim().toLowerCase().replace(/\s+/g,'-');
+  const aliases={
+    text:'text',script:'text',chat:'text',llm:'text',language:'text',completion:'text',completions:'text',response:'text',responses:'text',
+    image:'image',images:'image',img:'image',picture:'image','text-to-image':'image','image-to-image':'image','image-generation':'image',image_generation:'image',t2i:'image',i2i:'image',
+    video:'video',videos:'video','text-to-video':'video','image-to-video':'video','video-generation':'video',video_generation:'video',t2v:'video',i2v:'video',
+    audio:'audio',speech:'audio',voice:'audio',tts:'audio',sound:'audio',music:'audio'
+  };
+  const canonical=aliases[raw]||(['text','image','video','audio'].includes(raw)?raw:'');
+  if(model?.modalitySource==='user'&&canonical)return canonical;
+  const adapter=String(model?.adapterKey||model?.adapterResolved?.key||'').toLowerCase();
+  const route=String(model?.createPath||model?.operationRoutes?.generate?.createPath||'').toLowerCase();
+  if(adapter==='openai-image'||/\/images?(?:\/|$)|image[-_/]?generation/.test(route))return'image';
+  if(adapter==='standard-video-async-v1'||/\/videos?(?:\/|$)|video[-_/]?generation/.test(route))return'video';
+  if(adapter==='openai-audio-speech'||/\/audio(?:\/|$)|\/speech(?:\/|$)/.test(route))return'audio';
+  if(['openai-chat','openai-responses'].includes(adapter)||/\/chat\/completions|\/responses(?:\/|$)/.test(route))return'text';
+  if(canonical&&canonical!=='text')return canonical;
+  const hint=modelHint(model);
+  if(/gpt[-_. ]?image|dall[-_. ]?e|(?:^|[-_. ])flux(?:[-_. ]|$)|imagen|ideogram|stable[-_. ]?diffusion|sdxl|(?:^|[-_. ])image(?:[-_. ]|$)/.test(hint))return'image';
+  if(/sora|seedance|veo(?:[-_. ]|$)|kling|hailuo|vidu|hunyuan[-_. ]?video|(?:^|[-_. ])video(?:[-_. ]|$)|(?:^|[-_. ])t2v(?:[-_. ]|$)|(?:^|[-_. ])i2v(?:[-_. ]|$)/.test(hint))return'video';
+  if(/(?:^|[-_. ])tts(?:[-_. ]|$)|speech|voice|whisper/.test(hint))return'audio';
+  return canonical||'text';
+}
 function inferAdapterKey(provider={},model={}){
   const explicit=String(model.adapterKey||'auto').trim();
   if(explicit&&explicit!=='auto')return explicit;
   if(provider.protocol==='comfyui')return 'comfyui-workflow';
-  const mod=String(model.modality||'image').toLowerCase();
+  const mod=normalizeModelModality(model.modality,model);
   if(provider.protocol==='openai-compatible'){
     if(mod==='text'||mod==='script')return 'openai-chat';
     if(mod==='image')return 'openai-image';
@@ -132,7 +155,7 @@ function resolveRoute(provider={},model={},nodeType='',operation='generate'){
   return route;
 }
 function finalizeModel(provider={},model={},nodeType=''){
-  const next=clone(model||{}), type=String(nodeType||next.modality||'text').toLowerCase();
+  const next=clone(model||{}); next.modality=normalizeModelModality(next.modality,next); const type=normalizeModelModality(nodeType||next.modality,next);
   const before=routeIsExplicit(next), route=resolveRoute(provider,next,type,'generate');
   const ready=Boolean(next.id&&route.adapterKey&&route.adapterKey!=='auto'&&route.createPath);
   if(!before.explicitAdapter&&route.adapterKey&&route.adapterKey!=='auto')next.adapterKey=route.adapterKey;
@@ -174,5 +197,5 @@ function detectModelListProtocol(data,endpoint=''){
   if(objects.length>0&&withIds/objects.length>=.8&&/\/models(?:$|\?)/i.test(String(endpoint||'')))return{protocol:'openai-compatible',confidence:.9,reason:'models endpoint + model ids'};
   return{protocol:'',confidence:0,reason:`generic-model-list:${endpoint||'unknown'}`};
 }
-globalThis.CanvasProviderAdapters=Object.freeze({SUCCESS,FAILURE,normalizeReferenceTransport,providerLooksOpenAIStyle,inferAdapterKey,adapterDefaults,resolveRoute,finalizeModel,finalizeProvider,detectModelListProtocol});
+globalThis.CanvasProviderAdapters=Object.freeze({SUCCESS,FAILURE,normalizeReferenceTransport,normalizeModelModality,providerLooksOpenAIStyle,inferAdapterKey,adapterDefaults,resolveRoute,finalizeModel,finalizeProvider,detectModelListProtocol});
 })();

@@ -67,7 +67,9 @@ async function providerFromRecord(record){
 }
 async function persistProvidersNow(){const records=[];for(const p of cache.providers)records.push(await providerToRecord(p));await idbReplaceAll(STORES.providers,records)}
 function providers(){return cache.providers}
-function saveProviders(list){cache.providers=clone(Array.isArray(list)?list:[]);enqueuePersist(persistProvidersNow);return cache.providers}
+function normalizeProviderRecord(provider){try{return Adapters?.finalizeProvider?Adapters.finalizeProvider(provider||{}):clone(provider||{})}catch{return clone(provider||{})}}
+function saveProviders(list){cache.providers=clone(Array.isArray(list)?list:[]).map(normalizeProviderRecord);enqueuePersist(persistProvidersNow);return cache.providers}
+async function saveProvidersCommitted(list){cache.providers=clone(Array.isArray(list)?list:[]).map(normalizeProviderRecord);await persistProvidersNow();return cache.providers}
 function projects(){return cache.projects}
 function saveProjects(list){cache.projects=clone(Array.isArray(list)?list:[]);enqueuePersist(()=>idbReplaceAll(STORES.projects,cache.projects));return cache.projects}
 function tasks(){return cache.tasks}
@@ -96,6 +98,10 @@ async function initializePersistence(){
   runtime.db=await openDatabase();
   const providerRows=await idbGetAll(STORES.providers),projectRows=await idbGetAll(STORES.projects),taskRows=await idbGetAll(STORES.tasks),queueRow=await idbGet(STORES.settings,'queue');
   if(!providerRows.length){const legacy=legacyRead(LEGACY_KEYS.providers,[]);const fallback=legacy.length?legacy:legacyRead('canvas-studio-providers-v1',[]);cache.providers=Array.isArray(fallback)?fallback:[];if(cache.providers.length)await persistProvidersNow()}else cache.providers=await Promise.all(providerRows.map(providerFromRecord));
+  const providerSnapshot=JSON.stringify(cache.providers.map(p=>{const x=clone(p);delete x.apiKey;return x}));
+  cache.providers=cache.providers.map(normalizeProviderRecord);
+  const providerHealed=JSON.stringify(cache.providers.map(p=>{const x=clone(p);delete x.apiKey;return x}))!==providerSnapshot;
+  if(providerHealed&&cache.providers.length)await persistProvidersNow();
   if(!projectRows.length){cache.projects=legacyRead(LEGACY_KEYS.projects,[]);if(cache.projects.length)await idbReplaceAll(STORES.projects,cache.projects)}else cache.projects=projectRows;
   if(!taskRows.length){cache.tasks=legacyRead(LEGACY_KEYS.tasks,[]).slice(0,300);if(cache.tasks.length)await idbReplaceAll(STORES.tasks,cache.tasks)}else cache.tasks=taskRows.slice(0,300);
   cache.queue={paused:false,concurrency:2,...(queueRow?.value||legacyRead(LEGACY_KEYS.queue,{}))};
@@ -109,7 +115,7 @@ function findProvider(id){return providers().find(p=>String(p.id)===String(id))|
 function findTask(id){return tasks().find(t=>String(t.id)===String(id))||null}
 function updateTask(id,patch){const list=tasks(),i=list.findIndex(t=>t.id===id);if(i<0)return null;list[i]={...list[i],...patch,updatedAt:now()};saveTasks(list);return list[i]}
 function upsertTask(task){const list=tasks(),i=list.findIndex(t=>t.id===task.id);if(i>=0)list[i]=task;else list.unshift(task);saveTasks(list);return task}
-function normalizeMod(v){v=String(v||'text').toLowerCase();return v==='script'?'text':v}
+function normalizeMod(v,model={}){return Adapters?.normalizeModelModality?Adapters.normalizeModelModality(v,model):(String(v||'text').toLowerCase()==='script'?'text':String(v||'text').toLowerCase())}
 function fillTemplate(value,ctx){if(typeof value==='string')return value.replace(/\{\{\s*([^}]+)\s*\}\}/g,(_,k)=>{const parts=k.trim().split('.');let cur=ctx;for(const p of parts)cur=cur?.[p];return cur==null?'':typeof cur==='object'?JSON.stringify(cur):String(cur)});if(Array.isArray(value))return value.map(v=>fillTemplate(v,ctx));if(value&&typeof value==='object'){const out={};for(const [k,v] of Object.entries(value))out[k]=fillTemplate(v,ctx);return out}return value}
 function joinUrl(base,path){if(/^https?:\/\//i.test(String(path||'')))return String(path);const b=new URL(String(base||location.origin));const root=b.pathname.replace(/\/+$/,'');let p=String(path||'');if(!p.startsWith('/'))p='/'+p;if(root&&root!=='/'&&p.startsWith(root+'/'))b.pathname=p;else b.pathname=(root+p).replace(/\/{2,}/g,'/');b.search='';b.hash='';return b.toString()}
 function authCandidates(provider){const key=String(provider?.apiKey||'').trim(),list=[];if(!key)return[{}];const configured=String(provider?.authHeader||'').trim();if(configured){const scheme=String(provider?.authScheme||'').trim();list.push({[configured]:scheme?`${scheme} ${key}`:key})}list.push({Authorization:`Bearer ${key}`},{'x-api-key':key},{'api-key':key});const seen=new Set();return list.filter(x=>{const s=JSON.stringify(x);if(seen.has(s))return false;seen.add(s);return true})}
@@ -174,7 +180,24 @@ async function discover(provider){
   const endpoints=['/v1/models','/models','/api/v1/models','/api/models'];let last='';
   for(const path of endpoints){
     const url=joinUrl(provider.baseUrl,path);
-    try{const parsed=await providerJson(provider,url,{method:'GET',headers:{accept:'application/json'}});if(parsed.kind!=='json')continue;const data=parsed.value;const list=Array.isArray(data?.data)?data.data:Array.isArray(data?.models)?data.models:Array.isArray(data)?data:null;if(!list)continue;const detected=Adapters?.detectModelListProtocol?.(data,url)||{};const models=list.map(x=>typeof x==='string'?{id:x,name:x}:{id:String(x?.id||x?.name||''),name:String(x?.name||x?.id||''),modality:String(x?.modality||x?.type||'text').toLowerCase(),enabled:true,adapterKey:'auto'}).filter(x=>x.id);const merged={...provider,protocol:provider.protocol||detected.protocol||'auto',models};return{provider:Adapters?.finalizeProvider?Adapters.finalizeProvider(merged):merged,endpoint:url,models}}catch(e){last=e.message}}
+    try{
+      const parsed=await providerJson(provider,url,{method:'GET',headers:{accept:'application/json'}});if(parsed.kind!=='json')continue;
+      const data=parsed.value,list=Array.isArray(data?.data)?data.data:Array.isArray(data?.models)?data.models:Array.isArray(data)?data:null;if(!list)continue;
+      const detected=Adapters?.detectModelListProtocol?.(data,url)||{},currentProtocol=String(provider.protocol||'auto');
+      const suggestedProtocol=detected.protocol||'';
+      const resolvedProtocol=((!currentProtocol||currentProtocol==='auto'||currentProtocol==='generic-rest')&&suggestedProtocol)?suggestedProtocol:(currentProtocol||'auto');
+      const models=list.map(x=>{
+        const raw=typeof x==='string'?{id:x,name:x}:x||{},id=String(raw.id||raw.name||''),name=String(raw.name||raw.id||'');if(!id)return null;
+        const rawModality=String(raw.modality||raw.type||raw.mode||'').trim();
+        const candidate={id,name,modality:rawModality,adapterKey:'auto',createPath:String(raw.createPath||'')};
+        const modality=Adapters?.normalizeModelModality?Adapters.normalizeModelModality(rawModality,candidate):String(rawModality||'text').toLowerCase();
+        return{id,name,modality,modalitySource:rawModality?'provider':'inferred',enabled:true,adapterKey:'auto',...(raw.owned_by?{ownedBy:String(raw.owned_by)}:{})};
+      }).filter(Boolean);
+      const merged={...provider,protocol:resolvedProtocol,models};
+      const finalized=Adapters?.finalizeProvider?Adapters.finalizeProvider(merged):merged;
+      return{provider:finalized,endpoint:url,models:finalized.models||models,suggestedProtocol};
+    }catch(e){last=e.message}
+  }
   throw new Error(last||'没有发现可用的模型列表接口');
 }
 async function testAuth(provider){const result=await discover(provider);return{ok:true,endpoint:result.endpoint,modelCount:result.models.length,protocol:result.provider.protocol||'auto'}}
@@ -248,12 +271,12 @@ async function handleApi(info,input,init){
   if(path==='/api/auth/login')return json({ok:true,authenticated:true});
   if(path==='/api/providers'&&method==='GET')return json({providers:providers().map(safeProvider)});
   if(path==='/api/providers'&&method==='POST'){
-    const list=providers(),old=list.find(p=>p.id===body.id),merged={...old,...clone(body),id:body.id||old?.id||uid('provider_'),updatedAt:now(),createdAt:old?.createdAt||now()};if(!String(body.apiKey||'').trim()&&old?.apiKey)merged.apiKey=old.apiKey;const final=Adapters?.finalizeProvider?Adapters.finalizeProvider(merged):merged;const i=list.findIndex(p=>p.id===final.id);if(i>=0)list[i]=final;else list.push(final);saveProviders(list);return json({provider:safeProvider(final)});
+    const list=providers(),old=list.find(p=>p.id===body.id),merged={...old,...clone(body),id:body.id||old?.id||uid('provider_'),updatedAt:now(),createdAt:old?.createdAt||now()};if(!String(body.apiKey||'').trim()&&old?.apiKey)merged.apiKey=old.apiKey;const final=normalizeProviderRecord(merged),i=list.findIndex(p=>p.id===final.id);if(i>=0)list[i]=final;else list.push(final);await saveProvidersCommitted(list);return json({provider:safeProvider(final)});
   }
-  if(path.startsWith('/api/providers/')&&method==='DELETE'&&!['test-config','test-auth','diagnose','discover-models'].some(x=>path.endsWith('/'+x))){const id=decodeURIComponent(path.slice('/api/providers/'.length)),list=providers().filter(p=>p.id!==id);saveProviders(list);return json({ok:true});}
+  if(path.startsWith('/api/providers/')&&method==='DELETE'&&!['test-config','test-auth','diagnose','discover-models'].some(x=>path.endsWith('/'+x))){const id=decodeURIComponent(path.slice('/api/providers/'.length)),list=providers().filter(p=>p.id!==id);await saveProvidersCommitted(list);return json({ok:true});}
   if(['/api/providers/test-config','/api/providers/test-auth','/api/providers/diagnose','/api/providers/discover-models'].includes(path)&&method==='POST'){
     const existing=body.id?findProvider(body.id):null,provider={...existing,...clone(body)};if(!provider.apiKey&&existing?.apiKey)provider.apiKey=existing.apiKey;
-    try{const found=await discover(provider);if(path==='/api/providers/discover-models')return json({ok:true,endpoint:found.endpoint,models:found.models,provider:safeProvider(found.provider),modelCount:found.models.length,protocol:found.provider.protocol||'auto'});return json({ok:true,endpoint:found.endpoint,modelCount:found.models.length,protocol:found.provider.protocol||'auto',warning:''});}catch(e){return json({error:String(e.message||e)},400)}
+    try{const found=await discover(provider);if(path==='/api/providers/discover-models')return json({ok:true,endpoint:found.endpoint,models:found.models,provider:safeProvider(found.provider),modelCount:found.models.length,protocol:found.provider.protocol||'auto',suggestedProtocol:found.suggestedProtocol||''});return json({ok:true,endpoint:found.endpoint,modelCount:found.models.length,protocol:found.provider.protocol||'auto',suggestedProtocol:found.suggestedProtocol||'',warning:''});}catch(e){return json({error:String(e.message||e)},400)}
   }
   if(path==='/api/tasks'&&method==='GET'){const limit=Math.max(1,Math.min(300,Number(info.url.searchParams.get('limit')||120)));return json({tasks:tasks().slice(0,limit)});}
   if(path==='/api/tasks'&&method==='POST'){const task={id:uid('task_'),status:'queued',progress:0,providerId:String(body.providerId||''),modelId:String(body.modelId||''),providerSnapshot:clone(body.providerSnapshot||null),modelSnapshot:clone(body.modelSnapshot||null),nodeId:String(body.nodeId||''),nodeType:String(body.nodeType||body.modelSnapshot?.modality||'text'),prompt:String(body.prompt||''),references:clone(body.references||[]),parameters:clone(body.parameters||{}),priority:Number(body.priority??50),attempt:0,maxRetries:Number(body.maxRetries??1),cancelRequested:false,output:null,error:null,createdAt:now(),updatedAt:now()};upsertTask(task);pump();return json({task:clone(task)});}

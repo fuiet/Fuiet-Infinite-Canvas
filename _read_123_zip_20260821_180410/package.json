@@ -1,6 +1,6 @@
 {
   "name": "fuiet-infinite-canvas-preview",
-  "version": "4.7.0",
+  "version": "4.7.1",
   "private": true,
   "description": "Fuiet Infinite Canvas 在线开发预览版：统一 Browser Storage Manager + IndexedDB 持久化/媒体 + 加密 Provider Key + Cloudflare 无状态代理。",
   "scripts": {

@@ -3688,6 +3688,7 @@ async function fetchModelsFromModal(){
       else{route=defaultModelRoute(modality,d.protocol);route.id=found.id;}
       route.name=found.name||route.name||found.id;
       route.modality=modality;
+      route.modalitySource='user';
       route.enabled=true;
       route.capabilities={
         ...defaultCapabilities(modality,found.id,found.name),
