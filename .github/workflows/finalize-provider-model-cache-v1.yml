@@ -1,0 +1,58 @@
+name: Finalize Provider Model Cache V1
+
+on:
+  push:
+    branches:
+      - fix/provider-model-visibility
+    paths:
+      - '.github/workflows/finalize-provider-model-cache-v1.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Bust provider runtime browser caches
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          root=Path('_read_123_zip_20260821_180410')
+          replacements={
+            'provider-adapter-contract.js?v=20260827-autoconfig-2':'provider-adapter-contract.js?v=20260828-provider-model-visibility-1',
+            'browser-runtime.js?v=20260828-browser-runtime-1':'browser-runtime.js?v=20260828-provider-model-visibility-1',
+            'browser-bootstrap.js?v=20260828-storage-manager-1':'browser-bootstrap.js?v=20260828-provider-model-visibility-1',
+          }
+          for name in ['index.html','models.html']:
+            p=root/name
+            s=p.read_text(encoding='utf-8')
+            for old,new in replacements.items():
+              if old not in s:
+                raise SystemExit(f'{name}: missing {old}')
+              s=s.replace(old,new)
+            p.write_text(s,encoding='utf-8')
+          PY
+      - name: Validate final tree
+        working-directory: _read_123_zip_20260821_180410
+        run: |
+          npm run check
+          npm test
+          grep -q 'provider-model-visibility-1' index.html
+          grep -q 'provider-model-visibility-1' models.html
+      - name: Commit final validated tree
+        run: |
+          rm -f .github/workflows/finalize-provider-model-cache-v1.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+fuiet@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "Finalize provider model visibility fix"
+          git pull --rebase origin fix/provider-model-visibility
+          git push origin HEAD:fix/provider-model-visibility
