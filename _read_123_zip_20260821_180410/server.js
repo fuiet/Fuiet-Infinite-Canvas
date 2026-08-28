@@ -8,6 +8,7 @@ const { promisify } = require('util');
 const dns = require('dns').promises;
 const net = require('net');
 const { CanvasStore } = require('./store');
+const { verifyLocalMediaProcessResult } = require('./local-media-result');
 require('./provider-adapter-contract.js');
 require('./provider-runtime-core.js');
 const ProviderAdapterContract = globalThis.CanvasProviderAdapters;
@@ -1383,7 +1384,7 @@ const server = http.createServer(async (req, res) => {
       const name=u.searchParams.get('name')||'upload.bin';const mime=String(req.headers['content-type']||'').split(';')[0];if(!/^(image|video|audio)\//.test(mime)&&mime!=='application/octet-stream')return json(res,415,{error:'只允许图片、视频、音频素材'});
       const file=outFile(safeExt(name,mime));const size=await writeUpload(req,file);if(!size){try{fs.unlinkSync(file)}catch{};return json(res,400,{error:'空文件'})}let meta=null;try{meta=await probeMediaFile(file)}catch{}return json(res,201,{ok:true,url:mediaUrl(file),name:path.basename(file),size,mime,meta});
     }
-    if(pathname==='/api/media/process'&&req.method==='POST'){const body=await readJson(req);try{return json(res,200,{ok:true,...await processLocalMedia(body)})}catch(err){return json(res,400,{ok:false,error:err.message})}}
+    if(pathname==='/api/media/process'&&req.method==='POST'){const body=await readJson(req);try{const processed=await processLocalMedia(body);const verified=verifyLocalMediaProcessResult(processed,MEDIA_DIR);return json(res,200,{ok:true,...verified})}catch(err){return json(res,400,{ok:false,error:err.message})}}
     if(pathname.startsWith('/media/')&&req.method==='GET'){
       const file=path.join(MEDIA_DIR,path.basename(pathname));if(!file.startsWith(MEDIA_DIR)||!fs.existsSync(file))return json(res,404,{error:'media not found'});
       const ext=path.extname(file).toLowerCase(),mime=mimeForExt(ext),size=fs.statSync(file).size,range=String(req.headers.range||'').match(/bytes=(\d*)-(\d*)/);

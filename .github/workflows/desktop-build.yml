@@ -1,0 +1,50 @@
+name: Desktop Windows Build
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows-x64:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: _read_123_zip_20260821_180410
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install desktop build dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Syntax check
+        run: npm run check
+
+      - name: Regression tests
+        run: npm test
+
+      - name: Prepare pinned FFmpeg and ImageMagick runtime
+        shell: powershell
+        run: npm run desktop:prepare:win
+
+      - name: Verify bundled local media runtime
+        run: npm run desktop:verify
+
+      - name: Build NSIS installer
+        run: npx electron-builder --win nsis --x64 --publish never
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fuiet-Infinite-Canvas-Windows-x64
+          path: _read_123_zip_20260821_180410/release/*.exe
+          if-no-files-found: error
+          retention-days: 14
