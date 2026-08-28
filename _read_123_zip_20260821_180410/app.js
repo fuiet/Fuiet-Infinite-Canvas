@@ -1950,7 +1950,7 @@
           ${n.type==='video'?`<button class="micro-icon" data-gen-tool="运镜预设" title="运镜">运镜</button>${caps.supportsSubjects?'<button class="micro-icon" data-gen-tool="主体库" title="主体">主体</button>':''}`:''}
         </div>
         ${noModel?`<button class="inline-setup-model" id="inlineSetupModel">还没有${labelForType(n.type)}模型，点击添加</button>`:''}
-        <div class="gen-progress ${['queued','running','polling','retrying'].includes(n.taskStatus)?'':'hidden'}"><i style="width:${n.taskProgress||0}%"></i></div>
+        <div class="gen-progress ${['queued','running','polling','retrying','provider_succeeded','result_pending'].includes(n.taskStatus)?'':'hidden'}"><i style="width:${n.taskProgress||0}%"></i></div>
       </div>`;
     generator.classList.remove('hidden');
     positionGeneratorBelowNode(n,el,desiredWidth);
@@ -2152,7 +2152,8 @@
       // GETing the server-owned task is cross-runtime: Node keeps its own worker loop,
       // while Cloudflare GET triggers the persisted server queue/poller via kickQueue.
       info=(await apiJson('/api/tasks/'+encodeURIComponent(taskId))).task;
-      n.taskStatus=info.status;n.taskProgress=info.progress||0;n.taskError=taskFailureText(info);saveState();scheduleWorkflowVisualUpdate();
+      const resultSyncing=['provider_succeeded','result_pending'].includes(info.status);
+      n.taskStatus=info.status;n.taskProgress=info.progress||0;n.taskError=resultSyncing?'':taskFailureText(info);n.taskSyncMessage=resultSyncing?'上游已生成，正在同步视频结果…':'';saveState();scheduleWorkflowVisualUpdate();
       if(expandedNodeId===n.id)renderGenerator();
       if(info.status==='succeeded')return info;
       if(['failed','canceled'].includes(info.status))throw new Error(info.status==='canceled'?'任务已取消':taskFailureText(info)||'生成失败');
