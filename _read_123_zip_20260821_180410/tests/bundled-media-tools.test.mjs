@@ -29,10 +29,11 @@ test('electron-builder places generated media tools outside app.asar as executab
   assert.ok(pkg.build.files.includes('!runtime-tools/**'), 'runtime-tools should not also be packed into app.asar');
 });
 
-test('Windows build downloads pinned FFmpeg and official portable ImageMagick and validates packaged copies', () => {
+test('Windows build downloads pinned FFmpeg and ImageMagick release assets and validates packaged copies', () => {
   assert.match(fetcher, /github\.com\/GyanD\/codexffmpeg\/releases\/download\/9\.0\/ffmpeg-9\.0-essentials_build\.zip/);
   assert.match(fetcher, /e6b54767a6065919048f1a098eb27211ca4e12b4348a05d88777a5855d0b6e71/i);
-  assert.match(fetcher, /ImageMagick-7\.1\.2-30-portable-Q16-HDRI-x64\.7z/);
+  assert.match(fetcher, /github\.com\/ImageMagick\/ImageMagick\/releases\/download\/7\.1\.2-30\/ImageMagick-7\.1\.2-30-portable-Q16-HDRI-x64\.7z/);
+  assert.match(fetcher, /d98471f5ec9d87e222c69c8c28c98fe6665dab76cd3ef752c5e4de785be553be/i);
   assert.match(fetcher, /Get-FileHash[\s\S]{0,120}SHA256/);
   assert.match(workflow, /fetch-windows-media-tools\.ps1/);
   assert.match(workflow, /release\\win-unpacked\\resources\\tools/);
