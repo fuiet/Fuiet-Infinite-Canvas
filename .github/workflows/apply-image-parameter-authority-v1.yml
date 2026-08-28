@@ -1,0 +1,40 @@
+name: Apply Image Parameter Authority V1
+
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-image-parameter-authority-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Apply image parameter authority patch
+        run: python .github/scripts/fix_image_parameter_authority_v1.py
+      - name: Validate syntax and regression suite
+        working-directory: _read_123_zip_20260821_180410
+        run: |
+          npm run check
+          npm test
+      - name: Commit validated product changes and remove temporary migration files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/scripts/fix_image_parameter_authority_v1.py .github/workflows/apply-image-parameter-authority-v1.yml
+          git add _read_123_zip_20260821_180410/app.js \
+                  _read_123_zip_20260821_180410/browser-runtime.js \
+                  _read_123_zip_20260821_180410/browser-bootstrap.js \
+                  _read_123_zip_20260821_180410/image-generator-v2.js \
+                  _read_123_zip_20260821_180410/tests/image-parameter-authority.test.mjs
+          git commit -m "Make image generation controls authoritative"
+          git push origin HEAD:main
