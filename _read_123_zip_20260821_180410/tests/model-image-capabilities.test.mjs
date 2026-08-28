@@ -48,6 +48,10 @@ test('browser discovery preserves model capability metadata and request mapper s
   assert.match(runtime,/decorateDiscoveredModel/);assert.match(runtime,/ImageCapabilities\.mapRequest/);assert.match(runtime,/capabilityDiagnostics/);
 });
 
-test('capability resolver loads before browser runtime and all new assets are cache busted',()=>{
-  const a=index.indexOf('model-image-capabilities.js?v=20260828-model-capabilities-1'),b=index.indexOf('browser-runtime.js?v=20260828-model-capabilities-1');assert.ok(a>0&&b>a);
+test('capability resolver and output validator load before browser runtime with one cache contract',()=>{
+  const v='20260828-image-dimension-contract-1';
+  const resolverPos=index.indexOf(`model-image-capabilities.js?v=${v}`);
+  const validatorPos=index.indexOf(`image-output-dimensions.js?v=${v}`);
+  const runtimePos=index.indexOf(`browser-runtime.js?v=${v}`);
+  assert.ok(resolverPos>0&&validatorPos>resolverPos&&runtimePos>validatorPos);
 });
