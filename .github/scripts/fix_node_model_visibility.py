@@ -60,6 +60,19 @@ app = app.replace(
 )
 app_path.write_text(app, encoding='utf-8')
 
+# Existing storage bootstrap regression must reflect the stronger requirement: both
+# the UI settings manager and provider runtime are hydrated before app scripts start.
+storage_test = ROOT / 'tests' / 'browser-storage-manager.test.mjs'
+st = storage_test.read_text(encoding='utf-8')
+st = st.replace(
+    "assert.match(bootstrap,/await manager\\.ready/);",
+    "assert.match(bootstrap,/Promise\\.all\\(\\[manager\\.ready,globalThis\\.CanvasBrowserRuntime\\?\\.ready/);",
+    1
+)
+if "Promise\\.all\\(\\[manager\\.ready" not in st:
+    raise SystemExit('browser storage bootstrap assertion was not updated')
+storage_test.write_text(st, encoding='utf-8')
+
 # Add a regression test that specifically protects the bug visible in the user's
 # screenshot: provider/model exists, but every node picker reports 0 available.
 test = r"""import test from 'node:test';
@@ -104,4 +117,4 @@ test('browser runtime already heals persisted provider records before exposing t
 """
 (ROOT / 'tests' / 'node-model-availability-runtime.test.mjs').write_text(test, encoding='utf-8')
 
-print('patched bootstrap and canvas runtime model availability; added regression tests')
+print('patched bootstrap and canvas runtime model availability; updated regressions')
