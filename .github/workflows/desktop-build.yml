@@ -43,6 +43,26 @@ jobs:
       - name: Build NSIS installer
         run: npx electron-builder --win nsis --x64 --publish never
 
+      - name: Smoke test packaged desktop app
+        shell: powershell
+        run: |
+          $exe = Join-Path (Get-Location) 'release\win-unpacked\Fuiet Infinite Canvas.exe'
+          if (!(Test-Path $exe)) { throw "Packaged executable missing: $exe" }
+          $proc = Start-Process -FilePath $exe -PassThru
+          try {
+            Start-Sleep -Seconds 12
+            $proc.Refresh()
+            if ($proc.HasExited) {
+              throw "Packaged desktop app exited during startup. exit=$($proc.ExitCode)"
+            }
+            Write-Host "Packaged desktop app stayed alive through startup smoke test. pid=$($proc.Id)"
+          }
+          finally {
+            if (!$proc.HasExited) {
+              taskkill /PID $proc.Id /T /F | Out-Host
+            }
+          }
+
       - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
