@@ -174,27 +174,42 @@ async function referenceBlob(url){const value=String(url||'');if(!value)return n
 async function makePortableReferences(refs=[]){const out=[];for(const r of refsForRequest(refs)){let url=r.url;if(url&&(url.startsWith('blob:')||url.startsWith('/__browser_media/'))){try{const blob=await referenceBlob(url);if(blob&&blob.size<=20*1024*1024)url=await blobToDataUrl(blob)}catch{}}out.push({...r,url})}return out}
 function providerHost(provider){try{return new URL(String(provider?.baseUrl||'')).hostname.toLowerCase()}catch{return''}}
 function officialOpenAIImageProvider(provider){const h=providerHost(provider);return h==='api.openai.com'||h.endsWith('.openai.com')}
-function imageRichRequestBody(provider,model,task,strictBody){
-  if(officialOpenAIImageProvider(provider))return strictBody;
-  if(task?.nodeType!=='image')return strictBody;
-  const p=ImageParams?.normalize?.(task.parameters||{})||task.parameters||{};
-  return{
-    ...strictBody,
-    ...(p.size?{size:p.size,image_size:p.size}:{}),
-    ...(p.width?{width:Number(p.width)}:{}),
-    ...(p.height?{height:Number(p.height)}:{}),
-    ...(p.aspectRatio?{aspect_ratio:p.aspectRatio}:{}),
-    ...(p.resolution?{resolution:p.resolution}:{}),
-    ...(p.quality?{quality:p.quality,image_quality:p.quality}:{}),
-    n:Math.max(1,Number(p.count||strictBody?.n||1))
-  };
+function imageProviderProfile(provider={},model={}){
+  const host=providerHost(provider), hint=`${provider?.name||''} ${host} ${model?.id||''} ${model?.name||''}`.toLowerCase();
+  if(officialOpenAIImageProvider(provider))return'openai';
+  if(/siliconflow|silicon-flow/.test(hint))return'siliconflow';
+  if(/seedream|doubao|jimeng|volcengine|volces|ark\.cn-/.test(hint))return'seedream';
+  if(/flux|qwen[-_/ ]?image|stable[-_/ ]?diffusion|sdxl|kolors/.test(hint))return'diffusion';
+  return'openai-compatible';
+}
+function imageProfileBody(profile,provider,model,task,strictBody){
+  const p=ImageParams?.normalize?.(task.parameters||{})||task.parameters||{}, count=Math.max(1,Number(p.count||strictBody?.n||1));
+  const common={model:model.id,prompt:String(task.prompt||'')};
+  if(profile==='openai')return{...common,n:count,...(p.size?{size:p.size}:{}),...(p.quality?{quality:p.quality}:{})};
+  if(profile==='siliconflow')return{...common,image_size:p.size,batch_size:count};
+  if(profile==='seedream')return{...common,size:p.size,sequential_image_generation:'disabled',stream:false,response_format:'url'};
+  if(profile==='diffusion')return{...common,width:Number(p.width),height:Number(p.height),aspect_ratio:p.aspectRatio,image_size:p.size,batch_size:count,...(p.quality?{quality:p.quality}:{})};
+  return{...common,n:count,size:p.size,...(p.quality?{quality:p.quality}:{})};
 }
 function imageRequestBodies(provider,model,task,route,refs){
   const strict=defaultRequestBody(provider,model,task,route,refs);
-  if(route.requestTemplate&&Object.keys(route.requestTemplate).length)return[strict];
-  if(route.adapterKey!=='openai-image'||officialOpenAIImageProvider(provider))return[strict];
-  const rich=imageRichRequestBody(provider,model,task,strict);
-  return[rich,strict];
+  if(route.requestTemplate&&Object.keys(route.requestTemplate).length)return[{profile:'template',body:strict}];
+  if(route.adapterKey!=='openai-image')return[{profile:'generic',body:strict}];
+  const profile=imageProviderProfile(provider,model), primary=imageProfileBody(profile,provider,model,task,strict);
+  const list=[{profile,body:primary}];
+  const p=ImageParams?.normalize?.(task.parameters||{})||task.parameters||{};
+  if(profile==='seedream')list.push({profile:'seedream-width-height',body:{model:model.id,prompt:String(task.prompt||''),width:Number(p.width),height:Number(p.height),response_format:'url'}});
+  if(profile==='openai-compatible')list.push({profile:'width-height',body:{model:model.id,prompt:String(task.prompt||''),width:Number(p.width),height:Number(p.height),n:Math.max(1,Number(p.count||1))}});
+  return list;
+}
+function imageResponseSize(raw){
+  const value=Core?.firstPath?Core.firstPath(raw,['data.0.size','images.0.size','output.0.size','output.size','result.size','size']):undefined;
+  return value==null?'':String(value);
+}
+function imageRequestDiagnostics(profile,body,path){
+  const safe={};
+  for(const key of ['model','size','image_size','width','height','aspect_ratio','resolution','quality','image_quality','n','batch_size'])if(body?.[key]!==undefined)safe[key]=body[key];
+  return{profile,path:String(path||''),parameters:safe,at:now()};
 }
 
 function defaultRequestBody(provider,model,task,route,refs){
@@ -262,7 +277,8 @@ async function executeTask(task){
   for(const createPath of paths){const createUrl=joinUrl(provider.baseUrl,createPath);try{if(route.adapterKey==='standard-video-async-v1'){try{const form=await buildStandardVideoForm(model,task,refs);created=await providerJson(provider,createUrl,{method:route.method||'POST',headers:{},body:form})}catch(error){if(![400,404,405,415,422].includes(Number(error?.status)))throw error;lastCreateError=error;created=await providerJson(provider,createUrl,{method:route.method||'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)})}}else if(normalizeMod(task.nodeType)==='image'&&route.adapterKey==='openai-image'){
           const candidates=imageRequestBodies(provider,model,task,route,refs);let imageError=null;
           for(let bi=0;bi<candidates.length;bi++){
-            try{created=await providerJson(provider,createUrl,{method:route.method||'POST',headers:{'content-type':'application/json'},body:JSON.stringify(candidates[bi])});imageError=null;break}
+            const candidate=candidates[bi];updateTask(task.id,{requestDiagnostics:imageRequestDiagnostics(candidate.profile,candidate.body,createPath)});
+            try{created=await providerJson(provider,createUrl,{method:route.method||'POST',headers:{'content-type':'application/json'},body:JSON.stringify(candidate.body)});imageError=null;break}
             catch(error){imageError=error;if(bi===candidates.length-1||![400,405,415,422].includes(Number(error?.status)))throw error}
           }
           if(!created&&imageError)throw imageError;
@@ -274,7 +290,8 @@ async function executeTask(task){
     let value=extracted!==undefined?extracted:(modality==='text'?(raw?.choices?.[0]?.message?.content??raw?.text??raw?.content??JSON.stringify(raw)):raw?.url??raw?.data?.url);
     value=await normalizeGeneratedOutput(value,modality,provider);
     if(modality==='image'&&!validMediaOutput(value))throw new Error('上游已返回成功响应，但未识别到图片结果字段');
-    return updateTask(task.id,{status:'succeeded',progress:100,output:outputObject(value,modality)});
+    const upstreamSize=modality==='image'?imageResponseSize(raw):'';
+    return updateTask(task.id,{status:'succeeded',progress:100,output:outputObject(value,modality),...(upstreamSize?{upstreamSize}:{})});
   }
   if(created.kind!=='json')throw new Error('异步创建接口没有返回 JSON 任务信息');
   const taskId=Core?.extractTaskId?Core.extractTaskId(created.value,route):created.value?.id;
