@@ -25,11 +25,11 @@ const PORT = Number(process.env.PORT || 8080);
 const MAX_UPLOAD_BYTES = Math.max(10*1024*1024, Number(process.env.CANVAS_MAX_UPLOAD_BYTES || 100*1024*1024));
 const TASK_CONCURRENCY = Math.max(1, Math.min(8, Number(process.env.CANVAS_TASK_CONCURRENCY || 2)));
 let taskQueuePaused=false;
-const ADMIN_PASSWORD = String(process.env.CANVAS_ADMIN_PASSWORD || '');
-const HOST = String(process.env.HOST || process.env.CANVAS_HOST || (ADMIN_PASSWORD ? '0.0.0.0' : '127.0.0.1'));
-const TRUST_PROXY = process.env.CANVAS_TRUST_PROXY === '1';
+const ADMIN_PASSWORD = ''; // standalone: no login
+const HOST = '127.0.0.1'; // standalone: never expose the local API to the LAN by default
+const TRUST_PROXY = false;
 const SESSION_TTL_MS = Math.max(60*60*1000, Number(process.env.CANVAS_SESSION_TTL_MS || 24*60*60*1000));
-const ALLOW_CORS = process.env.CANVAS_ALLOW_CORS === '1';
+const ALLOW_CORS = false;
 const FFMPEG_BIN = process.env.FFMPEG_PATH || 'ffmpeg';
 const MAGICK_BIN = process.env.MAGICK_PATH || 'magick';
 const FFPROBE_BIN = process.env.FFPROBE_PATH || 'ffprobe';
@@ -373,7 +373,7 @@ function normalizeApiKeyValue(value, authScheme='Bearer', authHeader='Authorizat
 }
 const SENSITIVE_HEADER_NAMES = new Set([
   'authorization','proxy-authorization','x-api-key','api-key','apikey','cookie','set-cookie',
-  'x-auth-token','x-access-token','x-secret-key','cf-access-client-secret'
+  'x-auth-token','x-access-token','x-secret-key'
 ]);
 function isSensitiveHeaderName(name){
   const key=String(name||'').trim().toLowerCase();
