@@ -60,10 +60,10 @@ async function persistFinalizedProviders(providers,credentials='same-origin'){
 }
 function upgradeLocalCache(){
   try{
-    const list=JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]');
+    const list=JSON.parse(globalThis.CanvasBrowserStorageManager.getItem(STORAGE_KEY)||'[]');
     if(!Array.isArray(list)||!list.length)return;
     const next=list.map(finalize);
-    if(stable(next)!==stable(list))localStorage.setItem(STORAGE_KEY,JSON.stringify(next));
+    if(stable(next)!==stable(list))globalThis.CanvasBrowserStorageManager.setItem(STORAGE_KEY,JSON.stringify(next));
   }catch{}
 }
 

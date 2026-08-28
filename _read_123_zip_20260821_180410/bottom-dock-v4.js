@@ -32,7 +32,7 @@ function snap(){const d=window.devicePixelRatio||1,w=dock.offsetWidth;dock.style
 
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-const state=()=>{try{return JSON.parse(localStorage.getItem('libtv-clone-state')||'{}')||{}}catch{return {}}};
+const state=()=>{try{return JSON.parse(globalThis.CanvasBrowserStorageManager.getItem('libtv-clone-state')||'{}')||{}}catch{return {}}};
 const label=t=>({text:'文本',image:'图片',video:'视频',audio:'音频',script:'脚本',director:'导演台'})[t]||t||'节点';
 const nodeSvg=t=>({text:'<rect x="5" y="4" width="14" height="16" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>',image:'<rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.4"/><path d="m5 17 5-5 3 3 2-2 4 4"/>',video:'<rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="m10 9 5 3-5 3z"/>',audio:'<path d="M9 18V7l9-2v11"/><circle cx="6.5" cy="18" r="2.4"/><circle cx="15.5" cy="16" r="2.4"/>',script:'<path d="M6 3h9l3 3v15H6z"/><path d="M15 3v4h4M9 11h6M9 15h6"/>',director:'<circle cx="12" cy="12" r="7"/><path d="M12 8v8M8 12h8"/>'})[t]||'<rect x="5" y="5" width="14" height="14" rx="2"/>';
 const bl=$('.bottom-left');if(!bl)return;bl.classList.add('asset-ready');

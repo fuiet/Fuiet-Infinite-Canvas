@@ -8,8 +8,8 @@
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const attr=s=>esc(s).replace(/`/g,'&#96;');
   async function api(path,opt={}){const res=await fetch(path,{headers:{'Content-Type':'application/json',...(opt.headers||{})},...opt});let data={};try{data=await res.json()}catch{}if(!res.ok)throw new Error(data.error||`HTTP ${res.status}`);return data}
-  function loadLocalProviders(){try{const raw=JSON.parse(localStorage.getItem(PROVIDERS_STORAGE_KEY));return Array.isArray(raw)?raw:[]}catch{return[]}}
-  function saveLocalProviders(list){try{localStorage.setItem(PROVIDERS_STORAGE_KEY,JSON.stringify(Array.isArray(list)?list:[]))}catch{}}
+  function loadLocalProviders(){try{const raw=JSON.parse(globalThis.CanvasBrowserStorageManager.getItem(PROVIDERS_STORAGE_KEY));return Array.isArray(raw)?raw:[]}catch{return[]}}
+  function saveLocalProviders(list){try{globalThis.CanvasBrowserStorageManager.setItem(PROVIDERS_STORAGE_KEY,JSON.stringify(Array.isArray(list)?list:[]))}catch{}}
   async function restoreProvidersToServer(list){
     if(!Array.isArray(list)||!list.length)return [];
     for(const p of list){

@@ -30,7 +30,7 @@ btn.innerHTML=icon;
 
 function readSnap(){
   try{
-    const s=JSON.parse(localStorage.getItem('libtv-clone-state')||'{}')||{};
+    const s=JSON.parse(globalThis.CanvasBrowserStorageManager.getItem('libtv-clone-state')||'{}')||{};
     return s.canvasSettings?.snap!==false;
   }catch{return true}
 }

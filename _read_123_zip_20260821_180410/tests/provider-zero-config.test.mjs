@@ -62,16 +62,20 @@ test('explicit custom provider route is preserved by auto finalization',()=>{
   assert.equal(finalized.adapterResolved.ready,true);
 });
 
-test('canvas and models pages load real auto configuration before application model logic',()=>{
+test('canvas and models pages hydrate storage before real auto configuration and application model logic',()=>{
   const index=fs.readFileSync(path.join(ROOT,'index.html'),'utf8');
   const models=fs.readFileSync(path.join(ROOT,'models.html'),'utf8');
+  const bootstrap=fs.readFileSync(path.join(ROOT,'browser-bootstrap.js'),'utf8');
   const contract='./provider-adapter-contract.js';
-  const auto='./provider-auto-config-v1.js';
   assert.ok(index.indexOf(contract)>=0);
-  assert.ok(index.indexOf(auto)>index.indexOf(contract));
-  assert.ok(index.indexOf('./app.js')>index.indexOf(auto));
+  assert.ok(index.indexOf('./browser-runtime.js')>index.indexOf(contract));
+  assert.ok(index.indexOf('./browser-storage-manager.js')>index.indexOf('./browser-runtime.js'));
+  assert.ok(index.indexOf('./browser-bootstrap.js')>index.indexOf('./browser-storage-manager.js'));
   assert.ok(models.indexOf(contract)>=0);
-  assert.ok(models.indexOf(auto)>models.indexOf(contract));
-  assert.ok(models.indexOf('./models.js')>models.indexOf(auto));
-  assert.equal(models.includes('provider-auto-ready-v1.js'),false);
+  assert.ok(models.indexOf('./browser-bootstrap.js')>models.indexOf('./browser-storage-manager.js'));
+  const auto=bootstrap.indexOf('./provider-auto-config-v1.js');
+  assert.ok(auto>=0);
+  assert.ok(bootstrap.indexOf('./app.js')>auto);
+  assert.ok(bootstrap.indexOf('./models.js')>auto);
+  assert.equal(bootstrap.includes('provider-auto-ready-v1.js'),false);
 });

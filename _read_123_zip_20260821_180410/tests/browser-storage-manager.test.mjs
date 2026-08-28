@@ -1,0 +1,16 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const manager=fs.readFileSync(path.join(ROOT,'browser-storage-manager.js'),'utf8');
+const bootstrap=fs.readFileSync(path.join(ROOT,'browser-bootstrap.js'),'utf8');
+const index=fs.readFileSync(path.join(ROOT,'index.html'),'utf8');
+const models=fs.readFileSync(path.join(ROOT,'models.html'),'utf8');
+const appFiles=['app.js','models.js','bottom-dock-v3.js','bottom-dock-v4.js','bottom-left-edge-toggle-v1.js','bottom-left-grid-snap-v1.js','bottom-left-minimap-v1.js','provider-auto-config-v1.js','image-generator-v2.js','dist/models.js'];
+test('Browser Storage Manager is the single UI persistence facade',()=>{assert.match(manager,/DB_NAME='fuiet-infinite-canvas-browser'/);assert.match(manager,/STORE='settings'/);assert.match(manager,/PREFIX='ui:'/);assert.match(manager,/getItem,setItem,removeItem,getJSON,setJSON/);assert.match(manager,/cloudflarePersistence:false/)});
+test('legacy app localStorage is migrated once and removed',()=>{assert.match(manager,/rawLocalStorage=window\.localStorage/);assert.match(manager,/LEGACY_PREFIXES/);assert.match(manager,/rawLocalStorage\.removeItem/);assert.match(manager,/IGNORED_KEYS/);assert.match(manager,/canvas-studio-providers-v1/)});
+test('application and UI layers no longer access Web Storage directly',()=>{for(const name of appFiles){const src=fs.readFileSync(path.join(ROOT,name),'utf8');assert.doesNotMatch(src,/\blocalStorage\b|\bsessionStorage\b/,name)}});
+test('bootstrap waits for storage hydration before app and model scripts',()=>{assert.match(bootstrap,/await manager\.ready/);assert.match(bootstrap,/app\.js/);assert.match(bootstrap,/models\.js/);for(const html of [index,models]){assert.match(html,/browser-storage-manager\.js/);assert.match(html,/browser-bootstrap\.js/);assert.ok(html.indexOf('browser-storage-manager.js')<html.indexOf('browser-bootstrap.js'))}});
+test('high-frequency workspace snapshot writes are batched',()=>{assert.match(manager,/libtv-clone-state/);assert.match(manager,/pending=new Map/);assert.match(manager,/scheduleFlush/);assert.match(manager,/delay=.*120/)});

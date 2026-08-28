@@ -29,8 +29,8 @@ const defaultModel=()=>({id:'',name:'新模型',modality:'text',enabled:true,ada
   const attr=s=>esc(s).replace(/`/g,'&#96;');
   async function api(path,opt={}){const res=await fetch(path,{headers:{'Content-Type':'application/json',...(opt.headers||{})},...opt});let data={};try{data=await res.json()}catch{}if(!res.ok)throw new Error(data.error||`HTTP ${res.status}`);return data}
   function sanitizeProvider(provider){const safe=clone(provider||{});delete safe.apiKey;delete safe.apiKeyEncrypted;return safe}
-  function loadLocalProviders(){try{const raw=JSON.parse(localStorage.getItem(PROVIDERS_STORAGE_KEY));const safe=Array.isArray(raw)?raw.map(sanitizeProvider):[];localStorage.setItem(PROVIDERS_STORAGE_KEY,JSON.stringify(safe));return safe}catch{return[]}}
-  function saveLocalProviders(list){try{localStorage.setItem(PROVIDERS_STORAGE_KEY,JSON.stringify((Array.isArray(list)?list:[]).map(sanitizeProvider)))}catch{}}
+  function loadLocalProviders(){try{const raw=JSON.parse(globalThis.CanvasBrowserStorageManager.getItem(PROVIDERS_STORAGE_KEY));const safe=Array.isArray(raw)?raw.map(sanitizeProvider):[];globalThis.CanvasBrowserStorageManager.setItem(PROVIDERS_STORAGE_KEY,JSON.stringify(safe));return safe}catch{return[]}}
+  function saveLocalProviders(list){try{globalThis.CanvasBrowserStorageManager.setItem(PROVIDERS_STORAGE_KEY,JSON.stringify((Array.isArray(list)?list:[]).map(sanitizeProvider)))}catch{}}
   async function restoreProvidersToServer(list){
     if(!Array.isArray(list)||!list.length)return [];
     for(const p of list){

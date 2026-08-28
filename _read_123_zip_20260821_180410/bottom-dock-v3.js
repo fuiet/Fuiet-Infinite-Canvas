@@ -162,7 +162,7 @@
   let historyBatch=false;
   let bypassHistoryClick=false;
 
-  function readState(){try{return JSON.parse(localStorage.getItem('libtv-clone-state')||'{}')||{}}catch{return {}}}
+  function readState(){try{return JSON.parse(globalThis.CanvasBrowserStorageManager.getItem('libtv-clone-state')||'{}')||{}}catch{return {}}}
   function historyType(item={}){return item.type||({视频:'video',音频:'audio',文本:'text',图片:'image'})[item.kind]||'image'}
   function historyDate(item={}){
     const d=new Date(item.createdAt||item.updatedAt||0);if(Number.isNaN(d.getTime())||d.getTime()<=0)return '未记录日期';

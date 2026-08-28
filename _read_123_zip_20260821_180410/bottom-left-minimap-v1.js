@@ -34,7 +34,7 @@ style.textContent=`
 document.querySelector('#persistentMinimapV1Styles')?.remove();
 document.head.appendChild(style);
 
-const readState=()=>{try{return JSON.parse(localStorage.getItem('libtv-clone-state')||'{}')||{}}catch{return {}}};
+const readState=()=>{try{return JSON.parse(globalThis.CanvasBrowserStorageManager.getItem('libtv-clone-state')||'{}')||{}}catch{return {}}};
 const h=n=>Math.max(40,Number(n?.h)||({text:180,image:240,video:240,audio:170,script:260,director:260}[n?.type]||180));
 let geom=null,frame=0;
 

@@ -31,8 +31,8 @@ document.head.appendChild(style);
 const visibleIcon='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8.5c2.2 0 3.2 1.6 4.8 3.5 1.5 1.8 2.7 3.5 4.9 3.5 1.9 0 3.1-1.1 4.3-3"/><circle cx="5" cy="8.5" r="1.4"/><circle cx="19" cy="12.5" r="1.4"/></svg>';
 const hiddenIcon='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8.5c2.2 0 3.2 1.6 4.8 3.5 1.5 1.8 2.7 3.5 4.9 3.5 1.9 0 3.1-1.1 4.3-3"/><circle cx="5" cy="8.5" r="1.4"/><circle cx="19" cy="12.5" r="1.4"/><path d="M4 4l16 16"/></svg>';
 
-function readHidden(){try{return localStorage.getItem(KEY)==='hidden'}catch{return false}}
-function saveHidden(hidden){try{localStorage.setItem(KEY,hidden?'hidden':'visible')}catch{}}
+function readHidden(){try{return globalThis.CanvasBrowserStorageManager.getItem(KEY)==='hidden'}catch{return false}}
+function saveHidden(hidden){try{globalThis.CanvasBrowserStorageManager.setItem(KEY,hidden?'hidden':'visible')}catch{}}
 function apply(hidden,save=true){
   edgeLayer.classList.toggle('edge-links-hidden',hidden);
   btn.classList.toggle('active',hidden);

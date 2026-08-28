@@ -95,6 +95,7 @@ test('text nodes remain stable across creation, selection, manual mode and doubl
   const css = read('styles/text-node.css');
   const dblclick = read('text-node-doubleclick-v1.js');
   const html = read('index.html');
+  const bootstrap = read('browser-bootstrap.js');
 
   assert.match(app, /textInputMode/);
   assert.match(app, /textEditing/);
@@ -103,7 +104,9 @@ test('text nodes remain stable across creation, selection, manual mode and doubl
   assert.match(app, /n\.w\s*=\s*560/);
   assert.match(app, /n\.h\s*=\s*320/);
   assert.match(css, /\.node\.node-text\.text-node-editing\{\s*min-height:320px/);
-  assert.match(html, /text-node-doubleclick-v1\.js/);
+  assert.match(html, /browser-bootstrap\.js/);
+  assert.match(bootstrap, /text-node-doubleclick-v1\.js/);
+  assert.ok(bootstrap.indexOf('text-node-doubleclick-v1.js')>bootstrap.indexOf('app.js'));
   assert.match(dblclick, /data-text-manual-view/);
   assert.match(dblclick, /target\.dispatchEvent\(new MouseEvent\('dblclick'/);
   assert.match(dblclick, /first click remains owned by app\.js for normal selection/);

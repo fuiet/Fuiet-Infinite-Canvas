@@ -48,9 +48,9 @@ const PRESETS={
 };
 
 function readMap(key){
-  try{const v=JSON.parse(localStorage.getItem(key)||'{}');return v&&typeof v==='object'?v:{}}catch{return{}}
+  try{const v=JSON.parse(globalThis.CanvasBrowserStorageManager.getItem(key)||'{}');return v&&typeof v==='object'?v:{}}catch{return{}}
 }
-function writeMap(key,value){try{localStorage.setItem(key,JSON.stringify(value))}catch{}}
+function writeMap(key,value){try{globalThis.CanvasBrowserStorageManager.setItem(key,JSON.stringify(value))}catch{}}
 function activeImageNode(){
   return nodeLayer.querySelector('.node.node-image.selected[data-id],.node.node-image[data-interaction-state="selected"][data-id]')
     ||nodeLayer.querySelector('.node.node-image.multi-selected[data-id]');

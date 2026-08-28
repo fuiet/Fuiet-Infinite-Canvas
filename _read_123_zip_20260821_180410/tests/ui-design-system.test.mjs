@@ -11,6 +11,7 @@ const read = (path) => readFileSync(join(root, path), 'utf8');
 test('canvas loads the UI 2.3 visual stack after a quarantined legacy scaffold', () => {
   const html = read('index.html');
   const legacyLayer = read('styles/legacy-layer.css');
+  const bootstrap = read('browser-bootstrap.js');
   assert.match(html, /styles\/legacy-layer\.css/);
   assert.doesNotMatch(html, /href="\.\/styles\.css"/);
   assert.match(legacyLayer, /styles\.css/);
@@ -18,7 +19,9 @@ test('canvas loads the UI 2.3 visual stack after a quarantined legacy scaffold',
   assert.match(html, /styles\/tokens\.css/);
   assert.match(html, /styles\/nodes\.css/);
   assert.match(html, /styles\/asset-manager\.css/);
-  assert.match(html, /ui-v23\.js/);
+  assert.match(html, /browser-bootstrap\.js/);
+  assert.match(bootstrap, /ui-v23\.js/);
+  assert.ok(bootstrap.indexOf('ui-v23.js')>bootstrap.indexOf('app.js'));
   assert.doesNotMatch(html, /canvas-ui-v1\.css/);
   assert.doesNotMatch(html, /canvas-ui-v2\.css/);
   assert.doesNotMatch(html, /workspace-canvas-v3\.css/);
@@ -28,7 +31,10 @@ test('canvas loads the UI 2.3 visual stack after a quarantined legacy scaffold',
 test('asset management is the first persistent bottom-left tool', () => {
   const html = read('index.html');
   const dock = read('bottom-dock-v4.js');
-  assert.match(html, /bottom-dock-v4\.js/);
+  const bootstrap = read('browser-bootstrap.js');
+  assert.match(html, /browser-bootstrap\.js/);
+  assert.match(bootstrap, /bottom-dock-v4\.js/);
+  assert.ok(bootstrap.indexOf('bottom-dock-v4.js')>bootstrap.indexOf('ui-v23.js'));
   assert.match(dock, /btn\.id='assetMgrBtn'/);
   assert.match(dock, /btn\.innerHTML=.*资产管理/);
   assert.match(dock, /bl\.prepend\(btn\)/);
