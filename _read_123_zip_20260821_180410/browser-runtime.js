@@ -9,6 +9,7 @@ if(typeof window==='undefined'||typeof window.fetch!=='function')return;
 const rawFetch=window.fetch.bind(window);
 const Adapters=globalThis.CanvasProviderAdapters;
 const Core=globalThis.CanvasProviderRuntimeCore;
+const ImageParams=globalThis.CanvasImageRequestParameters;
 const LEGACY_KEYS={
   providers:'fuiet-browser-providers-v1',
   projects:'fuiet-browser-projects-v1',
@@ -155,7 +156,7 @@ function outputObject(value,modality='text'){
 function refsForRequest(refs=[]){return (Array.isArray(refs)?refs:[]).map(r=>({role:r.role||r.semanticRole||r.kind||'reference',type:r.type||r.kind||'',url:r.url||r.outputUrl||'',text:r.text||'',title:r.title||''})).filter(r=>r.url||r.text)}
 async function makePortableReferences(refs=[]){const out=[];for(const r of refsForRequest(refs)){let url=r.url;if(url&&url.startsWith('blob:')){try{const res=await rawFetch(url),blob=await res.blob();if(blob.size<=15*1024*1024){url=await new Promise((resolve,reject)=>{const fr=new FileReader();fr.onload=()=>resolve(fr.result);fr.onerror=reject;fr.readAsDataURL(blob)})}}catch{}}out.push({...r,url})}return out}
 function defaultRequestBody(provider,model,task,route,refs){
-  const mod=normalizeMod(task.nodeType||model.modality),p=task.parameters||{},prompt=String(task.prompt||''),modelId=model.id;
+  const mod=normalizeMod(task.nodeType||model.modality),rawParams=task.parameters||{},p=mod==='image'?(ImageParams?.normalize?.(rawParams)||rawParams):rawParams,prompt=String(task.prompt||''),modelId=model.id;
   const ctx={model:modelId,prompt,references:refs,parameters:p,task};
   if(route.requestTemplate&&Object.keys(route.requestTemplate).length)return fillTemplate(route.requestTemplate,ctx);
   if(route.adapterKey==='openai-chat'){
@@ -164,7 +165,7 @@ function defaultRequestBody(provider,model,task,route,refs){
     return{model:modelId,messages:[{role:'user',content}],...(p.responseFormat==='json_object'?{response_format:{type:'json_object'}}:{})};
   }
   if(route.adapterKey==='openai-responses')return{model:modelId,input:prompt};
-  if(route.adapterKey==='openai-image')return{model:modelId,prompt,n:Number(p.count||1),...(p.size?{size:p.size}:{}),...(p.aspectRatio?{aspect_ratio:p.aspectRatio}:{})};
+  if(route.adapterKey==='openai-image')return{model:modelId,prompt,n:Number(p.count||1),...(p.size?{size:p.size}:{}),...(p.quality?{quality:p.quality}:{}),...(p.aspectRatio?{aspect_ratio:p.aspectRatio}:{})};
   if(route.adapterKey==='openai-audio-speech')return{model:modelId,input:prompt,voice:p.voice||'alloy',...(p.format?{format:p.format}:{})};
   if(route.adapterKey==='comfyui-workflow')return{prompt:p.workflow||p.promptGraph||{},client_id:uid('browser_')};
   if(mod==='video'){
