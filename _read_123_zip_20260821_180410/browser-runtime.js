@@ -160,6 +160,31 @@ function refsForRequest(refs=[]){return (Array.isArray(refs)?refs:[]).map(r=>({r
 async function blobToDataUrl(blob){return new Promise((resolve,reject)=>{const fr=new FileReader();fr.onload=()=>resolve(fr.result);fr.onerror=reject;fr.readAsDataURL(blob)})}
 async function referenceBlob(url){const value=String(url||'');if(!value)return null;try{if(value.startsWith('data:')){const res=await rawFetch(value);return await res.blob()}if(value.startsWith('blob:')||value.startsWith('/__browser_media/')){const res=await rawFetch(value);if(res.ok)return await res.blob()}if(/^https?:\/\//i.test(value)){try{const res=await rawFetch(value,{mode:'cors'});if(res.ok)return await res.blob()}catch{}const proxied=await proxyFetch(value,{method:'GET'});if(proxied.ok)return await proxied.blob()}}catch{}return null}
 async function makePortableReferences(refs=[]){const out=[];for(const r of refsForRequest(refs)){let url=r.url;if(url&&(url.startsWith('blob:')||url.startsWith('/__browser_media/'))){try{const blob=await referenceBlob(url);if(blob&&blob.size<=20*1024*1024)url=await blobToDataUrl(blob)}catch{}}out.push({...r,url})}return out}
+function providerHost(provider){try{return new URL(String(provider?.baseUrl||'')).hostname.toLowerCase()}catch{return''}}
+function officialOpenAIImageProvider(provider){const h=providerHost(provider);return h==='api.openai.com'||h.endsWith('.openai.com')}
+function imageRichRequestBody(provider,model,task,strictBody){
+  if(officialOpenAIImageProvider(provider))return strictBody;
+  if(task?.nodeType!=='image')return strictBody;
+  const p=ImageParams?.normalize?.(task.parameters||{})||task.parameters||{};
+  return{
+    ...strictBody,
+    ...(p.size?{size:p.size,image_size:p.size}:{}),
+    ...(p.width?{width:Number(p.width)}:{}),
+    ...(p.height?{height:Number(p.height)}:{}),
+    ...(p.aspectRatio?{aspect_ratio:p.aspectRatio}:{}),
+    ...(p.resolution?{resolution:p.resolution}:{}),
+    ...(p.quality?{quality:p.quality,image_quality:p.quality}:{}),
+    n:Math.max(1,Number(p.count||strictBody?.n||1))
+  };
+}
+function imageRequestBodies(provider,model,task,route,refs){
+  const strict=defaultRequestBody(provider,model,task,route,refs);
+  if(route.requestTemplate&&Object.keys(route.requestTemplate).length)return[strict];
+  if(route.adapterKey!=='openai-image'||officialOpenAIImageProvider(provider))return[strict];
+  const rich=imageRichRequestBody(provider,model,task,strict);
+  return[rich,strict];
+}
+
 function defaultRequestBody(provider,model,task,route,refs){
   const mod=normalizeMod(task.nodeType||model.modality),rawParams=task.parameters||{},p=mod==='image'?(ImageParams?.normalize?.(rawParams)||rawParams):mod==='video'?(VideoParams?.normalize?.(rawParams)||rawParams):rawParams,prompt=String(task.prompt||''),modelId=model.id;
   const ctx={model:modelId,prompt,references:refs,parameters:p,task};
@@ -222,7 +247,14 @@ async function executeTask(task){
   const refs=await makePortableReferences(task.references||[]),body=defaultRequestBody(provider,model,task,route,refs);
   updateTask(task.id,{status:'running',progress:2,error:null});
   let created=null,usedCreatePath=route.createPath,lastCreateError=null;const paths=normalizeMod(task.nodeType)==='video'?alternateVideoCreatePaths(route,model):[route.createPath];
-  for(const createPath of paths){const createUrl=joinUrl(provider.baseUrl,createPath);try{if(route.adapterKey==='standard-video-async-v1'){try{const form=await buildStandardVideoForm(model,task,refs);created=await providerJson(provider,createUrl,{method:route.method||'POST',headers:{},body:form})}catch(error){if(![400,404,405,415,422].includes(Number(error?.status)))throw error;lastCreateError=error;created=await providerJson(provider,createUrl,{method:route.method||'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)})}}else created=await providerJson(provider,createUrl,{method:route.method||'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});usedCreatePath=createPath;break}catch(error){lastCreateError=error;if(!autoVideoRoute(model,route)||![404,405].includes(Number(error?.status)))throw error}}
+  for(const createPath of paths){const createUrl=joinUrl(provider.baseUrl,createPath);try{if(route.adapterKey==='standard-video-async-v1'){try{const form=await buildStandardVideoForm(model,task,refs);created=await providerJson(provider,createUrl,{method:route.method||'POST',headers:{},body:form})}catch(error){if(![400,404,405,415,422].includes(Number(error?.status)))throw error;lastCreateError=error;created=await providerJson(provider,createUrl,{method:route.method||'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)})}}else if(normalizeMod(task.nodeType)==='image'&&route.adapterKey==='openai-image'){
+          const candidates=imageRequestBodies(provider,model,task,route,refs);let imageError=null;
+          for(let bi=0;bi<candidates.length;bi++){
+            try{created=await providerJson(provider,createUrl,{method:route.method||'POST',headers:{'content-type':'application/json'},body:JSON.stringify(candidates[bi])});imageError=null;break}
+            catch(error){imageError=error;if(bi===candidates.length-1||![400,405,415,422].includes(Number(error?.status)))throw error}
+          }
+          if(!created&&imageError)throw imageError;
+        }else created=await providerJson(provider,createUrl,{method:route.method||'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});usedCreatePath=createPath;break}catch(error){lastCreateError=error;if(!autoVideoRoute(model,route)||![404,405].includes(Number(error?.status)))throw error}}
   if(!created)throw lastCreateError||new Error('视频创建接口不可用');
   if(route.responseMode!=='async'){
     if(created.kind==='blob')return updateTask(task.id,{status:'succeeded',progress:100,output:outputObject(created.value,task.nodeType)});

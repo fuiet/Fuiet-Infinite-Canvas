@@ -74,7 +74,9 @@ function qualityForNode(){
 }
 function setQuality(value){
   const id=activeNodeId();if(!id)return;
-  const map=readMap(QUALITY_KEY);map[id]=value;writeMap(QUALITY_KEY,map);syncSummary();
+  const map=readMap(QUALITY_KEY);map[id]=value;writeMap(QUALITY_KEY,map);
+  window.dispatchEvent(new CustomEvent('canvas:image-quality-change',{detail:{nodeId:id,value}}));
+  syncSummary();
 }
 function presetState(){const id=activeNodeId();const map=readMap(PRESET_KEY);return{id,map,state:map[id]||{}}}
 function setPreset(cat,item){

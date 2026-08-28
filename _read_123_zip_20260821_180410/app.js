@@ -2048,6 +2048,34 @@
     try{const raw=globalThis.CanvasBrowserStorageManager?.getItem('canvas-studio-image-quality-v2')||'{}',map=JSON.parse(raw);return String(map?.[n.id]||'标准画质')}catch{return '标准画质'}
   }
 
+  function imageGenerationParameters(n,caps={}){
+    const tool={...(n?.toolParams||{})};
+    // These keys are controlled by the visible image generator. Historical Image
+    // Studio/version data may contain old values; retaining them here causes the
+    // provider request to stay 1:1 even after the user changes the UI.
+    for(const key of ['imageQuality','quality','qualityLabel','aspectRatio','aspect_ratio','resolution','size','width','height','image_size','count','n'])delete tool[key];
+    const selectedQuality=imageQualityForNode(n)||'标准画质';
+    const raw={
+      ...tool,
+      capabilities:caps,
+      creativeContext:buildCreativeContextPacket(n),
+      imageQuality:selectedQuality,
+      qualityLabel:selectedQuality,
+      aspectRatio:n.aspectRatio||caps.aspectRatios?.[0]||'1:1',
+      resolution:n.resolution||caps.resolutions?.[0]||'1K',
+      count:Math.max(1,Number(n.count||1))
+    };
+    return globalThis.CanvasImageRequestParameters?.normalize?.(raw)||raw;
+  }
+
+  window.addEventListener('canvas:image-quality-change',event=>{
+    const id=String(event?.detail?.nodeId||''),value=String(event?.detail?.value||'').trim();
+    const node=state.nodes.find(x=>String(x.id)===id);
+    if(!node||node.type!=='image'||!value)return;
+    node.imageQuality=value;
+    saveState();
+  });
+
   function semanticWarningHtml(n){
     const v=validateSemanticInputs(n),items=[...v.errors,...v.warnings];if(!items.length)return '';
     return `<div class="semantic-warning-bar ${v.errors.length?'error':''}"><b>${v.errors.length?'输入冲突':'输入提示'}</b><ul>${items.map(x=>`<li>${escapeHtml(x)}</li>`).join('')}</ul></div>`;
@@ -2109,7 +2137,7 @@
       const attempt=chain[ai],check=validateSemanticInputs(n,{provider:attempt.provider,model:attempt.model}),caps=check.caps,refs=check.refs;if(check.errors.length){lastError=new Error(check.errors.join('；'));if(ai===0&&!chain.slice(1).length)break;continue}if(ai>0){n.taskStatus='fallback';n.fallbackAttempt=ai;n.taskError=`主模型失败，正在切换备用模型：${attempt.modelName}`;saveState();render();workflowLog(latestWorkflowRunForNode(n.id)||{logs:[]},`切换备用模型：${attempt.modelName}`,'warn')}
       try{
         let info=null;const canAdopt=n.taskId&&n.taskProviderId===attempt.providerId&&n.taskModelId===attempt.modelId&&['queued','running','polling','retrying'].includes(n.taskStatus);if(canAdopt){try{const existing=(await apiJson('/api/tasks/'+encodeURIComponent(n.taskId))).task;if(existing&&!['failed','canceled','succeeded'].includes(existing.status))info=await monitorNodeTask(n,n.taskId,attempt)}catch{}}
-        if(!info){const created=await apiJson('/api/tasks',{method:'POST',body:JSON.stringify({providerId:attempt.providerId,modelId:attempt.modelId,providerSnapshot:snapshotProviderForTask(attempt.provider),modelSnapshot:attempt.model,nodeType:n.type,prompt:n.prompt||'',references:refs,maxRetries:state.workflowSettings?.maxRetries??1,priority:nodePriority(n),parameters:{imageQuality:imageQualityForNode(n),aspectRatio:n.aspectRatio||caps.aspectRatios?.[0]||'16:9',count:n.count||1,duration:n.duration||caps.durations?.[0]||5,resolution:n.resolution||caps.resolutions?.[0]||'720p',capabilities:caps,creativeContext:buildCreativeContextPacket(n),...(n.toolParams||{})}})});n.taskId=created.task.id;n.taskProviderId=attempt.providerId;n.taskModelId=attempt.modelId;n.taskStatus=created.task.status;n.taskProgress=created.task.progress||0;saveState();render();if(created.task.status==='succeeded')info=created.task;else if(['failed','canceled'].includes(created.task.status))throw new Error(created.task.error||'生成失败');else info=await monitorNodeTask(n,n.taskId,attempt,created.task)}
+        if(!info){const created=await apiJson('/api/tasks',{method:'POST',body:JSON.stringify({providerId:attempt.providerId,modelId:attempt.modelId,providerSnapshot:snapshotProviderForTask(attempt.provider),modelSnapshot:attempt.model,nodeType:n.type,prompt:n.prompt||'',references:refs,maxRetries:state.workflowSettings?.maxRetries??1,priority:nodePriority(n),parameters:n.type==='image'?imageGenerationParameters(n,caps):{aspectRatio:n.aspectRatio||caps.aspectRatios?.[0]||'16:9',count:n.count||1,duration:n.duration||caps.durations?.[0]||5,resolution:n.resolution||caps.resolutions?.[0]||'720p',capabilities:caps,creativeContext:buildCreativeContextPacket(n),...(n.toolParams||{})}})});n.taskId=created.task.id;n.taskProviderId=attempt.providerId;n.taskModelId=attempt.modelId;n.taskStatus=created.task.status;n.taskProgress=created.task.progress||0;saveState();render();if(created.task.status==='succeeded')info=created.task;else if(['failed','canceled'].includes(created.task.status))throw new Error(created.task.error||'生成失败');else info=await monitorNodeTask(n,n.taskId,attempt,created.task)}
         const out=info.output||{};const resolvedUrl=resolveGeneratedOutputUrl(out.value??out);if(resolvedUrl)n.outputUrl=resolvedUrl;
         if(out.type==='url'&&!n.outputUrl)n.outputUrl=String(out.value||'').trim();
         else if(out.type==='text'){if(n.type==='text')n.text=out.value;else n.generatedText=out.value}
