@@ -47,13 +47,17 @@ function extractTaskId(response,config={}){
   }
   const common=firstPath(response,[
     'id','task_id','taskId','request_id','requestId','job_id','jobId',
-    'data.id','data.task_id','data.taskId','data.request_id','data.job_id',
-    'task.id','job.id','result.id','video.id','data.video.id','data.task.id','result.task_id','result.taskId'
+    'data.id','data.task_id','data.taskId','data.request_id','data.job_id','data.jobId',
+    'task.id','job.id','result.id','result.task.id','result.job.id','video.id','data.video.id','data.task.id','data.job.id','result.task_id','result.taskId'
   ]);
+  if(common===undefined||common===null||common===''){
+    const scalar=typeof response?.data==='string'||typeof response?.data==='number'?response.data:(typeof response?.result==='string'||typeof response?.result==='number'?response.result:undefined);
+    if(scalar!==undefined&&scalar!==null&&String(scalar).trim())return String(scalar);
+  }
   return common!==undefined&&common!==null&&common!==''?String(common):findStringByPrefix(response,'video_task_');
 }
 function extractStatus(response,config={}){
-  return firstPath(response,[config.statusPath,'status','data.status','state','data.state','task.status','data.task.status','job.status','result.status','video.status','data.video.status']);
+  return firstPath(response,[config.statusPath,'status','data.status','state','data.state','task.status','task.state','data.task.status','data.task.state','job.status','job.state','data.job.status','data.job.state','result.status','result.state','video.status','video.state','data.video.status','data.video.state']);
 }
 function extractProgress(response,config={}){
   return firstPath(response,[config.progressPath,'progress','data.progress','percent','data.percent','task.progress','job.progress','result.progress']);
@@ -65,7 +69,7 @@ function outputPaths(modality='video'){
   return [
     'output.url','output.video_url','output.videoUrl','data.output.url','data.output.video_url','data.output.videoUrl',
     'data.video_url','data.videoUrl','video_url','videoUrl','video.url','data.video.url','result.url','result.video.url','result.video_url','result.videoUrl','content_url','download_url','data.content_url','data.download_url',
-    'data.result.url','data.result.video_url','url','data.url','output.0.url','data.output.0.url','videos.0.url'
+    'data.result.url','data.result.video_url','data.result.videos.0.url','result.videos.0.url','task.output.url','task.result.url','data.task.output.url','data.task.result.url','data.task_result.url','data.task_result.video_url','data.task_result.videos.0.url','output.video.url','data.outputs.0.url','artifacts.0.url','url','data.url','output.0.url','data.output.0.url','videos.0.url'
   ];
 }
 function normalizeImageCandidate(value){
