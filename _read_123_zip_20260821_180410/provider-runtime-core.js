@@ -1,5 +1,5 @@
 /* Shared provider runtime core.
- * Pure protocol/state helpers used by both the Node and Cloudflare runtimes.
+ * Pure protocol/state helpers used by both the local Node runtime and preview runtime.
  * No filesystem, socket, fetch, database, or platform-specific APIs belong here.
  */
 (()=>{
@@ -60,16 +60,31 @@ function extractStatus(response,config={}){
   return firstPath(response,[config.statusPath,'status','data.status','state','data.state','task.status','task.state','data.task.status','data.task.state','job.status','job.state','data.job.status','data.job.state','result.status','result.state','video.status','video.state','data.video.status','data.video.state']);
 }
 function extractProgress(response,config={}){
-  return firstPath(response,[config.progressPath,'progress','data.progress','percent','data.percent','task.progress','job.progress','result.progress']);
+  return firstPath(response,[config.progressPath,'progress','data.progress','percent','data.percent','task.progress','task.percent','data.task.progress','data.task.percent','job.progress','result.progress']);
 }
 function outputPaths(modality='video'){
   if(modality==='image')return ['data.0.url','data.0.image_url','data.0.imageUrl','images.0.url','images.0.image_url','images.0.imageUrl','output.0.url','output.url','result.images.0.url','result.image.url','result.url','data.url','url'];
   if(modality==='audio')return ['audio.0.url','output.url','result.url','data.audio_url','audio_url','data.url','url'];
   if(modality==='text'||modality==='script')return ['choices.0.message.content','output_text','output.0.content.0.text','result.text','data.text','text','content'];
   return [
-    'output.url','output.video_url','output.videoUrl','data.output.url','data.output.video_url','data.output.videoUrl',
-    'data.video_url','data.videoUrl','video_url','videoUrl','video.url','data.video.url','result.url','result.video.url','result.video_url','result.videoUrl','content_url','download_url','data.content_url','data.download_url',
-    'data.result.url','data.result.video_url','data.result.videos.0.url','result.videos.0.url','task.output.url','task.result.url','data.task.output.url','data.task.result.url','data.task_result.url','data.task_result.video_url','data.task_result.videos.0.url','output.video.url','data.outputs.0.url','artifacts.0.url','url','data.url','output.0.url','data.output.0.url','videos.0.url'
+    // Provider task objects. DataEyes/Hailuo and several gateways expose the final
+    // file below task.content rather than output/result.
+    'task.content.url','task.content.video_url','task.content.videoUrl','task.content.download_url','task.content.content_url','task.content.0.url','task.content.0.video_url',
+    'data.task.content.url','data.task.content.video_url','data.task.content.videoUrl','data.task.content.download_url','data.task.content.0.url','data.task.content.0.video_url',
+    'content.url','content.video_url','content.videoUrl','content.download_url','content.0.url','content.0.video_url',
+    // Conventional output/result shapes.
+    'output.url','output.video_url','output.videoUrl','output.video.url','output.0.url','output.0.video_url',
+    'data.output.url','data.output.video_url','data.output.videoUrl','data.output.video.url','data.output.0.url','data.output.0.video_url',
+    'data.video_url','data.videoUrl','video_url','videoUrl','video.url','data.video.url',
+    'result.url','result.video.url','result.video_url','result.videoUrl','result.content.url','result.output.url',
+    'data.result.url','data.result.video_url','data.result.videoUrl','data.result.content.url','data.result.output.url',
+    'data.result.videos.0.url','result.videos.0.url','videos.0.url','data.videos.0.url',
+    'content_url','download_url','file_url','fileUrl','data.content_url','data.download_url','data.file_url','data.fileUrl',
+    'file.url','data.file.url','files.0.url','data.files.0.url',
+    'task.output.url','task.output.video_url','task.output.videoUrl','task.result.url','task.result.video_url','task.result.videoUrl',
+    'data.task.output.url','data.task.output.video_url','data.task.result.url','data.task.result.video_url',
+    'task_result.url','task_result.video_url','data.task_result.url','data.task_result.video_url','data.task_result.videos.0.url',
+    'data.outputs.0.url','artifacts.0.url','data.artifacts.0.url','url','data.url'
   ];
 }
 function normalizeImageCandidate(value){
@@ -82,8 +97,6 @@ function normalizeImageCandidate(value){
   if(!text)return undefined;
   if(/^(https?:\/\/|data:image\/|blob:|\/\/)/i.test(text))return text;
   if(text.startsWith('/'))return text;
-  // Values reaching this helper from explicit base64/image fields are image bytes,
-  // not arbitrary response text. Keep them browser-renderable as a data URL.
   if(text.length>=16)return `data:image/png;base64,${text.replace(/\s+/g,'')}`;
   return undefined;
 }
@@ -141,6 +154,8 @@ function classifyAsyncPoll(response,config={},modality='video'){
     rawStatus,
     progress:Number.isFinite(progress)?progress:null,
     output,
+    providerSucceeded:Boolean(status&&success.has(status)),
+    resultPending:Boolean(status&&success.has(status)&&(output===undefined||output===null||output==='')),
     detail:state==='failure'?failureDetail(response):undefined
   };
 }
