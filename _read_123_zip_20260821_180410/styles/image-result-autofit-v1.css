@@ -1,0 +1,78 @@
+/* Image result auto-fit v1
+ * Every generated/uploaded image result expands to its intrinsic aspect ratio.
+ * Result media owns the node silhouette; stale node h must never create clipping or black footer space.
+ */
+.node.node-image[data-content-state="result"],
+.node.node-image.ui-v23-media-result[data-content-state="result"]{
+  height:auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  padding:0!important;
+  background:transparent!important;
+  overflow:visible!important;
+}
+.node.node-image[data-content-state="result"]>.node-body,
+.node.node-image.ui-v23-media-result[data-content-state="result"]>.node-body{
+  height:auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  padding:0!important;
+  margin:0!important;
+  background:transparent!important;
+  overflow:visible!important;
+}
+.node.node-image[data-content-state="result"] .image-node-shell.has-output,
+.node.node-image.ui-v23-media-result[data-content-state="result"] .image-node-shell.has-output{
+  display:block!important;
+  width:100%!important;
+  height:auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  padding:0!important;
+  margin:0!important;
+  border:0!important;
+  background:transparent!important;
+  overflow:visible!important;
+  line-height:0!important;
+}
+.node.node-image[data-content-state="result"] .media-clip.image-node-stage,
+.node.node-image[data-content-state="result"] .node-content-img.image-node-stage,
+.node.node-image.ui-v23-media-result[data-content-state="result"] .media-clip.image-node-stage{
+  display:block!important;
+  width:100%!important;
+  height:auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  aspect-ratio:auto!important;
+  padding:0!important;
+  margin:0!important;
+  border:0!important;
+  background:transparent!important;
+  overflow:hidden!important;
+  line-height:0!important;
+  border-radius:8px!important;
+}
+.node.node-image[data-content-state="result"] img.node-media-img,
+.node.node-image.ui-v23-media-result[data-content-state="result"] img.node-media-img{
+  display:block!important;
+  width:100%!important;
+  height:auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  max-width:100%!important;
+  margin:0!important;
+  padding:0!important;
+  border:0!important;
+  object-fit:contain!important;
+  vertical-align:top!important;
+  border-radius:8px!important;
+}
+/* No hidden result footer / spacer may reserve black space below the image. */
+.node.node-image[data-content-state="result"]>.node-footer,
+.node.node-image[data-content-state="result"] .image-node-shell.has-output+.node-footer{
+  display:none!important;
+  height:0!important;
+  min-height:0!important;
+  margin:0!important;
+  padding:0!important;
+}
