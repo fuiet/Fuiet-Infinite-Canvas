@@ -1,43 +1,65 @@
-# Fuiet Infinite Canvas · Windows 单机桌面版 v4.2
+# Fuiet Infinite Canvas · Local-first
 
-这是纯本机版本，不再使用 Cloudflare Pages / Workers，也不依赖 Supabase。
+当前开发阶段可以部署到 Cloudflare 做在线预览，但 **Cloudflare 不是产品运行依赖**。正式产品目标是 Windows 桌面单机版：核心任务、供应商、项目、媒体、API Key、队列和恢复机制全部在本机运行。
 
-## Windows 安装版
+当前应用版本：`4.7.1`。
 
-当前正式桌面安装包目标：
+## 两种运行形态
+
+### 1. Cloudflare 在线预览
+
+Cloudflare Pages / Pages Functions 只负责：
+
+- 托管网页预览；
+- 提供无状态同源代理，解决浏览器直接调用部分上游 API 时的 CORS 问题。
+
+Cloudflare **不保存** Provider、API Key、Project、Task、Queue 或 Media，也不是任务轮询和结果持久化的权威来源。浏览器预览数据保存在浏览器本地 IndexedDB。
+
+### 2. Windows 桌面正式版
+
+桌面版运行结构：
+
+- 界面：Electron 桌面窗口；
+- 本地服务：Electron 内置 Node 运行 `server.js`；
+- 本地 API：每次启动自动选择一个空闲的 `127.0.0.1` 端口；
+- 数据库：SQLite；
+- 媒体：本地文件系统；
+- 任务队列和轮询：本地持久化；
+- API Key：本机 AES-256-GCM 加密；
+- 登录 / 多租户 RLS：桌面单机模式不需要；
+- Cloudflare：不参与桌面版核心运行路径。
+
+## Windows 安装包
+
+目标安装包：
 
 ```text
-Fuiet-Infinite-Canvas-Setup-4.2.0-x64.exe
+Fuiet-Infinite-Canvas-Setup-4.7.1-x64.exe
 ```
 
-安装后从桌面快捷方式直接启动，不需要命令行，也不需要用户另外安装：
+安装后从桌面快捷方式直接启动，用户不需要另外安装 Node.js、FFmpeg、FFprobe 或 ImageMagick。
 
-- Node.js
-- FFmpeg
-- FFprobe
-- ImageMagick
+Electron 自带 Node/Chromium。FFmpeg、FFprobe、ImageMagick 作为独立本地运行时放在安装目录：
 
-Electron 自带 Node/Chromium；FFmpeg、FFprobe、ImageMagick 会作为独立可执行运行时放在安装目录的 `resources/tools/` 中，而不是依赖 Windows PATH。
+```text
+resources\tools\
+```
 
-桌面程序每次启动时会先验证内置的三个媒体工具能够实际执行，然后才启动本地服务。如果安装内容损坏，会明确提示缺少或无法运行的工具，而不会偷偷改用系统里其他版本。
+安装版启动时会验证三个媒体工具确实存在且可以执行。如果安装内容损坏，应用直接报错，不会返回虚假的媒体处理成功。
 
-内置版本：
+当前固定媒体工具：
 
-- FFmpeg / FFprobe：9.0，Gyan Windows x64 static release essentials build
-- ImageMagick：7.1.2-30 portable Q16 HDRI x64 static
+- FFmpeg / FFprobe：9.0，Gyan Windows x64 static release essentials build；
+- ImageMagick：7.1.2-30 portable Q16 HDRI x64 static。
 
-构建时会保存 `resources/tools/tool-manifest.json` 和 `THIRD_PARTY_NOTICES.txt`，并保留第三方发行包中的相关许可证/配置文件。
+下载脚本对发行包执行 SHA-256 校验，并生成：
 
-## 运行架构
+```text
+runtime-tools\tool-manifest.json
+runtime-tools\THIRD_PARTY_NOTICES.txt
+```
 
-- 界面：Electron 桌面窗口
-- 服务：内置 Node 运行 `server.js`
-- 本地 API：每次启动自动选择一个空闲的 `127.0.0.1` 端口
-- 供应商：只需要 API Base URL + API Key
-- API Key：首次启动自动生成 `secret.key`，使用 AES-256-GCM 加密后保存
-- 登录：无
-- owner / RLS：无
-- 云端环境变量：无
+Electron Builder 通过 `extraResources` 把整个 `runtime-tools` 放到安装包的 `resources/tools`，而不是塞进 `app.asar`。
 
 ## 桌面数据目录
 
@@ -45,41 +67,87 @@ Electron 自带 Node/Chromium；FFmpeg、FFprobe、ImageMagick 会作为独立�
 %APPDATA%\Fuiet Infinite Canvas\data
 ```
 
-其中包含：
+主要内容：
 
 ```text
 secret.key
 providers.json
 canvas.sqlite
+backups\
 media\
 ```
 
-卸载程序默认不会删除这些创作数据。尤其不要单独丢失 `secret.key`，否则原有供应商 API Key 密文无法解密。
+卸载程序默认不会删除这些创作数据。不要单独删除 `secret.key`，否则已有供应商 API Key 密文无法解密。
+
+## 升级与数据库迁移
+
+桌面升级采用“安装新版本覆盖旧版本 + 保留 userData”的本地方案，不依赖在线升级服务器。
+
+每次启动时：
+
+1. 读取 `schema_migrations` 和 SQLite `user_version`；
+2. 如果发现待执行迁移，先通过 SQLite `VACUUM INTO` 在 `data/backups/` 创建一致性备份；
+3. 按版本顺序在事务中执行数据库迁移；
+4. 迁移失败立即回滚并阻止错误版本继续运行；
+5. 只保留最近若干份迁移前备份；
+6. 任务表中的上游 task id 和 provider/result 状态继续保留，因此升级或重启不会重新提交已经创建的上游视频任务。
+
+这套升级机制只依赖安装程序和本机数据目录，不依赖 Cloudflare、R2、D1、Supabase 或远程控制面。
 
 ## 安全边界
 
-本地服务默认只监听 `127.0.0.1`，不会默认暴露到局域网或公网。Electron 渲染层不开启 Node 权限，外部网页导航会交给系统浏览器处理。
+本地服务默认只监听 `127.0.0.1`。供应商请求由本地 gateway 做 URL、DNS、私网地址和重定向检查；认证 Header 不允许跟随跨域重定向泄露。前端不能把任意轮询 URL 直接交给本地后端执行。
+
+Electron 渲染层配置：
+
+- `nodeIntegration: false`
+- `contextIsolation: true`
+- `sandbox: true`
+- `webSecurity: true`
+
+外部网页使用系统浏览器打开，不在应用 WebView 中获得本地权限。
 
 ## 开发模式
 
-源码开发仍可使用：
+本地 Node 预览：
+
+```bash
+npm run start:local
+```
+
+Electron 开发模式：
 
 ```bash
 npm install
 npm run desktop
 ```
 
-开发机如果没有生成 `runtime-tools/`，桌面开发模式可以继续使用系统 PATH 中的媒体工具；正式安装版不会这样做，安装版强制使用内置运行时。
+开发机没有 `runtime-tools/` 时，可以使用系统 PATH 里的媒体工具；正式安装版强制使用安装包内置运行时。
 
 ## 构建 Windows 安装包
 
-Windows Runner / Windows 开发机：
+Windows 开发机：
 
 ```powershell
 npm install
-powershell -ExecutionPolicy Bypass -File scripts/fetch-windows-media-tools.ps1
-npm test
 npm run dist:win
 ```
 
-构建流程会在打包前和打包后分别执行 `ffmpeg -version`、`ffprobe -version`、`magick -version`，并检查它们确实存在于 `release\win-unpacked\resources\tools\`。
+`dist:win` 会依次：
+
+1. 下载并校验固定版本的 FFmpeg / FFprobe / ImageMagick；
+2. 验证本地可执行文件能够运行；
+3. 使用 Electron Builder 生成 Windows x64 NSIS 安装程序。
+
+GitHub 也提供 `Desktop Windows Build` 工作流，可手动触发或在版本 tag 上构建安装包；它只是构建工具，不参与应用运行。
+
+## 自动化测试
+
+```bash
+npm run check
+npm test
+```
+
+测试覆盖供应商适配、视频异步轮询、本地队列恢复、成功状态不可逆、SQLite 迁移、Cloudflare 预览边界、桌面打包约束和媒体输出真实性检查。
+
+更完整的不可破坏架构约束见 `LOCAL_FIRST_ARCHITECTURE.md`。
