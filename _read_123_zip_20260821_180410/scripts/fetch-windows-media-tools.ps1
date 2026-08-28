@@ -6,7 +6,7 @@ $OutputRoot = Join-Path $Root 'runtime-tools'
 $TempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("fuiet-media-tools-" + [guid]::NewGuid().ToString('N'))
 
 $FfmpegVersion = '9.0'
-$FfmpegUrl = 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip'
+$FfmpegUrl = 'https://github.com/GyanD/codexffmpeg/releases/download/9.0/ffmpeg-9.0-essentials_build.zip'
 $FfmpegSha256 = 'e6b54767a6065919048f1a098eb27211ca4e12b4348a05d88777a5855d0b6e71'
 $FfmpegSourceCommit = 'https://github.com/FFmpeg/FFmpeg/commit/d32b387f2b'
 $ImageMagickVersion = '7.1.2-30'
