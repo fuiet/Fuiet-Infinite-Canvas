@@ -1,5 +1,6 @@
 name: Diagnose Test Hang V2
 
+# Temporary diagnostic: rerun after isolated server fixture fix.
 on:
   push:
     branches: [local-desktop-hardening-v2]
