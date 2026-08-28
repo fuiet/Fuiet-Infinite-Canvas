@@ -10,7 +10,8 @@ $FfmpegUrl = 'https://github.com/GyanD/codexffmpeg/releases/download/9.0/ffmpeg-
 $FfmpegSha256 = 'e6b54767a6065919048f1a098eb27211ca4e12b4348a05d88777a5855d0b6e71'
 $FfmpegSourceCommit = 'https://github.com/FFmpeg/FFmpeg/commit/d32b387f2b'
 $ImageMagickVersion = '7.1.2-30'
-$ImageMagickUrl = 'https://download.imagemagick.org/archive/binaries/ImageMagick-7.1.2-30-portable-Q16-HDRI-x64.7z'
+$ImageMagickUrl = 'https://github.com/ImageMagick/ImageMagick/releases/download/7.1.2-30/ImageMagick-7.1.2-30-portable-Q16-HDRI-x64.7z'
+$ImageMagickSha256 = 'd98471f5ec9d87e222c69c8c28c98fe6665dab76cd3ef752c5e4de785be553be'
 
 function Download-File([string]$Uri, [string]$Destination) {
   Write-Host "Downloading $Uri"
@@ -61,10 +62,13 @@ try {
     Where-Object { $_.Name -match '^(LICENSE|README)' } |
     ForEach-Object { Copy-Item $_.FullName (Join-Path (Split-Path $ffmpegTarget -Parent) $_.Name) -Force }
 
-  # ImageMagick: official portable Win64 static Q16 HDRI build.
+  # ImageMagick: pinned official portable Win64 static Q16 HDRI release asset.
   $imageMagickArchive = Join-Path $TempRoot 'imagemagick.7z'
   Download-File $ImageMagickUrl $imageMagickArchive
   $imageMagickArchiveSha = (Get-FileHash $imageMagickArchive -Algorithm SHA256).Hash.ToLowerInvariant()
+  if ($imageMagickArchiveSha -ne $ImageMagickSha256) {
+    throw "ImageMagick SHA-256 mismatch. expected=$ImageMagickSha256 actual=$imageMagickArchiveSha"
+  }
   $imageMagickExtract = Join-Path $TempRoot 'imagemagick-extracted'
   New-Item $imageMagickExtract -ItemType Directory -Force | Out-Null
   $sevenZip = Find-SevenZip
@@ -92,7 +96,7 @@ ImageMagick
 - Version: $ImageMagickVersion
 - Build: portable Q16 HDRI x64 static
 - Binary source: $ImageMagickUrl
-- Archive SHA-256 recorded at build time in tool-manifest.json
+- Archive SHA-256: $ImageMagickSha256
 - ImageMagick is distributed under the ImageMagick License. The complete portable distribution is bundled so its license/config/delegate files remain available.
 "@ | Set-Content (Join-Path $OutputRoot 'THIRD_PARTY_NOTICES.txt') -Encoding UTF8
 
@@ -110,7 +114,7 @@ ImageMagick
     imagemagick = [ordered]@{
       version = $ImageMagickVersion
       source = $ImageMagickUrl
-      sha256 = $imageMagickArchiveSha
+      sha256 = $ImageMagickSha256
       executable = 'imagemagick/magick.exe'
     }
   }
