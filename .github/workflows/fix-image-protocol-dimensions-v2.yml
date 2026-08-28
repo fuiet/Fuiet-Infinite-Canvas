@@ -1,0 +1,45 @@
+name: Fix Image Protocol Dimensions V2
+
+on:
+  push:
+    branches: [fix-image-protocol-dimensions-v2]
+    paths:
+      - '.github/workflows/fix-image-protocol-dimensions-v2.yml'
+      - '_read_123_zip_20260821_180410/scripts/fix_image_protocol_dimensions_v2.py'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: _read_123_zip_20260821_180410
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix-image-protocol-dimensions-v2
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply provider-specific image dimension patch
+        run: python3 scripts/fix_image_protocol_dimensions_v2.py
+      - name: Validate syntax and regression suite
+        run: |
+          npm run check
+          npm test
+      - name: Commit validated product changes
+        run: |
+          cd ..
+          rm -f _read_123_zip_20260821_180410/scripts/fix_image_protocol_dimensions_v2.py
+          rm -f .github/workflows/fix-image-protocol-dimensions-v2.yml
+          rm -f _read_123_zip_20260821_180410/.trigger-image-protocol-v2
+          rm -f _read_123_zip_20260821_180410/.tmp-placeholder _read_123_zip_20260821_180410/.noop _read_123_zip_20260821_180410/.temp-branch-marker _read_123_zip_20260821_180410/.x _read_123_zip_20260821_180410/README_TEMP
+          rm -f _read_123_zip_20260821_180410/.github/workflows/fix-image-protocol-dimensions-v2.yml _read_123_zip_20260821_180410/.github/workflows/run-image-protocol-dimensions-v2.yml _read_123_zip_20260821_180410/.github/workflows/zzz-temp.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Fix provider-specific image dimension requests'
+          git push origin HEAD:fix-image-protocol-dimensions-v2
