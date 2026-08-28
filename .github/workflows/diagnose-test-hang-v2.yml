@@ -1,0 +1,42 @@
+name: Diagnose Test Hang V2
+
+on:
+  push:
+    branches: [local-desktop-hardening-v2]
+    paths:
+      - '.github/workflows/diagnose-test-hang-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  isolate-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: _read_123_zip_20260821_180410
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: local-desktop-hardening-v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run every test file separately with timeout
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in tests/*.test.mjs; do
+            echo "===== START $f ====="
+            start=$(date +%s)
+            if timeout --foreground 30s node --test "$f"; then
+              end=$(date +%s)
+              echo "===== PASS $f ($((end-start))s) ====="
+            else
+              code=$?
+              end=$(date +%s)
+              echo "===== FAIL_OR_TIMEOUT $f code=$code ($((end-start))s) ====="
+              exit $code
+            fi
+          done
