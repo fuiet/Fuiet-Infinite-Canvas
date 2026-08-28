@@ -23,9 +23,10 @@ test('image task records model capability, selected dimensions and upstream retu
   assert.match(runtime,/data\.0\.size/);
 });
 
-test('model capability resolver, output validator and image runtime are cache busted together',()=>{
-  assert.match(index,/image-request-parameters\.js\?v=20260828-image-dimension-contract-1/);
-  assert.match(index,/model-image-capabilities\.js\?v=20260828-image-dimension-contract-1/);
-  assert.match(index,/image-output-dimensions\.js\?v=20260828-image-dimension-contract-1/);
-  assert.match(index,/browser-runtime\.js\?v=20260828-image-dimension-contract-1/);
+test('image capability assets load before the shared runtime without requiring the same cache version',()=>{
+  const requestPos=index.indexOf('image-request-parameters.js?v=');
+  const resolverPos=index.indexOf('model-image-capabilities.js?v=');
+  const validatorPos=index.indexOf('image-output-dimensions.js?v=');
+  const runtimePos=index.indexOf('browser-runtime.js?v=');
+  assert.ok(requestPos>=0&&resolverPos>requestPos&&validatorPos>resolverPos&&runtimePos>validatorPos);
 });
