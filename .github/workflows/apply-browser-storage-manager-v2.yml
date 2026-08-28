@@ -46,3 +46,5 @@ jobs:
           git commit -m "Unify browser persistence behind Storage Manager"
           git pull --rebase origin feature/browser-storage-manager
           git push origin HEAD:feature/browser-storage-manager
+
+# Retry after tightening bootstrap-aware regression assertions.
