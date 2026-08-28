@@ -1,5 +1,6 @@
 from pathlib import Path
 
+# Temporary branch-only patch helper. Delete after server.js is committed.
 ROOT=Path(__file__).resolve().parents[1]
 SERVER=ROOT/'_read_123_zip_20260821_180410'/'server.js'
 text=SERVER.read_text(encoding='utf-8')
