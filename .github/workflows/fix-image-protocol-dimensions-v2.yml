@@ -43,3 +43,4 @@ jobs:
           git add -A
           git commit -m 'Fix provider-specific image dimension requests'
           git push origin HEAD:fix-image-protocol-dimensions-v2
+# rerun after provider-specific test update
