@@ -1,6 +1,12 @@
 const fs=require('fs');const path=require('path');const root=path.resolve(__dirname,'..');const read=f=>fs.readFileSync(path.join(root,f),'utf8');const write=(f,s)=>fs.writeFileSync(path.join(root,f),s);
 const V='20260829-video-protocol-registry-1';
-for(const file of ['index.html','models.html']){let s=read(file);s=s.replace(/provider-runtime-core\.js\?v=[^\"']+/g,`provider-runtime-core.js?v=${V}`);write(file,s)}
+{
+  let registry=read('video-protocol-registry.js');
+  const before="if(/\\bwan(?:[-_. ]|$)|wanx|qwen.*video|通义.*视频/.test(hint))return'wan';";
+  const after="if(/\\bwan(?:\\d|[-_. ]|$)|wanx|qwen.*video|通义.*视频/.test(hint))return'wan';";
+  if(!registry.includes(after)){if(!registry.includes(before))throw new Error('Wan family matcher not found');registry=registry.replace(before,after);write('video-protocol-registry.js',registry)}
+}
+for(const file of ['index.html','models.html']){let s=read(file);s=s.replace(/provider-runtime-core\.js\?v[^\"']*/g,`provider-runtime-core.js?v=${V}`);write(file,s)}
 write('tests/video-protocol-registry.test.mjs',`import test from 'node:test';
 import assert from 'node:assert/strict';
 await import('../video-protocol-registry.js');
@@ -103,7 +109,7 @@ test('task failure persistence keeps status and detail',()=>{
 
 test('adaptive video protocol assets pin changed registry components to fresh versions',()=>{
   for(const file of ['video-protocol-registry.js','provider-adapter-contract.js','provider-runtime-core.js','browser-runtime.js','browser-bootstrap.js']){
-    assert.ok(index.includes(\`\${file}?v=${V}\`),file);
+    assert.ok(index.includes(\`${file}?v=${V}\`),file);
   }
   assert.ok(index.includes('video-request-parameters.js?v=20260828-video-error-reporting-1'));
 });
