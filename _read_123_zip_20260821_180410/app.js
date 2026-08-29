@@ -2152,8 +2152,8 @@
       // GETing the server-owned task is cross-runtime: Node keeps its own worker loop,
       // while Cloudflare GET triggers the persisted server queue/poller via kickQueue.
       info=(await apiJson('/api/tasks/'+encodeURIComponent(taskId))).task;
-      const resultSyncing=['provider_succeeded','result_pending'].includes(info.status);
-      n.taskStatus=info.status;n.taskProgress=info.progress||0;n.taskError=resultSyncing?'':taskFailureText(info);n.taskSyncMessage=resultSyncing?'上游已生成，正在同步视频结果…':'';saveState();scheduleWorkflowVisualUpdate();
+      const resultSyncing=['provider_succeeded','result_pending'].includes(info.status),retrying=info.status==='retrying';
+      n.taskStatus=info.status;n.taskProgress=info.progress||0;n.taskError=(resultSyncing||retrying)?'':taskFailureText(info);n.taskSyncMessage=resultSyncing?'上游已生成，正在同步视频结果…':retrying?'上游服务暂时不可用，正在继续查询原任务…':'';saveState();scheduleWorkflowVisualUpdate();
       if(expandedNodeId===n.id)renderGenerator();
       if(info.status==='succeeded')return info;
       if(['failed','canceled'].includes(info.status))throw new Error(info.status==='canceled'?'任务已取消':taskFailureText(info)||'生成失败');
@@ -2168,7 +2168,7 @@
     for(let ai=0;ai<chain.length;ai++){
       const attempt=chain[ai],check=validateSemanticInputs(n,{provider:attempt.provider,model:attempt.model}),caps=check.caps,refs=check.refs;if(check.errors.length){lastError=new Error(check.errors.join('；'));if(ai===0&&!chain.slice(1).length)break;continue}if(ai>0){n.taskStatus='fallback';n.fallbackAttempt=ai;n.taskError=`主模型失败，正在切换备用模型：${attempt.modelName}`;saveState();render();workflowLog(latestWorkflowRunForNode(n.id)||{logs:[]},`切换备用模型：${attempt.modelName}`,'warn')}
       try{
-        let info=null;const canAdopt=n.taskId&&n.taskProviderId===attempt.providerId&&n.taskModelId===attempt.modelId&&['queued','running','polling','retrying'].includes(n.taskStatus);if(canAdopt){try{const existing=(await apiJson('/api/tasks/'+encodeURIComponent(n.taskId))).task;if(existing&&!['failed','canceled','succeeded'].includes(existing.status))info=await monitorNodeTask(n,n.taskId,attempt)}catch{}}
+        let info=null;const canAdopt=n.taskId&&n.taskProviderId===attempt.providerId&&n.taskModelId===attempt.modelId&&['queued','running','polling','retrying','provider_succeeded','result_pending'].includes(n.taskStatus);if(canAdopt){try{const existing=(await apiJson('/api/tasks/'+encodeURIComponent(n.taskId))).task;if(existing&&!['failed','canceled','succeeded'].includes(existing.status))info=await monitorNodeTask(n,n.taskId,attempt)}catch{}}
         if(!info){const created=await apiJson('/api/tasks',{method:'POST',body:JSON.stringify({providerId:attempt.providerId,modelId:attempt.modelId,providerSnapshot:snapshotProviderForTask(attempt.provider),modelSnapshot:attempt.model,nodeType:n.type,prompt:n.prompt||'',references:refs,maxRetries:state.workflowSettings?.maxRetries??1,priority:nodePriority(n),parameters:n.type==='image'?imageGenerationParameters(n,caps):{aspectRatio:n.aspectRatio||caps.aspectRatios?.[0]||'16:9',count:n.count||1,duration:n.duration||caps.durations?.[0]||5,resolution:n.resolution||caps.resolutions?.[0]||'720p',capabilities:caps,creativeContext:buildCreativeContextPacket(n),...(n.toolParams||{})}})});n.taskId=created.task.id;n.taskProviderId=attempt.providerId;n.taskModelId=attempt.modelId;n.taskStatus=created.task.status;n.taskProgress=created.task.progress||0;saveState();render();if(created.task.status==='succeeded')info=created.task;else if(['failed','canceled'].includes(created.task.status))throw new Error(taskFailureText(created.task)||'生成失败');else info=await monitorNodeTask(n,n.taskId,attempt,created.task)}
         const out=info.output||{};const resolvedUrl=resolveGeneratedOutputUrl(out.value??out);if(resolvedUrl)n.outputUrl=resolvedUrl;
         if(out.type==='url'&&!n.outputUrl)n.outputUrl=String(out.value||'').trim();
