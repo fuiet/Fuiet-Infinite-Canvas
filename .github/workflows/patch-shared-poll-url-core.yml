@@ -1,0 +1,34 @@
+name: Patch shared poll URL core
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/patch-shared-poll-url-core.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply shared-core patch
+        working-directory: _read_123_zip_20260821_180410
+        run: python scripts/patch-shared-poll-url-core.py
+      - name: Verify syntax and tests
+        working-directory: _read_123_zip_20260821_180410
+        run: |
+          npm run check
+          npm test
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add _read_123_zip_20260821_180410/provider-runtime-core.js _read_123_zip_20260821_180410/browser-runtime.js _read_123_zip_20260821_180410/server.js _read_123_zip_20260821_180410/tests/provider-runtime-core.test.mjs _read_123_zip_20260821_180410/tests/desktop-video-poll-parity.test.mjs
+          git commit -m "Share async poll URL extraction across runtimes"
+          git push
