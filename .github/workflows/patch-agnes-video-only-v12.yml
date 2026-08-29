@@ -45,4 +45,4 @@ jobs:
           git commit -m "Make video generation Agnes-only"
           git push origin HEAD:agnes-video-only-v12
 
-# Re-run after aligning discovery tests with the Agnes-only execution contract.
+# Retry against the latest branch head after the previous verified patch push raced another commit.
