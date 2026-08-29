@@ -1,0 +1,40 @@
+name: Patch Agnes browser poll recovery
+
+on:
+  push:
+    paths:
+      - 'scripts/patch-agnes-browser-poll-recovery.py'
+      - '.github/workflows/patch-agnes-browser-poll-recovery.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply patch
+        run: python3 scripts/patch-agnes-browser-poll-recovery.py
+      - name: Check
+        working-directory: _read_123_zip_20260821_180410
+        run: npm run check
+      - name: Test
+        working-directory: _read_123_zip_20260821_180410
+        run: npm test
+      - name: Commit patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add '_read_123_zip_20260821_180410/browser-runtime.js' '_read_123_zip_20260821_180410/video-protocol-registry.js' '_read_123_zip_20260821_180410/index.html' '_read_123_zip_20260821_180410/models.html' '_read_123_zip_20260821_180410/browser-bootstrap.js' '_read_123_zip_20260821_180410/tests/agnes-fixed-adapter.test.mjs' '_read_123_zip_20260821_180410/tests/video-result-cache-bust.test.mjs' '_read_123_zip_20260821_180410/tests/video-error-reporting.test.mjs' '_read_123_zip_20260821_180410/tests/browser-video-display-pipeline.test.mjs' '_read_123_zip_20260821_180410/tests/agnes-browser-poll-recovery.test.mjs'
+          if git diff --cached --quiet; then
+            echo 'No changes to commit'
+            exit 0
+          fi
+          git commit -m 'Fix Agnes browser polling and task recovery'
+          git push
