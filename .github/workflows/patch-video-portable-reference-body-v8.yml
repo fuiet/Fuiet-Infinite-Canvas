@@ -1,0 +1,38 @@
+name: Patch portable video reference body v8
+
+on:
+  push:
+    branches: [video-portable-reference-body-v8]
+    paths:
+      - '.github/workflows/patch-video-portable-reference-body-v8.yml'
+      - '_read_123_zip_20260821_180410/scripts/patch-video-portable-reference-body-v8.cjs'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: video-portable-reference-body-v8
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply portable reference fix
+        working-directory: _read_123_zip_20260821_180410
+        run: node scripts/patch-video-portable-reference-body-v8.cjs
+      - name: Check and test
+        working-directory: _read_123_zip_20260821_180410
+        run: |
+          npm run check
+          npm test
+      - name: Commit verified fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add _read_123_zip_20260821_180410
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Portableize local video references before upstream JSON requests"
+          git push origin HEAD:video-portable-reference-body-v8
