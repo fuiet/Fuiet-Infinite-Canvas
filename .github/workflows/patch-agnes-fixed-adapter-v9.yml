@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/patch-agnes-fixed-adapter-v9.yml'
       - '_read_123_zip_20260821_180410/scripts/patch-agnes-fixed-adapter-v9.cjs'
+      - '_read_123_zip_20260821_180410/scripts/patch-agnes-test-fixtures-v9.cjs'
 
 permissions:
   contents: write
@@ -23,7 +24,9 @@ jobs:
           node-version: 22
       - name: Apply Agnes adapter patch
         working-directory: _read_123_zip_20260821_180410
-        run: node scripts/patch-agnes-fixed-adapter-v9.cjs
+        run: |
+          node scripts/patch-agnes-fixed-adapter-v9.cjs
+          node scripts/patch-agnes-test-fixtures-v9.cjs
       - name: Syntax check
         working-directory: _read_123_zip_20260821_180410
         run: npm run check
