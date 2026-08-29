@@ -62,3 +62,11 @@ test('DataEyes Kling chooses text or image operation route',()=>{
   assert.ok(seed.createCandidates.length>1);
   assert.ok(seed.pollPathCandidates.length>1);
 });
+
+test('generic generate and t2v/i2v aliases normalize before Kling operation routing',()=>{
+  assert.equal(R.detectOperation({parameters:{operation:'t2v'}}),'text-to-video');
+  assert.equal(R.detectOperation({parameters:{operation:'i2v'}}),'image-to-video');
+  assert.equal(R.detectOperation({parameters:{operation:'generate'},references:[{type:'image',url:'x'}]}),'image-to-video');
+  const p={baseUrl:'https://platform.dataeyes.ai'},m={id:'kling-v2.1',modality:'video'};
+  assert.equal(A.resolveVideoRoute(p,m,{parameters:{operation:'generate'}},[{type:'image',url:'x'}]).createPath,'/kling/v1/videos/image2video');
+});

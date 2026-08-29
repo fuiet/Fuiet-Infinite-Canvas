@@ -24,8 +24,10 @@ function detectFamily(provider={},model={}){
   return'generic-video';
 }
 function detectOperation({references=[],parameters={}}={}){
-  const explicit=String(parameters.operation||parameters.videoOperation||'').trim().toLowerCase();
-  if(explicit)return explicit;
+  const raw=String(parameters.operation||parameters.videoOperation||'').trim().toLowerCase();
+  const aliases={'text2video':'text-to-video','t2v':'text-to-video','text_to_video':'text-to-video','image2video':'image-to-video','i2v':'image-to-video','image_to_video':'image-to-video','reference2video':'reference-to-video','reference_to_video':'reference-to-video','ref2video':'reference-to-video','first-last-frame':'first-last-frame','first_last_frame':'first-last-frame'};
+  const explicit=aliases[raw]||raw;
+  if(explicit&&!['generate','generation','video','video-generation','video_generation'].includes(explicit))return explicit;
   const refs=Array.isArray(references)?references:[];
   const images=refs.filter(r=>String(r?.type||r?.kind||'').toLowerCase()==='image'||/frame|image|reference/.test(String(r?.role||r?.semanticRole||'').toLowerCase()));
   if(images.length>1)return'reference-to-video';
