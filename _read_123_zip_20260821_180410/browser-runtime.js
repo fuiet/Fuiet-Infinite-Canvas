@@ -301,7 +301,7 @@ function defaultRequestBody(provider,model,task,route,refs){
   if(route.adapterKey==='openai-image')return{model:modelId,prompt,n:Number(p.count||1),...(p.size?{size:p.size}:{}),...(p.quality?{quality:p.quality}:{}),...(p.aspectRatio?{aspect_ratio:p.aspectRatio}:{})};
   if(route.adapterKey==='openai-audio-speech')return{model:modelId,input:prompt,voice:p.voice||'alloy',...(p.format?{format:p.format}:{})};
   if(route.adapterKey==='comfyui-workflow')return{prompt:p.workflow||p.promptGraph||{},client_id:uid('browser_')};
-  if(mod==='video'){const first=refs.find(r=>['first_frame','image','image_reference'].includes(r.role)||r.type==='image');const last=refs.find(r=>r.role==='last_frame');const duration=Number(p.duration??p.seconds??4);const ratio=String(p.aspectRatio||p.aspect_ratio||'16:9');return{model:modelId,prompt,...p,duration,seconds:String(p.seconds||duration),aspect_ratio:ratio,ratio,...(p.size?{size:p.size}:{}),...(first?.url?{image:first.url,image_url:first.url,input_image:first.url,first_frame:first.url,input_reference:first.url}:{}),...(last?.url?{last_frame:last.url,last_frame_url:last.url}:{}),...(refs.length?{references:refs}:{})};}
+  if(mod==='video'){const mapped=Adapters?.mapVideoRequest?.(provider,model,{...task,parameters:p},route,refs);if(mapped?.body)return mapped.body;const first=refs.find(r=>['first_frame','image','image_reference'].includes(r.role)||r.type==='image');const last=refs.find(r=>r.role==='last_frame');const duration=Number(p.duration??p.seconds??4);const ratio=String(p.aspectRatio||p.aspect_ratio||'16:9');return{model:modelId,prompt,...p,duration,seconds:String(p.seconds||duration),aspect_ratio:ratio,ratio,...(p.size?{size:p.size}:{}),...(first?.url?{image:first.url,image_url:first.url,input_image:first.url,first_frame:first.url,input_reference:first.url}:{}),...(last?.url?{last_frame:last.url,last_frame_url:last.url}:{}),...(refs.length?{references:refs}:{})};}
 
   return{model:modelId,prompt,...p,...(refs.length?{references:refs}:{})};
 }
@@ -309,8 +309,8 @@ async function buildStandardVideoForm(model,task,refs){const p=VideoParams?.norm
 function autoVideoRoute(model,route){return route?.adapterKey==='standard-video-async-v1'&&(model?.routeOrigin==='auto'||model?.adapterResolved?.auto===true||!String(model?.createPath||'').trim())}
 const VIDEO_AUTO_RETRY_STATUSES=new Set([400,404,405,415,422]);
 function alternateVideoCreatePaths(route,model){
-  const first=String(route.createPath||'/v1/videos');if(!autoVideoRoute(model,route))return[first];
-  return[...new Set([first,'/v1/videos','/v1/video/generations','/v1/videos/generations','/v1/video/generation','/video/generations','/videos/generations','/api/v1/videos','/api/v1/video/generations'])];
+  const first=String(route.createPath||'/v1/videos'),profile=Array.isArray(route.createCandidates)?route.createCandidates:[];if(!autoVideoRoute(model,route))return[first];
+  return[...new Set([first,...profile,'/v1/video/generations','/v1/videos','/v1/videos/generations','/v1/video/generation','/video/generations','/videos/generations','/api/v1/videos','/api/v1/video/generations'])];
 }
 function matchingPollPath(createPath,taskId,route){if(createPath==='/v1/video/generations'||createPath==='/api/v1/video/generations')return `${createPath}/${taskId}`;if(createPath==='/v1/videos/generations'||createPath==='/video/generations'||createPath==='/videos/generations')return `${createPath}/${taskId}`;return fillTemplate(route.pollPath||'/v1/videos/{{taskId}}',{taskId})}
 function videoRouteCandidate(provider,value){return providerRouteUrl(provider,value)}
@@ -319,6 +319,7 @@ function videoPollUrlCandidates(provider,createdRaw,createPath,taskId,route){
   const out=[],add=value=>{const url=videoRouteCandidate(provider,value);if(url&&!out.includes(url))out.push(url)};
   const responseUrl=Core?.firstPath?Core.firstPath(createdRaw,['poll_url','pollUrl','status_url','statusUrl','task_url','taskUrl','data.poll_url','data.pollUrl','data.status_url','data.statusUrl','data.task_url','data.taskUrl','links.status','links.poll','links.self','task.status_url','task.poll_url']):'';add(responseUrl);
   add(joinUrl(provider.baseUrl,matchingPollPath(createPath,taskId,route)));
+  for(const template of (Array.isArray(route.pollPathCandidates)?route.pollPathCandidates:[]))add(joinUrl(provider.baseUrl,fillTemplate(template,{taskId})));
   for(const path of [`/v1/tasks/${taskId}`,`/v1/video/tasks/${taskId}`,`/v1/videos/${taskId}`,`/v1/video/generations/${taskId}`,`/v1/videos/generations/${taskId}`,`/api/v1/tasks/${taskId}`,`/api/v1/video/generations/${taskId}`])add(joinUrl(provider.baseUrl,path));
   return out;
 }
@@ -326,12 +327,15 @@ async function pollVideoJson(provider,candidates,route){let last=null;for(const 
 async function fetchVideoContent(provider,createdRaw,taskId,route,activePollUrl=''){
   const candidates=[],add=value=>{const url=videoResourceCandidate(provider,value);if(url&&!candidates.includes(url))candidates.push(url)};
   const explicit=Core?.firstPath?Core.firstPath(createdRaw,['content_url','contentUrl','download_url','downloadUrl','links.content','links.download']):'';add(explicit);
+  for(const template of (Array.isArray(route.contentPathCandidates)?route.contentPathCandidates:[]))add(joinUrl(provider.baseUrl,fillTemplate(template,{taskId})));
   if(route.contentPath)add(joinUrl(provider.baseUrl,fillTemplate(route.contentPath,{taskId})));
-  if(activePollUrl)add(activePollUrl.replace(/\/$/,'')+'/content');
-  for(const path of [`/v1/videos/${taskId}/content`,`/v1/video/generations/${taskId}/content`,`/v1/videos/generations/${taskId}/content`])add(joinUrl(provider.baseUrl,path));
+  const genericContent=route.protocolFamily==='generic-video'||route.protocolFamily==='sora-openai';
+  if(genericContent&&activePollUrl)add(activePollUrl.replace(/\/$/,'')+'/content');
+  if(genericContent)for(const path of [`/v1/videos/${taskId}/content`,`/v1/video/generations/${taskId}/content`,`/v1/videos/generations/${taskId}/content`])add(joinUrl(provider.baseUrl,path));
+  if(!candidates.length)throw new Error('上游已成功，但该模型协议没有独立内容下载接口；继续从任务状态响应等待结果 URL');
   let last=null;for(const url of candidates){const res=await fetchProviderResource(provider,url,{method:'GET'});if(!res.ok){last=new Error(`结果下载失败 ${res.status}`);if([404,405].includes(res.status))continue;throw last}const parsed=await readResponse(res);return parsed.value}throw last||new Error('任务成功但没有找到视频结果下载接口');
 }
-function videoRequestDiagnostics(model,task,refs,createPath,transport){const p=VideoParams?.normalize?.(task.parameters||{})||task.parameters||{};return{createPath,transport,modelId:String(model?.id||''),duration:Number(p.duration||p.seconds||0),resolution:String(p.resolution||''),aspectRatio:String(p.aspectRatio||p.aspect_ratio||''),size:String(p.size||''),referenceCount:refs.length,hasFirstFrame:refs.some(r=>['first_frame','image','image_reference'].includes(r.role)||r.type==='image')}}
+function videoRequestDiagnostics(model,task,refs,createPath,transport,route={}){const p=VideoParams?.normalize?.(task.parameters||{})||task.parameters||{};return{createPath,transport,modelId:String(model?.id||''),protocolFamily:route.protocolFamily||'',protocolProfile:route.protocolProfile||'',videoOperation:route.videoOperation||'',duration:Number(p.duration||p.seconds||0),resolution:String(p.resolution||''),aspectRatio:String(p.aspectRatio||p.aspect_ratio||''),size:String(p.size||''),referenceCount:refs.length,hasFirstFrame:refs.some(r=>['first_frame','image','image_reference'].includes(r.role)||r.type==='image')}}
 async function providerJson(provider,url,init){const res=await fetchWithAuth(provider,url,init);const parsed=await readResponse(res);if(!res.ok){const detail=runtimeErrorText(parsed.value);const err=new Error(`供应商 HTTP ${res.status}${detail?`：${detail.slice(0,500)}`:''}`);err.status=res.status;err.detail=detail;throw err}return parsed}
 
 async function discover(provider){
@@ -349,7 +353,7 @@ async function discover(provider){
         const rawModality=String(raw.modality||raw.type||raw.mode||'').trim();
         const candidate={id,name,modality:rawModality,adapterKey:'auto',createPath:String(raw.createPath||'')};
         const modality=Adapters?.normalizeModelModality?Adapters.normalizeModelModality(rawModality,candidate):String(rawModality||'text').toLowerCase();
-        const base={id,name,modality,modalitySource:rawModality?'provider':'inferred',enabled:true,adapterKey:String(raw.adapterKey||raw.adapter_key||'auto'),...(raw.createPath||raw.create_path?{createPath:String(raw.createPath||raw.create_path)}:{}),...(raw.pollPath||raw.poll_path?{pollPath:String(raw.pollPath||raw.poll_path)}:{}),...(raw.contentPath||raw.content_path?{contentPath:String(raw.contentPath||raw.content_path)}:{}),...(raw.taskIdPath||raw.task_id_path?{taskIdPath:String(raw.taskIdPath||raw.task_id_path)}:{}),...(raw.statusPath||raw.status_path?{statusPath:String(raw.statusPath||raw.status_path)}:{}),...(raw.outputPath||raw.output_path?{outputPath:String(raw.outputPath||raw.output_path)}:{}),...(raw.responseMode||raw.response_mode?{responseMode:String(raw.responseMode||raw.response_mode)}:{}),...(raw.operationRoutes?{operationRoutes:clone(raw.operationRoutes)}:{}),...(raw.requestTemplate?{requestTemplate:clone(raw.requestTemplate)}:{}),...(raw.owned_by?{ownedBy:String(raw.owned_by)}:{})};
+        const base={id,name,modality,modalitySource:rawModality?'provider':'inferred',enabled:true,adapterKey:String(raw.adapterKey||raw.adapter_key||'auto'),...(raw.createPath||raw.create_path?{createPath:String(raw.createPath||raw.create_path)}:{}),...(raw.pollPath||raw.poll_path?{pollPath:String(raw.pollPath||raw.poll_path)}:{}),...(raw.contentPath||raw.content_path?{contentPath:String(raw.contentPath||raw.content_path)}:{}),...(raw.taskIdPath||raw.task_id_path?{taskIdPath:String(raw.taskIdPath||raw.task_id_path)}:{}),...(raw.statusPath||raw.status_path?{statusPath:String(raw.statusPath||raw.status_path)}:{}),...(raw.outputPath||raw.output_path?{outputPath:String(raw.outputPath||raw.output_path)}:{}),...(raw.responseMode||raw.response_mode?{responseMode:String(raw.responseMode||raw.response_mode)}:{}),...(raw.operationRoutes?{operationRoutes:clone(raw.operationRoutes)}:{}),...(raw.requestTemplate?{requestTemplate:clone(raw.requestTemplate)}:{}),...(raw.videoProtocolFamily||raw.video_protocol_family?{videoProtocolFamily:String(raw.videoProtocolFamily||raw.video_protocol_family)}:{}),...(raw.videoProtocolConfig||raw.video_protocol_config?{videoProtocolConfig:clone(raw.videoProtocolConfig||raw.video_protocol_config)}:{}),...(raw.owned_by?{ownedBy:String(raw.owned_by)}:{})};
         return ImageCapabilities?.decorateDiscoveredModel?ImageCapabilities.decorateDiscoveredModel({...provider,protocol:resolvedProtocol},raw,base):base;
       }).filter(Boolean);
       const merged={...provider,protocol:resolvedProtocol,models};
@@ -369,9 +373,10 @@ async function executeTask(task){
   const model=(provider.models||[]).find(m=>m.id===task.modelId)||task.modelSnapshot;
   if(!model?.id)throw new Error('模型不存在');
   const operation=task.parameters?.operation||'generate';
-  const route=Adapters?.resolveRoute?Adapters.resolveRoute(provider,model,task.nodeType,operation):{createPath:model.createPath,method:model.method||'POST',responseMode:model.responseMode||'sync',outputPath:model.outputPath||''};
+  const modality=normalizeMod(task.nodeType);
+  const route=modality==='video'&&Adapters?.resolveVideoRoute?Adapters.resolveVideoRoute(provider,model,task,task.references||[]):Adapters?.resolveRoute?Adapters.resolveRoute(provider,model,task.nodeType,operation):{createPath:model.createPath,method:model.method||'POST',responseMode:model.responseMode||'sync',outputPath:model.outputPath||''};
   if(!route.createPath)throw new Error('无法自动确定供应商创建接口');
-  const modality=normalizeMod(task.nodeType),existingUpstreamTaskId=modality==='video'?String(task.upstreamTaskId||'').trim():'';
+  const existingUpstreamTaskId=modality==='video'?String(task.upstreamTaskId||'').trim():'';
   const resumingUpstream=Boolean(existingUpstreamTaskId);
   const refs=resumingUpstream?[]:await makePortableReferences(task.references||[]),body=resumingUpstream?null:defaultRequestBody(provider,model,task,route,refs);
   let created=null,usedCreatePath=String(task.upstreamCreatePath||task.videoProtocolDiagnostics?.createPath||route.createPath),lastCreateError=null;
@@ -383,15 +388,20 @@ async function executeTask(task){
       const createUrl=joinUrl(provider.baseUrl,createPath);
       try{
         if(route.adapterKey==='standard-video-async-v1'){
-          try{
-            updateTask(task.id,{videoRequestDiagnostics:videoRequestDiagnostics(model,task,refs,createPath,'multipart')});
-            const form=await buildStandardVideoForm(model,task,refs);
-            created=await providerJson(provider,createUrl,{method:route.method||'POST',headers:{},body:form});
-          }catch(error){
-            if(!VIDEO_AUTO_RETRY_STATUSES.has(Number(error?.status)))throw error;
-            lastCreateError=error;
-            updateTask(task.id,{videoRequestDiagnostics:videoRequestDiagnostics(model,task,refs,createPath,'json')});
+          if(route.requestTransport==='json'){
+            updateTask(task.id,{videoRequestDiagnostics:videoRequestDiagnostics(model,task,refs,createPath,'json',route)});
             created=await providerJson(provider,createUrl,{method:route.method||'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+          }else{
+            try{
+              updateTask(task.id,{videoRequestDiagnostics:videoRequestDiagnostics(model,task,refs,createPath,'multipart',route)});
+              const form=await buildStandardVideoForm(model,task,refs);
+              created=await providerJson(provider,createUrl,{method:route.method||'POST',headers:{},body:form});
+            }catch(error){
+              if(!VIDEO_AUTO_RETRY_STATUSES.has(Number(error?.status)))throw error;
+              lastCreateError=error;
+              updateTask(task.id,{videoRequestDiagnostics:videoRequestDiagnostics(model,task,refs,createPath,'json',route)});
+              created=await providerJson(provider,createUrl,{method:route.method||'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+            }
           }
         }else if(modality==='image'&&route.adapterKey==='openai-image'){
           const candidates=imageRequestBodies(provider,model,task,route,refs);let imageError=null;

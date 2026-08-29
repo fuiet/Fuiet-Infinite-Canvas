@@ -1,0 +1,104 @@
+/* Shared video protocol registry.
+ * Pure model-family/protocol metadata used by browser preview and local desktop runtime.
+ * Provider/model explicit overrides always win over these defaults.
+ */
+(()=>{
+'use strict';
+const SUCCESS=['completed','succeeded','success','done','finished','ready'];
+const FAILURE=['failed','failure','error','canceled','cancelled','rejected','expired'];
+const uniq=list=>[...new Set((list||[]).map(x=>String(x||'').trim()).filter(Boolean))];
+const hostOf=provider=>{try{return new URL(String(provider?.baseUrl||'')).hostname.toLowerCase()}catch{return''}};
+const hintOf=model=>`${model?.id||''} ${model?.name||''}`.trim().toLowerCase();
+function detectFamily(provider={},model={}){
+  const explicit=String(model.videoProtocolFamily||model.protocolFamily||model.videoFamily||'').trim().toLowerCase();
+  if(explicit)return explicit;
+  const hint=hintOf(model);
+  if(/kling|kwaivgi|可灵/.test(hint))return'kling';
+  if(/seedance|seed[-_. ]?ance|art[-_. ]?sdance|artsdance|dance\s*2(?:\.0)?|doubao[-_. ]?video|豆包.*视频/.test(hint))return'seedance';
+  if(/hailuo|minimax|海螺|\bh3\b/.test(hint))return'minimax-hailuo';
+  if(/vidu/.test(hint))return'vidu';
+  if(/\bveo(?:[-_. ]|$)|google.*video/.test(hint))return'veo';
+  if(/\bsora(?:[-_. ]|$)|openai.*video/.test(hint))return'sora-openai';
+  if(/\bwan(?:\d|[-_. ]|$)|wanx|qwen.*video|通义.*视频/.test(hint))return'wan';
+  if(/grok.*video/.test(hint))return'grok';
+  return'generic-video';
+}
+function detectOperation({references=[],parameters={}}={}){
+  const raw=String(parameters.operation||parameters.videoOperation||'').trim().toLowerCase();
+  const aliases={'text2video':'text-to-video','t2v':'text-to-video','text_to_video':'text-to-video','image2video':'image-to-video','i2v':'image-to-video','image_to_video':'image-to-video','reference2video':'reference-to-video','reference_to_video':'reference-to-video','ref2video':'reference-to-video','first-last-frame':'first-last-frame','first_last_frame':'first-last-frame'};
+  const explicit=aliases[raw]||raw;
+  if(explicit&&!['generate','generation','video','video-generation','video_generation'].includes(explicit))return explicit;
+  const refs=Array.isArray(references)?references:[];
+  const images=refs.filter(r=>String(r?.type||r?.kind||'').toLowerCase()==='image'||/frame|image|reference/.test(String(r?.role||r?.semanticRole||'').toLowerCase()));
+  if(images.length>1)return'reference-to-video';
+  if(images.some(r=>/last/.test(String(r?.role||r?.semanticRole||'').toLowerCase())))return'first-last-frame';
+  if(images.length)return'image-to-video';
+  return'text-to-video';
+}
+const COMMON_TASK_IDS=['id','task_id','taskId','request_id','requestId','job_id','jobId','data.id','data.task_id','data.taskId','data.request_id','data.job_id','task.id','data.task.id','job.id','data.job.id','result.id','result.task_id','result.taskId','result.task.id','video.id','data.video.id'];
+const COMMON_STATUS=['status','state','data.status','data.state','task.status','task.state','data.task.status','data.task.state','job.status','job.state','data.job.status','data.job.state','result.status','result.state','video.status','video.state','data.video.status','data.video.state'];
+const COMMON_PROGRESS=['progress','percent','data.progress','data.percent','task.progress','task.percent','data.task.progress','data.task.percent','job.progress','result.progress'];
+const COMMON_OUTPUTS=[
+  'task.content.url','task.content.video_url','task.content.videoUrl','task.content.download_url','data.task.content.url','data.task.content.video_url',
+  'output.url','output.video_url','output.videoUrl','output.video.url','output.0.url','output.0.video_url','data.output.url','data.output.video_url','data.output.0.url',
+  'result.url','result.video_url','result.videoUrl','result.video.url','result.output.url','data.result.url','data.result.video_url','data.result.video.url','data.result.output.url',
+  'data.video_url','data.videoUrl','video_url','videoUrl','video.url','data.video.url','videos.0.url','data.videos.0.url','result.videos.0.url','data.result.videos.0.url',
+  'content.url','content.video_url','content.videoUrl','content.download_url','content_url','download_url','file_url','fileUrl','data.content_url','data.download_url','data.file_url','file.url','data.file.url','files.0.url','data.files.0.url',
+  'task.output.url','task.output.video_url','task.result.url','task.result.video_url','data.task.output.url','data.task.result.url','task_result.url','task_result.video_url','data.task_result.url','data.task_result.video_url',
+  'artifacts.0.url','data.artifacts.0.url','data.outputs.0.url','url','data.url'
+];
+function genericProfile(family){
+  return{family,profile:`${family}:gateway`,adapterKey:'standard-video-async-v1',responseMode:'async',method:'POST',pollMethod:'GET',requestTransport:'json',successValues:SUCCESS,failureValues:FAILURE,allowOutputWithoutTerminalStatus:true,pollIntervalMs:1800,timeoutMs:3600000,taskIdPaths:COMMON_TASK_IDS,statusPaths:COMMON_STATUS,progressPaths:COMMON_PROGRESS,outputPaths:COMMON_OUTPUTS,contentPathCandidates:[]};
+}
+function gatewayCandidates(family,operation){
+  const standard=['/v1/video/generations','/v1/videos','/v1/videos/generations'];
+  if(family==='seedance')return{createCandidates:standard,pollPathCandidates:['/v1/video/generations/{{taskId}}','/v1/tasks/{{taskId}}','/v1/videos/{{taskId}}','/v1/videos/generations/{{taskId}}']};
+  if(family==='kling')return{createCandidates:standard,pollPathCandidates:['/v1/video/generations/{{taskId}}','/v1/videos/{{taskId}}','/v1/tasks/{{taskId}}','/v1/video/tasks/{{taskId}}']};
+  if(family==='minimax-hailuo')return{createCandidates:standard,pollPathCandidates:['/v1/video/generations/{{taskId}}','/v1/tasks/{{taskId}}','/v1/videos/{{taskId}}']};
+  if(family==='vidu')return{createCandidates:standard,pollPathCandidates:['/v1/tasks/{{taskId}}','/v1/video/generations/{{taskId}}','/v1/videos/{{taskId}}']};
+  if(family==='veo')return{createCandidates:standard,pollPathCandidates:['/v1/tasks/{{taskId}}','/v1/videos/{{taskId}}','/v1/video/generations/{{taskId}}']};
+  if(family==='wan')return{createCandidates:standard,pollPathCandidates:['/v1/tasks/{{taskId}}','/v1/video/generations/{{taskId}}','/v1/videos/{{taskId}}']};
+  if(family==='sora-openai')return{requestTransport:'multipart-fallback-json',createCandidates:['/v1/videos','/v1/video/generations','/v1/videos/generations'],pollPathCandidates:['/v1/videos/{{taskId}}','/v1/video/generations/{{taskId}}','/v1/tasks/{{taskId}}'],contentPathCandidates:['/v1/videos/{{taskId}}/content']};
+  if(family==='grok')return{createCandidates:['/v1/videos/generations','/v1/video/generations','/v1/videos'],pollPathCandidates:['/v1/videos/generations/{{taskId}}','/v1/tasks/{{taskId}}','/v1/videos/{{taskId}}']};
+  return{createCandidates:standard,pollPathCandidates:['/v1/video/generations/{{taskId}}','/v1/videos/{{taskId}}','/v1/tasks/{{taskId}}']};
+}
+function dataEyesProfile(provider,model,operation){
+  const host=hostOf(provider);if(!(host==='platform.dataeyes.ai'||host.endsWith('.dataeyes.ai')))return null;
+  const family=detectFamily(provider,model),base=genericProfile(family);
+  if(family==='minimax-hailuo')return{...base,profile:'dataeyes:minimax-hailuo',createPath:'/hailuo/v2/video_generation',createCandidates:['/hailuo/v2/video_generation'],pollPath:'/hailuo/v2/query/video_generation/{{taskId}}',pollPathCandidates:['/hailuo/v2/query/video_generation/{{taskId}}'],taskIdPaths:['task_id',...COMMON_TASK_IDS],statusPaths:['task.status',...COMMON_STATUS],outputPaths:['task.content.url',...COMMON_OUTPUTS],contentPath:'',contentPathCandidates:[],pollIntervalMs:2000};
+  if(family==='kling'){
+    const image=operation!=='text-to-video';const create=image?'/kling/v1/videos/image2video':'/kling/v1/videos/text2video';
+    return{...base,profile:`dataeyes:kling:${image?'image2video':'text2video'}`,createPath:create,createCandidates:[create],pollPath:`${create}/{{taskId}}`,pollPathCandidates:[`${create}/{{taskId}}`],contentPath:'',contentPathCandidates:[]};
+  }
+  if(family==='wan')return{...base,profile:'dataeyes:wan',createPath:'/ali/api/v1/services/aigc/video-generation/video-synthesis',createCandidates:['/ali/api/v1/services/aigc/video-generation/video-synthesis'],pollPath:'/ali/api/v1/tasks/{{taskId}}',pollPathCandidates:['/ali/api/v1/tasks/{{taskId}}'],contentPath:'',contentPathCandidates:[]};
+  if(family==='vidu'){
+    const create=operation==='reference-to-video'?'/vidu/ent/v2/reference2video':operation==='image-to-video'?'/vidu/ent/v2/img2video':'/vidu/ent/v2/text2video';
+    return{...base,profile:`dataeyes:vidu:${operation}`,createPath:create,createCandidates:[create],contentPath:'',contentPathCandidates:[]};
+  }
+  if(family==='grok')return{...base,profile:'dataeyes:grok',createPath:'/grok/v1/videos/generations',createCandidates:['/grok/v1/videos/generations'],contentPath:'',contentPathCandidates:[]};
+  return null;
+}
+function resolve(provider={},model={},operation='generate'){
+  const family=detectFamily(provider,model),op=operation==='generate'?detectOperation({references:model.__references||[],parameters:model.__parameters||{}}):operation;
+  const specialized=dataEyesProfile(provider,model,op);if(specialized)return specialized;
+  const base=genericProfile(family),candidates=gatewayCandidates(family,op);
+  return{...base,...candidates,profile:`${family}:${op}`,videoOperation:op,createPath:candidates.createCandidates?.[0]||'/v1/video/generations',pollPath:candidates.pollPathCandidates?.[0]||'/v1/video/generations/{{taskId}}',contentPath:(candidates.contentPathCandidates||[])[0]||''};
+}
+function mapRequest(provider={},model={},task={},route={},refs=[]){
+  const family=String(route.protocolFamily||route.family||detectFamily(provider,model));
+  const operation=String(route.videoOperation||detectOperation({references:refs,parameters:task.parameters||{}}));
+  const p={...(task.parameters||{})},prompt=String(task.prompt||''),first=(refs||[]).find(r=>r?.url&&(/first|image|reference/.test(String(r.role||r.semanticRole||'').toLowerCase())||r.type==='image')),last=(refs||[]).find(r=>r?.url&&/last/.test(String(r.role||r.semanticRole||'').toLowerCase()));
+  const body={model:model.id,prompt,...p};
+  const duration=Number(p.duration??p.seconds??0);if(duration){body.duration=duration;body.seconds=String(p.seconds||duration)}
+  const ratio=String(p.aspectRatio||p.aspect_ratio||'');if(ratio){body.aspect_ratio=ratio;body.ratio=ratio}
+  if(p.size)body.size=p.size;
+  if(first?.url){body.image=first.url;body.image_url=first.url;body.input_image=first.url;body.first_frame=first.url;body.input_reference=first.url}
+  if(last?.url){body.last_frame=last.url;body.last_frame_url=last.url}
+  if((refs||[]).length)body.references=refs;
+  if(family==='kling'){body.mode=body.mode||p.mode||'std';if(p.negativePrompt&&!body.negative_prompt)body.negative_prompt=p.negativePrompt}
+  if(family==='seedance'&&first?.url&&!body.image_url)body.image_url=first.url;
+  return{family,operation,body};
+}
+function publicProfiles(){return['kling','seedance','minimax-hailuo','vidu','veo','sora-openai','wan','grok','generic-video'];}
+globalThis.CanvasVideoProtocolRegistry=Object.freeze({SUCCESS,FAILURE,detectFamily,detectOperation,resolve,mapRequest,publicProfiles,COMMON_TASK_IDS,COMMON_STATUS,COMMON_PROGRESS,COMMON_OUTPUTS});
+})();
