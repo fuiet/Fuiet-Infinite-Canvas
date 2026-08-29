@@ -30,6 +30,21 @@ jobs:
       - name: Agnes regression tests
         working-directory: _read_123_zip_20260821_180410
         run: node --test tests/agnes-fixed-adapter.test.mjs
+      - name: Server startup diagnostic
+        working-directory: _read_123_zip_20260821_180410
+        run: |
+          TMPDIR=$(mktemp -d)
+          CANVAS_DATA_DIR="$TMPDIR" PORT=18999 node server.js > /tmp/agnes-server.log 2>&1 &
+          PID=$!
+          sleep 2
+          if ! kill -0 "$PID" 2>/dev/null; then
+            echo '--- server stderr/stdout ---'
+            cat /tmp/agnes-server.log
+            exit 1
+          fi
+          curl -fsS http://127.0.0.1:18999/api/health
+          kill "$PID"
+          wait "$PID" || true
       - name: Full test suite
         working-directory: _read_123_zip_20260821_180410
         run: timeout 90s npm test
