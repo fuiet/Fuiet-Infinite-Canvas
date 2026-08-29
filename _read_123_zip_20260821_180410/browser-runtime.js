@@ -335,6 +335,11 @@ function videoRouteCandidate(provider,value){return providerRouteUrl(provider,va
 function videoResourceCandidate(provider,value){return providerResourceUrl(provider,value)}
 function videoPollUrlCandidates(provider,createdRaw,createPath,taskId,route){
   const out=[],add=value=>{const url=videoRouteCandidate(provider,value);if(url&&!out.includes(url))out.push(url)};
+  if(route?.strictPollPath===true){
+    if(route.pollPath)add(joinUrl(provider.baseUrl,fillTemplate(route.pollPath,{taskId})));
+    for(const template of (Array.isArray(route.pollPathCandidates)?route.pollPathCandidates:[]))add(joinUrl(provider.baseUrl,fillTemplate(template,{taskId})));
+    return out;
+  }
   const responseUrl=Core?.firstPath?Core.firstPath(createdRaw,['poll_url','pollUrl','status_url','statusUrl','task_url','taskUrl','data.poll_url','data.pollUrl','data.status_url','data.statusUrl','data.task_url','data.taskUrl','links.status','links.poll','links.self','task.status_url','task.poll_url']):'';add(responseUrl);
   add(joinUrl(provider.baseUrl,matchingPollPath(createPath,taskId,route)));
   for(const template of (Array.isArray(route.pollPathCandidates)?route.pollPathCandidates:[]))add(joinUrl(provider.baseUrl,fillTemplate(template,{taskId})));
@@ -471,7 +476,8 @@ async function executeTask(task){
     if(modality==='video')pollCandidates=videoPollUrlCandidates(provider,created.value,usedCreatePath,taskId,route);
     updateTask(task.id,{status:'polling',providerStatus:'processing',resultStatus:'pending',upstreamTaskId:String(taskId),upstreamCreatePath:usedCreatePath,providerCreateResponse:created.kind==='json'?clone(created.value):null,progress:5,videoProtocolDiagnostics:modality==='video'?{createPath:usedCreatePath,pollCandidates}:undefined});
   }else{
-    if(!pollCandidates.length)pollCandidates=videoPollUrlCandidates(provider,null,usedCreatePath,taskId,route);
+    if(route?.strictPollPath===true){pollCandidates=videoPollUrlCandidates(provider,null,usedCreatePath,taskId,route);activePollUrl=''}
+    else if(!pollCandidates.length)pollCandidates=videoPollUrlCandidates(provider,null,usedCreatePath,taskId,route);
     updateTask(task.id,{status:task.providerStatus==='succeeded'?'result_pending':'polling',providerStatus:task.providerStatus||'processing',resultStatus:task.providerStatus==='succeeded'?'pending':(task.resultStatus||'pending'),upstreamTaskId:String(taskId),upstreamCreatePath:usedCreatePath,videoProtocolDiagnostics:{...(task.videoProtocolDiagnostics||{}),createPath:usedCreatePath,pollCandidates}});
   }
 
