@@ -4,8 +4,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-const REGISTRY_VERSION='20260829-video-task-reconcile-1';
-const APP_VERSION='20260829-video-task-reconcile-1';
+const REGISTRY_VERSION='20260829-portable-video-refs-1';
+const APP_VERSION='20260829-portable-video-refs-1';
 const read=name=>fs.readFileSync(path.join(ROOT,name),'utf8');
 
 test('canvas loads video registry runtime and bootstrap with a fresh cache version',()=>{

@@ -975,6 +975,26 @@ function findStringByPrefix(value,prefix,depth=0){
   if(typeof value==='object'){for(const x of Object.values(value)){const hit=findStringByPrefix(x,prefix,depth+1);if(hit)return hit}}
   return '';
 }
+function localVideoMediaReference(value){
+  const text=String(value||'').trim();if(!text)return'';if(/^\/media\/[A-Za-z0-9._-]+$/.test(text))return text;
+  try{const u=new URL(text);if(['127.0.0.1','localhost','::1'].includes(u.hostname)&&/^\/media\/[A-Za-z0-9._-]+$/.test(u.pathname))return u.pathname}catch{}
+  return'';
+}
+function localMediaMime(file){
+  const ext=path.extname(file).toLowerCase();return({'.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp','.gif':'image/gif','.mp4':'video/mp4','.mov':'video/quicktime','.mp3':'audio/mpeg','.wav':'audio/wav','.m4a':'audio/mp4','.aac':'audio/aac'})[ext]||'application/octet-stream';
+}
+async function portableizeLocalVideoJsonBody(body,config={}){
+  if(!ProviderRuntimeCore.mapNestedStrings)return body;
+  const transport=ProviderAdapterContract.normalizeReferenceTransport?ProviderAdapterContract.normalizeReferenceTransport(config.referenceTransport||'auto',{cloud:false}):'auto';
+  return await ProviderRuntimeCore.mapNestedStrings(body,async value=>{
+    const local=localVideoMediaReference(value);if(!local)return value;
+    if(transport==='url')throw new Error('当前视频协议要求公共 URL，但参考媒体仅存在本机；请使用 data-url 或配置供应商上传接口');
+    if(transport==='upload')throw new Error('当前视频协议要求先上传参考媒体，但尚未配置供应商上传接口；不能把本机 /media 地址直接发送给上游');
+    const file=mediaPathFromUrl(local),stat=fs.statSync(file);
+    if(stat.size>25*1024*1024)throw new Error('本机参考媒体超过 25MB，JSON data-url 传输已阻止；请配置供应商上传接口');
+    return 'data:'+localMediaMime(file)+';base64,'+fs.readFileSync(file).toString('base64');
+  });
+}
 function standardVideoBody(model,payload,config={}){
   const p={...(payload.parameters||{})};
   const refs=Array.isArray(payload.references)?payload.references:[];
@@ -1046,7 +1066,8 @@ async function executeStandardVideoAsync(task,provider,model,payload){
   let createPath=createPaths[0];
   const ctx={model:model.id,modelId:model.id,prompt:payload.prompt||'',parameters:payload.parameters||{},params:payload.parameters||{},references:payload.references||[]};
   const mapped=ProviderAdapterContract.mapVideoRequest?.(provider,model,{prompt:payload.prompt||'',parameters:payload.parameters||{}},sharedRoute,payload.references||[]);
-  const body=config.requestTemplate&&Object.keys(config.requestTemplate).length?renderTemplate(config.requestTemplate,ctx):(mapped?.body||standardVideoBody(model,payload,config));
+  const rawBody=config.requestTemplate&&Object.keys(config.requestTemplate).length?renderTemplate(config.requestTemplate,ctx):(mapped?.body||standardVideoBody(model,payload,config));
+  const body=await portableizeLocalVideoJsonBody(rawBody,config);
   updateTask(task,{progress:8});
   let taskId='';
   const resume=payload._upstream&&payload._upstream.protocol==='standard-video-async-v1'&&payload._upstream.modelId===model.id?payload._upstream:null;
