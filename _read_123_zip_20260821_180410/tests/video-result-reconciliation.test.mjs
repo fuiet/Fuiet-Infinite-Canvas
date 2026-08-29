@@ -62,5 +62,10 @@ test('browser reload resumes tasks with upstream ids instead of marking them fai
 test('canvas monitor keeps provider-success result synchronization alive',()=>{
   assert.match(app,/\['provider_succeeded','result_pending'\]\.includes\(info\.status\)/);
   assert.match(app,/上游已生成，正在同步视频结果…/);
+  assert.match(app,/上游服务暂时不可用，正在继续查询原任务…/);
   assert.match(app,/\['queued','running','polling','retrying','provider_succeeded','result_pending'\]\.includes\(n\.taskStatus\)/);
+});
+
+test('canvas re-adopts provider-success tasks instead of creating duplicate generation jobs',()=>{
+  assert.match(app,/const canAdopt=n\.taskId&&n\.taskProviderId===attempt\.providerId&&n\.taskModelId===attempt\.modelId&&\['queued','running','polling','retrying','provider_succeeded','result_pending'\]\.includes\(n\.taskStatus\)/);
 });
