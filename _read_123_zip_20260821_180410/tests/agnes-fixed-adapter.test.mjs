@@ -52,12 +52,13 @@ test('browser and desktop runtimes wire Agnes image reference mapping without we
   assert.match(server,/ImageCapabilities\.mapRequest\(provider,model,payload\.parameters\|\|\{\},payload\.prompt\|\|'',Number\(payload\.parameters\?\.count\|\|1\),refs\)/);
 });
 
-
-test('Agnes browser polling uses only the documented agnesapi route and heals persisted generic poll urls',()=>{
+test('Agnes browser polling uses only the documented agnesapi route and has no generic fallback',()=>{
   const registry=fs.readFileSync(new URL('../video-protocol-registry.js',import.meta.url),'utf8');
   const browser=fs.readFileSync(new URL('../browser-runtime.js',import.meta.url),'utf8');
+  assert.ok(registry.includes("function publicProfiles(){return['agnes-video']}"));
   assert.match(registry,/strictPollPath:true/);
-  assert.match(browser,/if\(route\?\.strictPollPath===true\)\{/);
-  assert.match(browser,/return out;\n  \}\n  const responseUrl=/);
+  assert.match(browser,/function videoPollUrlCandidates\(provider,createdRaw,createPath,taskId,route\)/);
+  assert.doesNotMatch(browser,/const responseUrl=Core\?\.firstPath/);
+  assert.doesNotMatch(browser,/genericContent/);
   assert.match(browser,/if\(route\?\.strictPollPath===true\)\{pollCandidates=videoPollUrlCandidates\(provider,null,usedCreatePath,taskId,route\);activePollUrl=''\}/);
 });
