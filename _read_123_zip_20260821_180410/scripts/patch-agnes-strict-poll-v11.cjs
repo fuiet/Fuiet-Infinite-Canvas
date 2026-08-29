@@ -53,7 +53,7 @@ for(const file of ['index.html','models.html']){
 }
 {
   const file='tests/agnes-fixed-adapter.test.mjs';let s=read(file);
-  s += `\n\ntest('Agnes browser polling uses only the documented agnesapi route and heals persisted generic poll urls',()=>{\n  const registry=read('video-protocol-registry.js');\n  const browser=read('browser-runtime.js');\n  assert.match(registry,/strictPollPath:true/);\n  assert.match(browser,/if\\(route\\?\\.strictPollPath===true\\)\\{/);\n  assert.match(browser,/return out;\\n  \\}\\n  const responseUrl=/);\n  assert.match(browser,/if\\(route\\?\\.strictPollPath===true\\)\\{pollCandidates=videoPollUrlCandidates\\(provider,null,usedCreatePath,taskId,route\\);activePollUrl=''\\}/);\n});\n`;
+  s += `\n\ntest('Agnes browser polling uses only the documented agnesapi route and heals persisted generic poll urls',()=>{\n  const registry=fs.readFileSync(new URL('../video-protocol-registry.js',import.meta.url),'utf8');\n  const browser=fs.readFileSync(new URL('../browser-runtime.js',import.meta.url),'utf8');\n  assert.match(registry,/strictPollPath:true/);\n  assert.match(browser,/if\\(route\\?\\.strictPollPath===true\\)\\{/);\n  assert.match(browser,/return out;\\n  \\}\\n  const responseUrl=/);\n  assert.match(browser,/if\\(route\\?\\.strictPollPath===true\\)\\{pollCandidates=videoPollUrlCandidates\\(provider,null,usedCreatePath,taskId,route\\);activePollUrl=''\\}/);\n});\n`;
   write(file,s);
 }
 console.log('Agnes strict poll fix applied');
