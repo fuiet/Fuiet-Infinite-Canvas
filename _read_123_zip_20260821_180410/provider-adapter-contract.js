@@ -32,6 +32,16 @@ function providerHost(provider={}){
 function modelHint(model={}){
   return `${model.id||''} ${model.name||''}`.trim().toLowerCase();
 }
+function isAgnesProvider(provider={}){
+  const h=providerHost(provider);return h==='apihub.agnes-ai.com'||h.endsWith('.agnes-ai.com');
+}
+function agnesKnownModels(){
+  return[
+    {id:'agnes-2.5-flash',name:'Agnes 2.5 Flash',modality:'text',adapterKey:'openai-chat',createPath:'/v1/chat/completions',method:'POST',responseMode:'sync',outputPath:'choices.0.message.content'},
+    {id:'agnes-image-2.1-flash',name:'Agnes Image 2.1 Flash',modality:'image',adapterKey:'openai-image',createPath:'/v1/images/generations',method:'POST',responseMode:'sync',outputPath:'data.0.url',imageCapabilities:{family:'agnes-image-2.1-flash',source:'provider-profile',confidence:1,requestMode:'agnes-image',aspectRatios:['1:1','3:4','4:3','16:9','9:16','2:3','3:2','21:9'],resolutions:['1K','2K','3K','4K'],qualities:[{label:'模型默认',value:''}],maxImages:8}},
+    {id:'agnes-video-2.5-flash',name:'Agnes Video 2.5 Flash',modality:'video',adapterKey:'standard-video-async-v1',createPath:'/v1/videos',method:'POST',responseMode:'async',videoProtocolFamily:'agnes-video',capabilities:{supportedResolutions:['720p'],supportedDurations:[4,5,6,7,8,9,10,11,12],supportedAspectRatios:['21:9','16:9','4:3','1:1','3:4','9:16'],maxReferenceImages:5}}
+  ];
+}
 function normalizeModelModality(value,model={}){
   const raw=String(value||'').trim().toLowerCase().replace(/\s+/g,'-');
   const aliases={
@@ -212,7 +222,14 @@ function finalizeModel(provider={},model={},nodeType=''){
 }
 function finalizeProvider(provider={}){
   const next=clone(provider||{});
-  next.models=Array.isArray(next.models)?next.models.map(model=>finalizeModel(next,model,model?.modality)):[];
+  let models=Array.isArray(next.models)?next.models:[];
+  if(isAgnesProvider(next)){
+    if(!next.protocol||next.protocol==='auto')next.protocol='openai-compatible';
+    const byId=new Map(models.map(model=>[String(model?.id||''),model]));
+    for(const known of agnesKnownModels()){const current=byId.get(known.id);byId.set(known.id,current?{...known,...current,id:known.id}:known)}
+    models=[...byId.values()];
+  }
+  next.models=models.map(model=>finalizeModel(next,model,model?.modality));
   return next;
 }
 function detectModelListProtocol(data,endpoint=''){
@@ -226,5 +243,5 @@ function detectModelListProtocol(data,endpoint=''){
   if(objects.length>0&&withIds/objects.length>=.8&&/\/models(?:$|\?)/i.test(String(endpoint||'')))return{protocol:'openai-compatible',confidence:.9,reason:'models endpoint + model ids'};
   return{protocol:'',confidence:0,reason:`generic-model-list:${endpoint||'unknown'}`};
 }
-globalThis.CanvasProviderAdapters=Object.freeze({SUCCESS,FAILURE,normalizeReferenceTransport,normalizeModelModality,providerLooksOpenAIStyle,inferAdapterKey,adapterDefaults,knownVideoResultProfile,resolveRoute,resolveVideoRoute,mapVideoRequest,finalizeModel,finalizeProvider,detectModelListProtocol});
+globalThis.CanvasProviderAdapters=Object.freeze({SUCCESS,FAILURE,normalizeReferenceTransport,normalizeModelModality,providerLooksOpenAIStyle,isAgnesProvider,agnesKnownModels,inferAdapterKey,adapterDefaults,knownVideoResultProfile,resolveRoute,resolveVideoRoute,mapVideoRequest,finalizeModel,finalizeProvider,detectModelListProtocol});
 })();

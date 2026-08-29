@@ -37,7 +37,7 @@ async function jsonCall(port,url,init={}){
 
 test('Node provider gateway redacts auth headers and blocks credentialed cross-origin redirects',{concurrency:false},async()=>{
   const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'canvas-node-provider-security-'));
-  for(const name of ['server.js','store.js','video-protocol-registry.js','provider-adapter-contract.js','provider-runtime-core.js','local-media-result.js'])fs.copyFileSync(path.join(ROOT,name),path.join(tmp,name));
+  for(const name of ['server.js','store.js','image-request-parameters.js','model-image-capabilities.js','video-protocol-registry.js','provider-adapter-contract.js','provider-runtime-core.js','local-media-result.js'])fs.copyFileSync(path.join(ROOT,name),path.join(tmp,name));
   const canvasPort=await freePort();
   const child=spawn(process.execPath,['server.js'],{cwd:tmp,env:{...process.env,NODE_NO_WARNINGS:'1',HOST:'127.0.0.1',PORT:String(canvasPort),CANVAS_ADMIN_PASSWORD:''},stdio:['ignore','pipe','pipe']});
   let childErr='';child.stderr.on('data',d=>{childErr+=String(d)});
