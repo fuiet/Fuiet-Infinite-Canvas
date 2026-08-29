@@ -132,6 +132,23 @@ function extractOutput(response,config={},modality='video'){
 function failureDetail(response){
   return firstPath(response,['error.message','data.error.message','task.error.message','job.error.message','message','error','data.error','task.error','job.error','result.error']);
 }
+function providerErrorText(value,depth=0){
+  if(value==null||depth>8)return'';
+  if(typeof value==='string')return value.trim();
+  if(Array.isArray(value))return value.map(item=>providerErrorText(item,depth+1)).filter(Boolean).join(' ');
+  if(typeof value==='object'){
+    for(const key of ['message','detail','reason','error','msg','title','body','response','data']){const text=providerErrorText(value[key],depth+1);if(text)return text}
+    try{return JSON.stringify(value)}catch{return''}
+  }
+  return String(value);
+}
+function isRetryableProviderFailure(value){
+  const httpStatus=Number(value?.status??value?.statusCode??value?.httpStatus??value?.http_status??0);
+  if([408,425,429,500,502,503,504].includes(httpStatus))return true;
+  const text=providerErrorText(value).toLowerCase();
+  if(!text)return false;
+  return /circuit(?: breaker)?(?: is)? open|retry (?:later|after|again)|temporar(?:y|ily) unavailable|service unavailable|upstream[^.;\n]*(?:unavailable|overload|timeout)|gateway timeout|timed? out|timeout|too many requests|rate[ _-]?limit(?:ed)?|over(?:loaded| capacity)|connection (?:reset|refused|closed)|bad gateway|http\s*(?:408|425|429|500|502|503|504)\b/.test(text);
+}
 function classifyAsyncPoll(response,config={},modality='video'){
   const rawStatus=extractStatus(response,config);
   const status=String(rawStatus??'').trim().toLowerCase();
@@ -140,8 +157,11 @@ function classifyAsyncPoll(response,config={},modality='video'){
   const output=extractOutput(response,config,modality);
   const success=lowerValues(config.successValues,DEFAULT_SUCCESS);
   const failure=lowerValues(config.failureValues,DEFAULT_FAILURE);
+  const detail=status&&failure.has(status)?failureDetail(response):undefined;
+  const retryableFailure=Boolean(status&&failure.has(status)&&isRetryableProviderFailure(detail??response));
   let state='pending';
-  if(status&&failure.has(status))state='failure';
+  if(retryableFailure)state='retryable';
+  else if(status&&failure.has(status))state='failure';
   else if(status&&success.has(status))state='success';
   else if(!status&&config.allowOutputWithoutTerminalStatus===true&&output!==undefined&&output!==null&&output!=='')state='success';
   return {
@@ -152,7 +172,8 @@ function classifyAsyncPoll(response,config={},modality='video'){
     output,
     providerSucceeded:Boolean(status&&success.has(status)),
     resultPending:Boolean(status&&success.has(status)&&(output===undefined||output===null||output==='')),
-    detail:state==='failure'?failureDetail(response):undefined
+    retryableFailure,
+    detail:(state==='failure'||state==='retryable')?detail:undefined
   };
 }
 function nextPollDelay(baseDelayMs,attempt,{factor=1.7,maxMs=30000,maxExponent=8,minMs=500}={}){
@@ -170,6 +191,6 @@ function formatFailure(assessment,prefix='上游任务失败'){
 
 globalThis.CanvasProviderRuntimeCore=Object.freeze({
   DEFAULT_SUCCESS,DEFAULT_FAILURE,getPath,firstPath,extractTaskId,extractStatus,extractProgress,extractImageOutput,extractOutput,
-  classifyAsyncPoll,nextPollDelay,formatFailure
+  classifyAsyncPoll,nextPollDelay,formatFailure,providerErrorText,isRetryableProviderFailure
 });
 })();
