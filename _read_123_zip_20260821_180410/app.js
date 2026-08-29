@@ -2122,12 +2122,12 @@
       const directKeys=['value','url','uri','href','file_url','fileUrl','fileURL','download_url','downloadUrl','video_url','videoUrl','image_url','imageUrl','audio_url','audioUrl','source_url','sourceUrl'];
       for(const key of directKeys){
         const v=output?.[key];
-        if(typeof v==='string'&&/^(https?:\/\/|data:|\/media\/)/i.test(v.trim()))return v.trim();
+        if(typeof v==='string'&&/^(https?:\/\/|data:|blob:|\/\/|\/media\/|\/__browser_media\/)/i.test(v.trim()))return v.trim();
       }
       const nestedPaths=['data.url','data.video_url','data.videoUrl','data.image_url','data.imageUrl','data.audio_url','data.audioUrl','result.url','result.video_url','result.videoUrl','result.image_url','result.imageUrl','output.url','output.video_url','output.videoUrl','output.image_url','output.imageUrl','outputs.0.url','outputs.0.video_url','outputs.0.videoUrl','videos.0.url','images.0.url','audio.0.url'];
       for(const p of nestedPaths){
         const v=deepGet(output,p);
-        if(typeof v==='string'&&/^(https?:\/\/|data:|\/media\/)/i.test(v.trim()))return v.trim();
+        if(typeof v==='string'&&/^(https?:\/\/|data:|blob:|\/\/|\/media\/|\/__browser_media\/)/i.test(v.trim()))return v.trim();
       }
       for(const v of Object.values(output)){
         const nested=resolveGeneratedOutputUrl(v);

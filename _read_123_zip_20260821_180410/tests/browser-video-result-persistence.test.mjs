@@ -17,7 +17,9 @@ test('browser video URLs are materialized before a task is marked saved',()=>{
   const helper=sliceBetween(runtime,'async function materializeGeneratedVideoOutput(value,provider)','function imageTargetSelection');
   assert.match(helper,/fetchProviderResource\(provider,url/);
   assert.match(helper,/readResponse\(res\)/);
-  assert.match(helper,/parsed\.kind!==['"]blob['"]/);
+  assert.match(helper,/res\.blob\(\)/);
+  assert.match(helper,/typedGeneratedVideoBlob\(blob,url,res\)/);
+  assert.match(helper,/storeMediaBlob\(typed,\{name:'generated-video'\}\)/);
   const completion=sliceBetween(runtime,"if(assessment.state==='success')",'const current=findTask(task.id);');
   assert.match(completion,/materializeGeneratedVideoOutput\(output,provider\)/);
   assert.ok(completion.indexOf('materializeGeneratedVideoOutput(output,provider)')<completion.indexOf("status:'succeeded'"));

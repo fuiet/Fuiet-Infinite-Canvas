@@ -95,7 +95,7 @@ function mediaUrl(id){return `/__browser_media/${encodeURIComponent(id)}`}
 async function ensureMediaServiceWorker(){
   if(!('serviceWorker'in navigator))return false;
   try{
-    await navigator.serviceWorker.register('./browser-media-sw.js?v=20260828-idb-1',{scope:'./'});
+    const registration=await navigator.serviceWorker.register('./browser-media-sw.js?v=20260829-video-display-3',{scope:'./',updateViaCache:'none'});try{await registration.update()}catch{}
     await navigator.serviceWorker.ready;
     if(navigator.serviceWorker.controller)return true;
     return await new Promise(resolve=>{let done=false;const finish=value=>{if(done)return;done=true;clearTimeout(timer);resolve(value)};const timer=setTimeout(()=>finish(Boolean(navigator.serviceWorker.controller)),5000);navigator.serviceWorker.addEventListener('controllerchange',()=>finish(true),{once:true})});
@@ -224,6 +224,27 @@ async function normalizeGeneratedOutput(value,modality,provider){
   }
   return text;
 }
+async function typedGeneratedVideoBlob(blob,url,res){
+  if(!(blob instanceof Blob)||!blob.size)return blob;
+  const current=String(blob.type||res?.headers?.get?.('content-type')||'').split(';')[0].trim().toLowerCase();
+  if(current.startsWith('video/'))return blob;
+  const hint=`${String(url||'')} ${String(res?.headers?.get?.('content-disposition')||'')}`.toLowerCase();
+  let mime='';
+  if(/\.(mp4|m4v)(?:[?#]|$)/i.test(hint))mime='video/mp4';
+  else if(/\.webm(?:[?#]|$)/i.test(hint))mime='video/webm';
+  else if(/\.(mov|qt)(?:[?#]|$)/i.test(hint))mime='video/quicktime';
+  else if(/\.(ogv|ogg)(?:[?#]|$)/i.test(hint))mime='video/ogg';
+  if(!mime){
+    try{
+      const head=new Uint8Array(await blob.slice(0,16).arrayBuffer());
+      const ascii=String.fromCharCode(...head);
+      if(head.length>=8&&ascii.slice(4,8)==='ftyp')mime='video/mp4';
+      else if(head.length>=4&&head[0]===0x1a&&head[1]===0x45&&head[2]===0xdf&&head[3]===0xa3)mime='video/webm';
+      else if(ascii.startsWith('OggS'))mime='video/ogg';
+    }catch{}
+  }
+  return mime?new Blob([blob],{type:mime}):blob;
+}
 async function materializeGeneratedVideoOutput(value,provider){
   const text=String(value||'').trim();
   if(!text||text.startsWith('/__browser_media/')||text.startsWith('/media/')||text.startsWith('data:')||text.startsWith('blob:'))return text;
@@ -241,9 +262,12 @@ async function materializeGeneratedVideoOutput(value,provider){
     }
     throw new Error('视频结果地址没有返回可播放的视频文件');
   }
-  const parsed=await readResponse(res);
-  if(parsed.kind!=='blob'||!parsed.value)throw new Error('视频结果下载后未能保存到浏览器本地媒体库');
-  return parsed.value;
+  const blob=await res.blob();
+  if(!blob.size)throw new Error('视频结果下载为空文件');
+  const typed=await typedGeneratedVideoBlob(blob,url,res);
+  const stored=await storeMediaBlob(typed,{name:'generated-video'});
+  if(!stored?.url)throw new Error('视频结果下载后未能保存到浏览器本地媒体库');
+  return stored.url;
 }
 function imageTargetSelection(provider,model,parameters={}){
   const selection=ImageCapabilities?.normalizeSelection?.(provider||{},model||{},parameters||{});
