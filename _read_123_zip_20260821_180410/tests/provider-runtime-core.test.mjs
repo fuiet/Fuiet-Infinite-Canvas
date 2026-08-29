@@ -26,3 +26,11 @@ test('output-without-status requires an explicit opt-in and polling delay is bou
   assert.equal(Core.nextPollDelay(1500,0),1500);
   assert.ok(Core.nextPollDelay(1500,50)<=30000);
 });
+
+
+test('shared runtime core extracts provider supplied poll URLs',()=>{
+  assert.equal(Core.extractPollUrl({poll_url:'/v1/jobs/a'}),'/v1/jobs/a');
+  assert.equal(Core.extractPollUrl({data:{statusUrl:'https://api.test/jobs/b'}}),'https://api.test/jobs/b');
+  assert.equal(Core.extractPollUrl({links:{status:'/tasks/c'}}),'/tasks/c');
+  assert.equal(Core.extractPollUrl({status:'processing'}),undefined);
+});

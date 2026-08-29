@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const server=fs.readFileSync(new URL('../server.js',import.meta.url),'utf8');
+const browser=fs.readFileSync(new URL('../browser-runtime.js',import.meta.url),'utf8');
 const registry=fs.readFileSync(new URL('../video-protocol-registry.js',import.meta.url),'utf8');
 
 test('desktop video config preserves strict polling routes',()=>{
@@ -14,7 +15,8 @@ test('desktop accepts only same-origin provider response polling routes',()=>{
   assert.match(server,/function providerVideoRouteUrl\(provider,value\)/);
   assert.match(server,/return url\.origin===baseOrigin\?url\.toString\(\):''/);
   assert.match(server,/function standardVideoResponsePollUrl\(created,provider,config=\{\}\)/);
-  assert.match(server,/'poll_url','pollUrl','status_url','statusUrl','task_url','taskUrl'/);
+  assert.match(server,/ProviderRuntimeCore\.extractPollUrl\(created\)/);
+  assert.match(browser,/Core\?\.extractPollUrl\?Core\.extractPollUrl\(createdRaw\)/);
   assert.match(server,/if\(config\.strictPollPath===true\)return''/);
 });
 

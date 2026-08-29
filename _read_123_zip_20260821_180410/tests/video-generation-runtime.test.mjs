@@ -18,8 +18,9 @@ test('auto video protocol retries request-format failures across common create p
 test('video polling follows response urls and falls back to task endpoints',()=>{
   const src=fs.readFileSync(path.join(ROOT,'browser-runtime.js'),'utf8');
   assert.match(src,/videoPollUrlCandidates/);
-  assert.match(src,/status_url/);
-  assert.match(src,/poll_url/);
+  assert.equal(C.extractPollUrl({status_url:'/v1/jobs/status-1'}),'/v1/jobs/status-1');
+  assert.equal(C.extractPollUrl({poll_url:'/v1/jobs/poll-2'}),'/v1/jobs/poll-2');
+  assert.match(src,/Core\?\.extractPollUrl\?Core\.extractPollUrl\(createdRaw\)/);
   assert.match(src,/`\/v1\/tasks\/\$\{taskId\}`/);
   assert.match(src,/pollVideoJson/);
   assert.match(src,/fetchVideoContent/);

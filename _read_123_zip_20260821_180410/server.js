@@ -1051,12 +1051,7 @@ function providerVideoRouteUrl(provider,value){
 }
 function standardVideoResponsePollUrl(created,provider,config={}){
   if(config.strictPollPath===true)return'';
-  const value=firstDeepValue(created,[
-    'poll_url','pollUrl','status_url','statusUrl','task_url','taskUrl',
-    'data.poll_url','data.pollUrl','data.status_url','data.statusUrl','data.task_url','data.taskUrl',
-    'links.status','links.poll','links.self','task.status_url','task.poll_url'
-  ]);
-  return providerVideoRouteUrl(provider,value);
+  return providerVideoRouteUrl(provider,ProviderRuntimeCore.extractPollUrl(created));
 }
 async function downloadStandardVideoContent(task,provider,config,taskId){
   const templates=[...new Set([...(Array.isArray(config.contentPathCandidates)?config.contentPathCandidates:[]),String(config.contentPath||'').trim()].filter(Boolean))];

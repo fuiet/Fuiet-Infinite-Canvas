@@ -6,6 +6,11 @@
 'use strict';
 const DEFAULT_SUCCESS=['completed','succeeded','success','done','finished','ready'];
 const DEFAULT_FAILURE=['failed','failure','error','canceled','cancelled','rejected','expired'];
+const ASYNC_POLL_URL_PATHS=[
+  'poll_url','pollUrl','status_url','statusUrl','task_url','taskUrl',
+  'data.poll_url','data.pollUrl','data.status_url','data.statusUrl','data.task_url','data.taskUrl',
+  'links.status','links.poll','links.self','task.status_url','task.poll_url'
+];
 
 function getPath(obj,path){
   if(!path)return obj;
@@ -24,6 +29,7 @@ function firstPath(obj,paths=[]){
   }
   return undefined;
 }
+function extractPollUrl(response){return firstPath(response,ASYNC_POLL_URL_PATHS);}
 function findStringByPrefix(value,prefix,depth=0){
   if(depth>6||value==null)return '';
   if(typeof value==='string')return value.startsWith(prefix)?value:'';
@@ -200,7 +206,7 @@ function formatFailure(assessment,prefix='上游任务失败'){
 }
 
 globalThis.CanvasProviderRuntimeCore=Object.freeze({
-  DEFAULT_SUCCESS,DEFAULT_FAILURE,getPath,firstPath,extractTaskId,extractStatus,extractProgress,extractImageOutput,extractOutput,
+  DEFAULT_SUCCESS,DEFAULT_FAILURE,ASYNC_POLL_URL_PATHS,getPath,firstPath,extractPollUrl,extractTaskId,extractStatus,extractProgress,extractImageOutput,extractOutput,
   classifyAsyncPoll,nextPollDelay,formatFailure,providerErrorText,isRetryableProviderFailure,mapNestedStrings
 });
 })();
