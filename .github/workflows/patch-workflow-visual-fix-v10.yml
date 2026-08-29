@@ -1,0 +1,43 @@
+name: Patch workflow visual fix v10
+
+on:
+  push:
+    branches: [workflow-visual-insert-fix-v10]
+    paths:
+      - '.github/workflows/patch-workflow-visual-fix-v10.yml'
+      - '_read_123_zip_20260821_180410/scripts/patch-workflow-visual-fix-v10.cjs'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow-visual-insert-fix-v10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply fix
+        working-directory: _read_123_zip_20260821_180410
+        run: node scripts/patch-workflow-visual-fix-v10.cjs
+      - name: Check
+        working-directory: _read_123_zip_20260821_180410
+        run: npm run check
+      - name: Regression tests
+        working-directory: _read_123_zip_20260821_180410
+        run: node --test tests/workflow-visual-status.test.mjs tests/video-result-cache-bust.test.mjs
+      - name: Full tests
+        working-directory: _read_123_zip_20260821_180410
+        run: timeout 90s npm test
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add _read_123_zip_20260821_180410
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Fix workflow status badge DOM insertion"
+          git push origin HEAD:workflow-visual-insert-fix-v10
