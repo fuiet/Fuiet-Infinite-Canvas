@@ -9,6 +9,7 @@ const dns = require('dns').promises;
 const net = require('net');
 const { CanvasStore } = require('./store');
 const { verifyLocalMediaProcessResult } = require('./local-media-result');
+require('./video-protocol-registry.js');
 require('./provider-adapter-contract.js');
 require('./provider-runtime-core.js');
 const ProviderAdapterContract = globalThis.CanvasProviderAdapters;
@@ -426,7 +427,16 @@ function normalizeVideoProtocolConfig(input={}, existing={}) {
     failureValues:arr(raw.failureValues ?? old.failureValues,['failed','error','cancelled','canceled']),
     pollIntervalMs:Math.max(500,Number(raw.pollIntervalMs ?? old.pollIntervalMs ?? 1500)),
     timeoutMs:Math.max(5000,Number(raw.timeoutMs ?? old.timeoutMs ?? 20*60*1000)),
-    allowOutputWithoutTerminalStatus:raw.allowOutputWithoutTerminalStatus === true || old.allowOutputWithoutTerminalStatus === true
+    allowOutputWithoutTerminalStatus:raw.allowOutputWithoutTerminalStatus === true || old.allowOutputWithoutTerminalStatus === true,
+    protocolFamily:String(raw.protocolFamily??raw.family??old.protocolFamily??old.family??'').trim(),
+    protocolProfile:String(raw.protocolProfile??raw.profile??old.protocolProfile??old.profile??'').trim(),
+    createCandidates:arr(raw.createCandidates??old.createCandidates,[]),
+    pollPathCandidates:arr(raw.pollPathCandidates??old.pollPathCandidates,[]),
+    contentPathCandidates:arr(raw.contentPathCandidates??old.contentPathCandidates,[]),
+    taskIdPaths:arr(raw.taskIdPaths??old.taskIdPaths,[]),
+    statusPaths:arr(raw.statusPaths??old.statusPaths,[]),
+    progressPaths:arr(raw.progressPaths??old.progressPaths,[]),
+    outputPaths:arr(raw.outputPaths??old.outputPaths,[])
   };
 }
 
@@ -532,6 +542,8 @@ function normalizeModel(m={}) {
     modality,
     // Adapter is the product-facing contract. Raw paths/templates below are only a developer override.
     adapterKey: String(m.adapterKey || 'auto').trim() || 'auto',
+    videoProtocolFamily:String(m.videoProtocolFamily||m.protocolFamily||'').trim(),
+    videoProtocolConfig:(m.videoProtocolConfig&&typeof m.videoProtocolConfig==='object')?m.videoProtocolConfig:{},
     operationRoutes: (m.operationRoutes && typeof m.operationRoutes==='object') ? m.operationRoutes : {},
     createPath: String(m.createPath || '').trim(),
     method: String(m.method || 'POST').toUpperCase(),
@@ -1003,8 +1015,9 @@ function standardVideoStatus(polled,config={}){return ProviderRuntimeCore.extrac
 function standardVideoProgress(polled,config={}){return ProviderRuntimeCore.extractProgress(polled,config);}
 function standardVideoOutput(polled,config={}){return ProviderRuntimeCore.extractOutput(polled,config,'video');}
 async function downloadStandardVideoContent(task,provider,config,taskId){
-  const template=String(config.contentPath||'').trim();
-  if(!template)return null;
+  const templates=[...(Array.isArray(config.contentPathCandidates)?config.contentPathCandidates:[]),String(config.contentPath||'').trim()].filter(Boolean);
+  if(!templates.length)return null;
+  const template=templates[0];
   const contentPath=template.replace(/\{\{taskId\}\}/g,encodeURIComponent(String(taskId)));
   const contentUrl=joinUrl(provider.baseUrl,contentPath);
   const res=await fetchSafe(contentUrl,{method:'GET',headers:providerHeaders(provider),timeoutMs:120000},provider,{allowCredentiallessCrossOriginRedirect:true});
@@ -1023,12 +1036,13 @@ async function downloadStandardVideoContent(task,provider,config,taskId){
 }
 async function executeStandardVideoAsync(task,provider,model,payload){
   if(task.nodeType!=='video')throw new Error('标准异步视频协议只能用于视频模型');
-  const sharedRoute=ProviderAdapterContract.resolveRoute(provider,model,'video','generate');
+  const sharedRoute=ProviderAdapterContract.resolveVideoRoute?ProviderAdapterContract.resolveVideoRoute(provider,model,{parameters:payload.parameters||{}},payload.references||[]):ProviderAdapterContract.resolveRoute(provider,model,'video','generate');
   const config=normalizeVideoProtocolConfig(sharedRoute,sharedRoute);
   const createPath=String(config.createPath||'/v1/videos');
   const createUrl=joinUrl(provider.baseUrl,createPath);
   const ctx={model:model.id,modelId:model.id,prompt:payload.prompt||'',parameters:payload.parameters||{},params:payload.parameters||{},references:payload.references||[]};
-  const body=config.requestTemplate&&Object.keys(config.requestTemplate).length?renderTemplate(config.requestTemplate,ctx):standardVideoBody(model,payload,config);
+  const mapped=ProviderAdapterContract.mapVideoRequest?.(provider,model,{prompt:payload.prompt||'',parameters:payload.parameters||{}},sharedRoute,payload.references||[]);
+  const body=config.requestTemplate&&Object.keys(config.requestTemplate).length?renderTemplate(config.requestTemplate,ctx):(mapped?.body||standardVideoBody(model,payload,config));
   updateTask(task,{progress:8});
   let taskId='';
   const resume=payload._upstream&&payload._upstream.protocol==='standard-video-async-v1'&&payload._upstream.modelId===model.id?payload._upstream:null;

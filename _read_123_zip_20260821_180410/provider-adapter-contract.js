@@ -6,6 +6,7 @@
 'use strict';
 const SUCCESS=['completed','succeeded','success','done','finished','ready'];
 const FAILURE=['failed','failure','error','canceled','cancelled','rejected','expired'];
+const VideoProtocols=globalThis.CanvasVideoProtocolRegistry;
 const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
 const compact=o=>{const out={};for(const [k,v] of Object.entries(o||{}))if(v!==undefined&&v!==null&&v!=='')out[k]=v;return out};
 const clamp=(v,min,max,fallback)=>{const n=Number(v);return Number.isFinite(n)?Math.max(min,Math.min(max,n)):fallback};
@@ -96,14 +97,13 @@ function adapterDefaults(key,nodeType){
   if(key==='generic-sync')return{createPath:'',method:'POST',responseMode:'sync'};
   return{createPath:'',method:'POST',responseMode:nodeType==='video'?'async':'sync',pollMethod:'GET',successValues:SUCCESS,failureValues:FAILURE,pollIntervalMs:1500,timeoutMs:1200000};
 }
-function knownVideoResultProfile(provider={},model={}){
-  const host=providerHost(provider),hint=modelHint(model);
-  // DataEyes Hailuo/MiniMax H3 returns a terminal task object whose video is at
-  // task.content.url. Keep this as a result-profile only: explicit/custom create
-  // and poll routes still win, and we do not guess a provider request body.
-  if((host==='platform.dataeyes.ai'||host.endsWith('.dataeyes.ai'))&&/hailuo|minimax|\bh3\b/.test(hint)){
-    return{taskIdPath:'task_id',statusPath:'task.status',outputPath:'task.content.url',contentPath:'',pollIntervalMs:2000,timeoutMs:3600000};
+function knownVideoResultProfile(provider={},model={},operation='generate'){
+  if(VideoProtocols?.resolve){
+    const profile=VideoProtocols.resolve(provider,model,operation)||{};
+    return{...profile,protocolFamily:profile.protocolFamily||profile.family||VideoProtocols.detectFamily?.(provider,model)||'generic-video',protocolProfile:profile.protocolProfile||profile.profile||''};
   }
+  const host=providerHost(provider),hint=modelHint(model);
+  if((host==='platform.dataeyes.ai'||host.endsWith('.dataeyes.ai'))&&/hailuo|minimax|\bh3\b/.test(hint))return{taskIdPath:'task_id',statusPath:'task.status',outputPath:'task.content.url',contentPath:'',pollIntervalMs:2000,timeoutMs:3600000,protocolFamily:'minimax-hailuo',protocolProfile:'legacy-dataeyes-hailuo'};
   return{};
 }
 function looksLikeLegacyAutoVideoRoute(value={}){
@@ -118,16 +118,22 @@ function migrateLegacyAutoVideoRoute(value={}){
   return {...value,createPath:'/v1/videos',pollPath:'/v1/videos/{{taskId}}',contentPath:'/v1/videos/{{taskId}}/content'};
 }
 function routeIsExplicit(model={}){
-  const legacyAuto=looksLikeLegacyAutoVideoRoute(model);
+  const nested=model.videoProtocolConfig&&typeof model.videoProtocolConfig==='object'?model.videoProtocolConfig:{};
+  const nestedExplicit=Object.keys(nested).some(k=>nested[k]!==undefined&&nested[k]!==null&&nested[k]!=='');
+  const persistedAuto=model.routeOrigin==='auto'||model.adapterResolved?.auto===true;
+  const legacyAuto=looksLikeLegacyAutoVideoRoute(model)||persistedAuto;
   const explicitAdapter=!legacyAuto&&Boolean(String(model.adapterKey||'').trim()&&String(model.adapterKey||'auto').trim()!=='auto');
   const hasExplicitRoute=!legacyAuto&&Boolean(String(model.createPath||model.operationRoutes?.generate?.createPath||'').trim());
-  return {explicitAdapter,hasExplicitRoute,autoDefaults:!explicitAdapter&&!hasExplicitRoute};
+  return {explicitAdapter,hasExplicitRoute,nestedExplicit,autoDefaults:!explicitAdapter&&!hasExplicitRoute&&!nestedExplicit};
 }
 function resolveRoute(provider={},model={},nodeType='',operation='generate'){
   const adapterKey=inferAdapterKey(provider,model);
   const defaults=adapterDefaults(adapterKey,nodeType);
-  const knownVideo=nodeType==='video'?knownVideoResultProfile(provider,model):{};
-  const providerVideo=nodeType==='video'?migrateLegacyAutoVideoRoute(compact(provider.videoProtocolConfig||{})):{};
+  const knownVideo=nodeType==='video'?knownVideoResultProfile(provider,model,operation):{};
+  const providerRaw=nodeType==='video'?migrateLegacyAutoVideoRoute(compact(provider.videoProtocolConfig||{})):{};
+  const providerAutoDefaults=String(provider.videoProtocol||'auto')==='auto'&&['/v1/videos','/v1/video/generations'].includes(String(providerRaw.createPath||''))&&!String(providerRaw.taskIdPath||providerRaw.statusPath||providerRaw.outputPath||'').trim()&&!Object.keys(providerRaw.requestTemplate||{}).length;
+  const providerVideo=providerAutoDefaults?{}:providerRaw;
+  const modelVideo=nodeType==='video'?compact(model.videoProtocolConfig||{}):{};
   const {explicitAdapter,hasExplicitRoute,autoDefaults}=routeIsExplicit(model);
   const direct=compact({
     createPath:autoDefaults?undefined:model.createPath,
@@ -149,14 +155,33 @@ function resolveRoute(provider={},model={},nodeType='',operation='generate'){
     allowOutputWithoutTerminalStatus:autoDefaults?undefined:model.allowOutputWithoutTerminalStatus
   });
   const op=compact(model.operationRoutes?.[operation]||model.operationRoutes?.generate||{});
-  const route={...defaults,...knownVideo,...providerVideo,...direct,...op,adapterKey};
+  const route={...defaults,...knownVideo,...providerVideo,...modelVideo,...direct,...op,adapterKey};
   route.method=String(route.method||'POST').toUpperCase();
   route.pollMethod=String(route.pollMethod||'GET').toUpperCase();
   route.successValues=Array.isArray(route.successValues)&&route.successValues.length?route.successValues:SUCCESS;
   route.failureValues=Array.isArray(route.failureValues)&&route.failureValues.length?route.failureValues:FAILURE;
   route.pollIntervalMs=clamp(route.pollIntervalMs,500,30000,1500);
   route.timeoutMs=clamp(route.timeoutMs,5000,3600000,1200000);
+  if(nodeType==='video'){
+    route.protocolFamily=route.protocolFamily||route.family||VideoProtocols?.detectFamily?.(provider,model)||'generic-video';
+    route.protocolProfile=route.protocolProfile||route.profile||'';
+    const uniq=list=>[...new Set((list||[]).map(String).map(x=>x.trim()).filter(Boolean))];
+    route.createCandidates=uniq([route.createPath,...(Array.isArray(route.createCandidates)?route.createCandidates:[])]);
+    route.pollPathCandidates=uniq([route.pollPath,...(Array.isArray(route.pollPathCandidates)?route.pollPathCandidates:[])]);
+    route.contentPathCandidates=uniq([route.contentPath,...(Array.isArray(route.contentPathCandidates)?route.contentPathCandidates:[])]);
+    route.taskIdPaths=uniq([route.taskIdPath,...(Array.isArray(route.taskIdPaths)?route.taskIdPaths:[])]);
+    route.statusPaths=uniq([route.statusPath,...(Array.isArray(route.statusPaths)?route.statusPaths:[])]);
+    route.progressPaths=uniq([route.progressPath,...(Array.isArray(route.progressPaths)?route.progressPaths:[])]);
+    route.outputPaths=uniq([route.outputPath,...(Array.isArray(route.outputPaths)?route.outputPaths:[])]);
+  }
   return route;
+}
+function resolveVideoRoute(provider={},model={},task={},references=[]){
+  const operation=VideoProtocols?.detectOperation?VideoProtocols.detectOperation({references,parameters:task?.parameters||{}}):String(task?.parameters?.operation||'generate');
+  return resolveRoute(provider,model,'video',operation);
+}
+function mapVideoRequest(provider={},model={},task={},route={},references=[]){
+  return VideoProtocols?.mapRequest?VideoProtocols.mapRequest(provider,model,task,route,references):null;
 }
 function finalizeModel(provider={},model={},nodeType=''){
   const next=clone(model||{}); next.modality=normalizeModelModality(next.modality,next); const type=normalizeModelModality(nodeType||next.modality,next);
@@ -180,7 +205,8 @@ function finalizeModel(provider={},model={},nodeType=''){
     next.timeoutMs=route.timeoutMs||1200000;
     next.requestTemplate={};
   }
-  next.adapterResolved={key:route.adapterKey||'auto',ready,auto:!before.explicitAdapter,createPath:route.createPath||'',responseMode:route.responseMode||''};
+  if(type==='video'){next.videoProtocolFamily=next.videoProtocolFamily||route.protocolFamily||route.family||'';next.videoProtocolProfile=route.protocolProfile||route.profile||'';}
+  next.adapterResolved={key:route.adapterKey||'auto',ready,auto:!before.explicitAdapter,createPath:route.createPath||'',responseMode:route.responseMode||'',protocolFamily:route.protocolFamily||'',protocolProfile:route.protocolProfile||''};
   if(before.autoDefaults&&ready)next.routeOrigin='auto';
   return next;
 }
@@ -200,5 +226,5 @@ function detectModelListProtocol(data,endpoint=''){
   if(objects.length>0&&withIds/objects.length>=.8&&/\/models(?:$|\?)/i.test(String(endpoint||'')))return{protocol:'openai-compatible',confidence:.9,reason:'models endpoint + model ids'};
   return{protocol:'',confidence:0,reason:`generic-model-list:${endpoint||'unknown'}`};
 }
-globalThis.CanvasProviderAdapters=Object.freeze({SUCCESS,FAILURE,normalizeReferenceTransport,normalizeModelModality,providerLooksOpenAIStyle,inferAdapterKey,adapterDefaults,knownVideoResultProfile,resolveRoute,finalizeModel,finalizeProvider,detectModelListProtocol});
+globalThis.CanvasProviderAdapters=Object.freeze({SUCCESS,FAILURE,normalizeReferenceTransport,normalizeModelModality,providerLooksOpenAIStyle,inferAdapterKey,adapterDefaults,knownVideoResultProfile,resolveRoute,resolveVideoRoute,mapVideoRequest,finalizeModel,finalizeProvider,detectModelListProtocol});
 })();

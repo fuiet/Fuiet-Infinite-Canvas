@@ -41,10 +41,8 @@ function lowerValues(values,fallback){
   return new Set(source.map(value=>String(value).trim().toLowerCase()).filter(Boolean));
 }
 function extractTaskId(response,config={}){
-  if(config.taskIdPath){
-    const explicit=getPath(response,config.taskIdPath);
-    if(explicit!==undefined&&explicit!==null&&explicit!=='')return String(explicit);
-  }
+  const configured=firstPath(response,[config.taskIdPath,...(Array.isArray(config.taskIdPaths)?config.taskIdPaths:[])]);
+  if(configured!==undefined&&configured!==null&&configured!=='')return String(configured);
   const common=firstPath(response,[
     'id','task_id','taskId','request_id','requestId','job_id','jobId',
     'data.id','data.task_id','data.taskId','data.request_id','data.job_id','data.jobId',
@@ -57,10 +55,10 @@ function extractTaskId(response,config={}){
   return common!==undefined&&common!==null&&common!==''?String(common):findStringByPrefix(response,'video_task_');
 }
 function extractStatus(response,config={}){
-  return firstPath(response,[config.statusPath,'status','data.status','state','data.state','task.status','task.state','data.task.status','data.task.state','job.status','job.state','data.job.status','data.job.state','result.status','result.state','video.status','video.state','data.video.status','data.video.state']);
+  return firstPath(response,[config.statusPath,...(Array.isArray(config.statusPaths)?config.statusPaths:[]),'status','data.status','state','data.state','task.status','task.state','data.task.status','data.task.state','job.status','job.state','data.job.status','data.job.state','result.status','result.state','video.status','video.state','data.video.status','data.video.state']);
 }
 function extractProgress(response,config={}){
-  return firstPath(response,[config.progressPath,'progress','data.progress','percent','data.percent','task.progress','task.percent','data.task.progress','data.task.percent','job.progress','result.progress']);
+  return firstPath(response,[config.progressPath,...(Array.isArray(config.progressPaths)?config.progressPaths:[]),'progress','data.progress','percent','data.percent','task.progress','task.percent','data.task.progress','data.task.percent','job.progress','result.progress']);
 }
 function outputPaths(modality='video'){
   if(modality==='image')return ['data.0.url','data.0.image_url','data.0.imageUrl','images.0.url','images.0.image_url','images.0.imageUrl','output.0.url','output.url','result.images.0.url','result.image.url','result.url','data.url','url'];
@@ -127,10 +125,8 @@ function extractOutput(response,config={},modality='video'){
     const image=extractImageOutput(response,config);
     if(image!==undefined&&image!==null&&image!=='')return image;
   }
-  if(config.outputPath){
-    const explicit=getPath(response,config.outputPath);
-    if(explicit!==undefined&&explicit!==null&&explicit!=='')return explicit;
-  }
+  const explicit=firstPath(response,[config.outputPath,...(Array.isArray(config.outputPaths)?config.outputPaths:[])]);
+  if(explicit!==undefined&&explicit!==null&&explicit!=='')return explicit;
   return firstPath(response,outputPaths(modality));
 }
 function failureDetail(response){
