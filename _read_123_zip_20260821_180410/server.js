@@ -431,6 +431,7 @@ function normalizeVideoProtocolConfig(input={}, existing={}) {
     pollIntervalMs:Math.max(500,Number(raw.pollIntervalMs ?? old.pollIntervalMs ?? 1500)),
     timeoutMs:Math.max(5000,Number(raw.timeoutMs ?? old.timeoutMs ?? 20*60*1000)),
     allowOutputWithoutTerminalStatus:raw.allowOutputWithoutTerminalStatus === true || old.allowOutputWithoutTerminalStatus === true,
+    strictPollPath:raw.strictPollPath === true || old.strictPollPath === true,
     protocolFamily:String(raw.protocolFamily??raw.family??old.protocolFamily??old.family??'').trim(),
     protocolProfile:String(raw.protocolProfile??raw.profile??old.protocolProfile??old.profile??'').trim(),
     createCandidates:arr(raw.createCandidates??old.createCandidates,[]),
@@ -1039,6 +1040,24 @@ function standardVideoTaskId(created,config={}){return ProviderRuntimeCore.extra
 function standardVideoStatus(polled,config={}){return ProviderRuntimeCore.extractStatus(polled,config);}
 function standardVideoProgress(polled,config={}){return ProviderRuntimeCore.extractProgress(polled,config);}
 function standardVideoOutput(polled,config={}){return ProviderRuntimeCore.extractOutput(polled,config,'video');}
+function providerVideoRouteUrl(provider,value){
+  const text=String(value||'').trim();if(!text)return'';
+  try{
+    const candidate=/^https?:\/\//i.test(text)?text:joinUrl(provider.baseUrl,text);
+    const baseOrigin=new URL(String(provider.baseUrl||'')).origin;
+    const url=new URL(candidate);
+    return url.origin===baseOrigin?url.toString():'';
+  }catch{return''}
+}
+function standardVideoResponsePollUrl(created,provider,config={}){
+  if(config.strictPollPath===true)return'';
+  const value=firstDeepValue(created,[
+    'poll_url','pollUrl','status_url','statusUrl','task_url','taskUrl',
+    'data.poll_url','data.pollUrl','data.status_url','data.statusUrl','data.task_url','data.taskUrl',
+    'links.status','links.poll','links.self','task.status_url','task.poll_url'
+  ]);
+  return providerVideoRouteUrl(provider,value);
+}
 async function downloadStandardVideoContent(task,provider,config,taskId){
   const templates=[...new Set([...(Array.isArray(config.contentPathCandidates)?config.contentPathCandidates:[]),String(config.contentPath||'').trim()].filter(Boolean))];
   if(!templates.length)return null;
@@ -1074,9 +1093,14 @@ async function executeStandardVideoAsync(task,provider,model,payload){
   const rawBody=config.requestTemplate&&Object.keys(config.requestTemplate).length?renderTemplate(config.requestTemplate,ctx):(mapped?.body||standardVideoBody(model,payload,config));
   const body=await portableizeLocalVideoJsonBody(rawBody,config);
   updateTask(task,{progress:8});
-  let taskId='';
+  let taskId='',activePollUrl='';
   const resume=payload._upstream&&payload._upstream.protocol==='standard-video-async-v1'&&payload._upstream.modelId===model.id?payload._upstream:null;
-  if(resume?.id){taskId=String(resume.id);taskLog(task,`恢复标准视频任务：${taskId}`)}
+  if(resume?.id){
+    taskId=String(resume.id);
+    activePollUrl=config.strictPollPath===true?'':providerVideoRouteUrl(provider,resume.pollUrl);
+    if(config.strictPollPath===true&&resume.pollUrl){payload._upstream={...resume,pollUrl:''};task.payload=payload;updateTask(task,{payload})}
+    taskLog(task,`恢复标准视频任务：${taskId}`);
+  }
   else{
     const createMethod=String(config.createMethod||config.method||'POST').toUpperCase();
     let created=null,lastCreateError=null;
@@ -1088,7 +1112,8 @@ async function executeStandardVideoAsync(task,provider,model,payload){
     if(!created)throw lastCreateError||new Error('没有可用的视频创建接口');
     taskId=standardVideoTaskId(created,config);
     if(!taskId)throw new Error('视频任务已提交，但响应中未找到任务 ID。可在供应商/模型高级配置中设置 taskIdPath。');
-    payload._upstream={protocol:'standard-video-async-v1',modelId:model.id,id:String(taskId),createdAt:new Date().toISOString()};
+    activePollUrl=standardVideoResponsePollUrl(created,provider,config);
+    payload._upstream={protocol:'standard-video-async-v1',modelId:model.id,id:String(taskId),pollUrl:activePollUrl||'',createdAt:new Date().toISOString()};
     task.payload=payload;updateTask(task,{payload,progress:20});taskLog(task,`已持久化视频任务 ID：${taskId}`);
   }
   const started=Date.now();let checks=0;
@@ -1096,7 +1121,7 @@ async function executeStandardVideoAsync(task,provider,model,payload){
   while(Date.now()-started<config.timeoutMs){
     assertTaskActive(task);await new Promise(r=>setTimeout(r,config.pollIntervalMs));checks++;
     const pollCtx={...ctx,taskId};
-    const pollTemplates=[...new Set([String(config.pollPath||'/v1/videos/{{taskId}}'),...(Array.isArray(config.pollPathCandidates)?config.pollPathCandidates:[])].filter(Boolean))];
+    const pollTemplates=[...new Set([...(config.strictPollPath===true?[]:[activePollUrl]),String(config.pollPath||'/v1/videos/{{taskId}}'),...(Array.isArray(config.pollPathCandidates)?config.pollPathCandidates:[])].filter(Boolean))];
     const pollMethod=String(config.pollMethod||'GET').toUpperCase();
     const pollBody=config.pollBodyTemplate&&typeof config.pollBodyTemplate==='object'?renderTemplate(config.pollBodyTemplate,pollCtx):undefined;
     let polled=null,lastPollError=null,retryablePollError=null;
@@ -1480,7 +1505,8 @@ const server = http.createServer(async (req, res) => {
 
     if(pathname==='/api/tasks'&&req.method==='GET'){const status=u.searchParams.get('status')||undefined;return json(res,200,{tasks:store.listTasks({status,limit:Math.min(300,Number(u.searchParams.get('limit')||100))}).map(taskPublic)})}
     if(pathname==='/api/tasks'&&req.method==='POST'){
-      const body=await readJson(req),now=new Date().toISOString();const task={id:uid('task_'),status:'queued',progress:0,providerId:String(body.providerId||''),modelId:String(body.modelId||''),nodeType:String(body.nodeType||''),payload:body,output:null,error:null,createdAt:now,updatedAt:now,attempt:0,maxRetries:Math.max(0,Math.min(5,Number(body.maxRetries??1))),priority:Math.max(0,Math.min(100,Number(body.priority??50))),cancelRequested:false,logs:[]};
+      const body=await readJson(req),taskPayload={...body};delete taskPayload._upstream;
+      const now=new Date().toISOString();const task={id:uid('task_'),status:'queued',progress:0,providerId:String(body.providerId||''),modelId:String(body.modelId||''),nodeType:String(body.nodeType||''),payload:taskPayload,output:null,error:null,createdAt:now,updatedAt:now,attempt:0,maxRetries:Math.max(0,Math.min(5,Number(body.maxRetries??1))),priority:Math.max(0,Math.min(100,Number(body.priority??50))),cancelRequested:false,logs:[]};
       if(!task.providerId||!task.modelId||!['text','image','video','audio','script'].includes(task.nodeType))return json(res,400,{error:'任务参数不完整'});
       const created=store.createTask(task);store.appendTaskLog(created.id,'任务进入持久队列');processTaskQueue();return json(res,202,{task:taskPublic(store.getTask(created.id))});
     }
