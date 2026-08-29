@@ -57,7 +57,7 @@ const VERSION='${VERSION}';
 const read=name=>fs.readFileSync(new URL('../'+name,import.meta.url),'utf8');
 test('canvas loads Agnes-only video runtime with one fresh cache version',()=>{const index=read('index.html');for(const file of ['video-protocol-registry.js','provider-adapter-contract.js','provider-runtime-core.js','browser-runtime.js','browser-bootstrap.js'])assert.ok(index.includes(file+'?v='+VERSION),file)});
 test('models page loads the same Agnes-only runtime version',()=>{const models=read('models.html');for(const file of ['video-protocol-registry.js','provider-adapter-contract.js','provider-runtime-core.js','browser-runtime.js','browser-bootstrap.js'])assert.ok(models.includes(file+'?v='+VERSION),file)});
-test('bootstrap loads application scripts at Agnes-only version',()=>{const bootstrap=read('browser-bootstrap.js');assert.ok(bootstrap.includes("const v='"+VERSION+"'"));assert.match(bootstrap,/`\.\/app\.js\?v=\$\{v\}`/)});
+test('bootstrap loads application scripts at Agnes-only version',()=>{const bootstrap=read('browser-bootstrap.js');assert.ok(bootstrap.includes("const v='"+VERSION+"'"));assert.ok(bootstrap.includes('./app.js?v=\${v}'))});
 `);
 
 write('tests/video-error-reporting.test.mjs',`import test from 'node:test';
@@ -71,7 +71,6 @@ test('Agnes upstream HTTP errors preserve status and readable detail',()=>{asser
 test('Agnes-only browser assets are cache-busted together',()=>{for(const file of ['video-protocol-registry.js','provider-adapter-contract.js','provider-runtime-core.js','browser-runtime.js','browser-bootstrap.js'])assert.ok(index.includes(file+'?v=${VERSION}'),file)});
 `);
 
-// Provider discovery remains generic for text/image, but discovered video models are no longer exposed.
 {
   const file='tests/provider-save-auto-discovery.test.mjs';
   let s=fs.readFileSync(path.join(root,file),'utf8');
