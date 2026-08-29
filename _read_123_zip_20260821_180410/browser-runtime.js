@@ -473,11 +473,17 @@ async function executeTask(task){
       if(latest?.providerStatus==='succeeded'){
         updateTask(task.id,{status:'result_pending',lastPollAt:now(),lastError:runtimeErrorText(error)||'上游已成功，结果同步暂时失败',error:null});attempt++;continue;
       }
+      if(Core?.isRetryableProviderFailure?.(error)){
+        updateTask(task.id,{status:'retrying',providerStatus:latest?.providerStatus||'processing',resultStatus:latest?.resultStatus||'pending',lastPollAt:now(),lastError:runtimeErrorText(error)||'上游轮询暂时不可用，将继续重试',error:null});attempt++;continue;
+      }
       throw error;
     }
     if(polled.kind!=='json')throw new Error('轮询接口没有返回 JSON');
     const assessment=Core?.classifyAsyncPoll?Core.classifyAsyncPoll(polled.value,route,modality):{state:'pending',output:null};
     updateTask(task.id,{lastPollAt:now(),progress:assessment.progress==null?Math.min(95,8+attempt*3):Number(assessment.progress)});
+    if(assessment.state==='retryable'){
+      updateTask(task.id,{status:'retrying',providerStatus:'processing',resultStatus:'pending',lastError:Core?.formatFailure?Core.formatFailure(assessment,'上游轮询暂时不可用'):'上游轮询暂时不可用，将继续重试',error:null});attempt++;continue;
+    }
     if(assessment.state==='failure'){
       const latest=findTask(task.id);
       if(latest?.providerStatus==='succeeded'){updateTask(task.id,{status:'result_pending',lastError:Core?.formatFailure?Core.formatFailure(assessment):'上游成功后的旧状态响应被忽略',error:null});attempt++;continue}

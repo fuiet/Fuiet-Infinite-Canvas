@@ -1073,9 +1073,12 @@ async function executeStandardVideoAsync(task,provider,model,payload){
     const pollTemplates=[...new Set([String(config.pollPath||'/v1/videos/{{taskId}}'),...(Array.isArray(config.pollPathCandidates)?config.pollPathCandidates:[])].filter(Boolean))];
     const pollMethod=String(config.pollMethod||'GET').toUpperCase();
     const pollBody=config.pollBodyTemplate&&typeof config.pollBodyTemplate==='object'?renderTemplate(config.pollBodyTemplate,pollCtx):undefined;
-    let polled=null,lastPollError=null;
-    for(const template of pollTemplates){const pollPath=renderPathTemplate(template,pollCtx);try{polled=await fetchJson(joinUrl(provider.baseUrl,pollPath),{method:pollMethod,headers:providerHeaders(provider),body:['GET','HEAD'].includes(pollMethod)?undefined:(pollBody===undefined?undefined:JSON.stringify(pollBody)),timeoutMs:60000,provider});break}catch(error){lastPollError=error;if(![404,405].includes(Number(error?.status)))throw error}}
-    if(!polled)throw lastPollError||new Error('没有可用的视频轮询接口');
+    let polled=null,lastPollError=null,retryablePollError=null;
+    for(const template of pollTemplates){const pollPath=renderPathTemplate(template,pollCtx);try{polled=await fetchJson(joinUrl(provider.baseUrl,pollPath),{method:pollMethod,headers:providerHeaders(provider),body:['GET','HEAD'].includes(pollMethod)?undefined:(pollBody===undefined?undefined:JSON.stringify(pollBody)),timeoutMs:60000,provider});break}catch(error){lastPollError=error;if([404,405].includes(Number(error?.status)))continue;if(ProviderRuntimeCore.isRetryableProviderFailure?.(error)){retryablePollError=error;break}throw error}}
+    if(!polled){
+      if(retryablePollError){const detail=retryablePollError?.message||String(retryablePollError);updateTask(task,{status:'retrying',lastPollAt:new Date().toISOString(),lastError:detail,progress:Math.min(94,20+checks*4)});taskLog(task,`上游轮询暂时不可用，保留任务 ${taskId} 后继续重试：${detail}`,'warn');continue}
+      throw lastPollError||new Error('没有可用的视频轮询接口');
+    }
     const assessment=ProviderRuntimeCore.classifyAsyncPoll(polled,config,'video');
     const status=assessment.status,progressRaw=assessment.progress;
     const pollPatch={status:'polling',lastPollAt:new Date().toISOString(),progress:Number.isFinite(progressRaw)?Math.max(20,Math.min(96,progressRaw)):Math.min(94,20+checks*4)};
@@ -1083,6 +1086,7 @@ async function executeStandardVideoAsync(task,provider,model,payload){
       Object.assign(pollPatch,{status:'provider_succeeded',providerStatus:'succeeded',resultStatus:assessment.output!=null?'available':'pending',providerOutput:polled,providerSucceededAt:new Date().toISOString()});
     }
     updateTask(task,pollPatch);
+    if(assessment.state==='retryable'){const detail=ProviderRuntimeCore.formatFailure(assessment,'上游轮询暂时不可用');updateTask(task,{status:'retrying',lastError:detail,lastPollAt:new Date().toISOString()});taskLog(task,`保留上游任务 ${taskId}，稍后继续轮询：${detail}`,'warn');continue}
     if(assessment.state==='failure')throw new Error(ProviderRuntimeCore.formatFailure(assessment,'上游视频任务失败'));
     const output=assessment.output;
     if(assessment.state==='success'){
