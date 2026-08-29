@@ -6,12 +6,14 @@ browser_path=ROOT/'browser-runtime.js'
 server_path=ROOT/'server.js'
 core_test_path=ROOT/'tests'/'provider-runtime-core.test.mjs'
 parity_test_path=ROOT/'tests'/'desktop-video-poll-parity.test.mjs'
+video_runtime_test_path=ROOT/'tests'/'video-generation-runtime.test.mjs'
 
 core=core_path.read_text(encoding='utf-8')
 browser=browser_path.read_text(encoding='utf-8')
 server=server_path.read_text(encoding='utf-8')
 core_test=core_test_path.read_text(encoding='utf-8')
 parity_test=parity_test_path.read_text(encoding='utf-8')
+video_runtime_test=video_runtime_test_path.read_text(encoding='utf-8')
 
 def one(text,old,new,label):
     n=text.count(old)
@@ -109,9 +111,32 @@ parity_test=one(parity_test,
   assert.match(server,/if\\(config\\.strictPollPath===true\\)return''/);""",
 'parity test verifies shared core use')
 
+video_runtime_test=one(video_runtime_test,
+"""test('video polling follows response urls and falls back to task endpoints',()=>{
+  const src=fs.readFileSync(path.join(ROOT,'browser-runtime.js'),'utf8');
+  assert.match(src,/videoPollUrlCandidates/);
+  assert.match(src,/status_url/);
+  assert.match(src,/poll_url/);
+  assert.match(src,/`\\/v1\\/tasks\\/\\$\\{taskId\\}`/);
+  assert.match(src,/pollVideoJson/);
+  assert.match(src,/fetchVideoContent/);
+});""",
+"""test('video polling follows response urls and falls back to task endpoints',()=>{
+  const src=fs.readFileSync(path.join(ROOT,'browser-runtime.js'),'utf8');
+  assert.match(src,/videoPollUrlCandidates/);
+  assert.equal(C.extractPollUrl({status_url:'/v1/jobs/status-1'}),'/v1/jobs/status-1');
+  assert.equal(C.extractPollUrl({poll_url:'/v1/jobs/poll-2'}),'/v1/jobs/poll-2');
+  assert.match(src,/Core\\?\\.extractPollUrl\\?Core\\.extractPollUrl\\(createdRaw\\)/);
+  assert.match(src,/`\\/v1\\/tasks\\/\\$\\{taskId\\}`/);
+  assert.match(src,/pollVideoJson/);
+  assert.match(src,/fetchVideoContent/);
+});""",
+'replace stale browser literal assertions with shared-core behavior assertions')
+
 core_path.write_text(core,encoding='utf-8')
 browser_path.write_text(browser,encoding='utf-8')
 server_path.write_text(server,encoding='utf-8')
 core_test_path.write_text(core_test,encoding='utf-8')
 parity_test_path.write_text(parity_test,encoding='utf-8')
+video_runtime_test_path.write_text(video_runtime_test,encoding='utf-8')
 print('moved async poll URL shape knowledge into shared provider runtime core')
