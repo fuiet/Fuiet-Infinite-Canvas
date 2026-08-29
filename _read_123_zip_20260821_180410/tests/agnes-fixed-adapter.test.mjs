@@ -51,3 +51,13 @@ test('browser and desktop runtimes wire Agnes image reference mapping without we
   assert.match(browser,/Agnes 文本模型的图像理解仅支持公开可访问的 image_url/);
   assert.match(server,/ImageCapabilities\.mapRequest\(provider,model,payload\.parameters\|\|\{\},payload\.prompt\|\|'',Number\(payload\.parameters\?\.count\|\|1\),refs\)/);
 });
+
+
+test('Agnes browser polling uses only the documented agnesapi route and heals persisted generic poll urls',()=>{
+  const registry=fs.readFileSync(new URL('../video-protocol-registry.js',import.meta.url),'utf8');
+  const browser=fs.readFileSync(new URL('../browser-runtime.js',import.meta.url),'utf8');
+  assert.match(registry,/strictPollPath:true/);
+  assert.match(browser,/if\(route\?\.strictPollPath===true\)\{/);
+  assert.match(browser,/return out;\n  \}\n  const responseUrl=/);
+  assert.match(browser,/if\(route\?\.strictPollPath===true\)\{pollCandidates=videoPollUrlCandidates\(provider,null,usedCreatePath,taskId,route\);activePollUrl=''\}/);
+});
