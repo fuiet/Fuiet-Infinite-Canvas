@@ -43,6 +43,16 @@ for(const file of ['index.html','models.html']){
 }
 
 {
+  const file='tests/video-error-reporting.test.mjs';
+  let s=read(file);
+  const old="for(const file of ['video-protocol-registry.js','provider-adapter-contract.js','provider-runtime-core.js','browser-runtime.js','browser-bootstrap.js']){\n    assert.ok(index.includes(`${file}?v=20260829-agnes-fixed-adapter-1`),file);\n  }";
+  const next="for(const file of ['video-protocol-registry.js','provider-adapter-contract.js','provider-runtime-core.js','browser-runtime.js']){\n    assert.ok(index.includes(`${file}?v=20260829-agnes-fixed-adapter-1`),file);\n  }\n  assert.ok(index.includes('browser-bootstrap.js?v=20260829-workflow-visual-fix-1'),'browser-bootstrap.js');";
+  if(!s.includes(old))throw new Error('video-error-reporting cache assertion not found');
+  s=s.replace(old,next);
+  write(file,s);
+}
+
+{
   const file='tests/workflow-visual-status.test.mjs';
   const s=`import test from 'node:test';\nimport assert from 'node:assert/strict';\nimport fs from 'node:fs';\nimport path from 'node:path';\nimport {fileURLToPath} from 'node:url';\nconst ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');\nconst app=fs.readFileSync(path.join(ROOT,'app.js'),'utf8');\n\ntest('workflow status badge inserts into the header-right parent safely',()=>{\n  assert.doesNotMatch(app,/\\$\\('\.node-header',el\\)\\?\\.insertBefore\\(badge,\\$\\('\.node-menu-btn',el\\)\\|\\|null\\)/);\n  assert.match(app,/headerRight=\\$\\('\.node-header-right',el\\)/);\n  assert.match(app,/headerRight\.insertBefore\\(badge,menu\\|\\|null\\)/);\n});\n`;
   write(file,s);
