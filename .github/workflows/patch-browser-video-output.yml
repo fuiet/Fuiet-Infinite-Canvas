@@ -1,0 +1,43 @@
+name: Patch browser video output persistence
+
+on:
+  push:
+    paths:
+      - 'scripts/patch-browser-video-output.py'
+      - '.github/workflows/patch-browser-video-output.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply patch
+        run: python3 scripts/patch-browser-video-output.py
+      - name: Install dependencies
+        working-directory: _read_123_zip_20260821_180410
+        run: npm ci
+      - name: Check
+        working-directory: _read_123_zip_20260821_180410
+        run: npm run check
+      - name: Test
+        working-directory: _read_123_zip_20260821_180410
+        run: npm test
+      - name: Commit patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add '_read_123_zip_20260821_180410/browser-runtime.js' '_read_123_zip_20260821_180410/functions/api/[[path]].js' '_read_123_zip_20260821_180410/tests/browser-video-result-persistence.test.mjs'
+          if git diff --cached --quiet; then
+            echo 'No changes to commit'
+            exit 0
+          fi
+          git commit -m 'Persist browser video results across CDN redirects'
+          git push
