@@ -95,7 +95,7 @@ function mediaUrl(id){return `/__browser_media/${encodeURIComponent(id)}`}
 async function ensureMediaServiceWorker(){
   if(!('serviceWorker'in navigator))return false;
   try{
-    const registration=await navigator.serviceWorker.register('./browser-media-sw.js?v=20260829-video-display-3',{scope:'./',updateViaCache:'none'});try{await registration.update()}catch{}
+    const registration=await navigator.serviceWorker.register('./browser-media-sw.js?v=20260829-agnes-live-poll-4',{scope:'./',updateViaCache:'none'});try{await registration.update()}catch{}
     await navigator.serviceWorker.ready;
     if(navigator.serviceWorker.controller)return true;
     return await new Promise(resolve=>{let done=false;const finish=value=>{if(done)return;done=true;clearTimeout(timer);resolve(value)};const timer=setTimeout(()=>finish(Boolean(navigator.serviceWorker.controller)),5000);navigator.serviceWorker.addEventListener('controllerchange',()=>finish(true),{once:true})});
@@ -444,12 +444,16 @@ async function executeTask(task){
   const modality=normalizeMod(task.nodeType);
   const route=modality==='video'&&Adapters?.resolveVideoRoute?Adapters.resolveVideoRoute(provider,model,task,task.references||[]):Adapters?.resolveRoute?Adapters.resolveRoute(provider,model,task.nodeType,operation):{createPath:model.createPath,method:model.method||'POST',responseMode:model.responseMode||'sync',outputPath:model.outputPath||''};
   if(!route.createPath)throw new Error('无法自动确定供应商创建接口');
-  const existingUpstreamTaskId=modality==='video'?String(task.upstreamTaskId||'').trim():'';
+  const recoveredUpstreamTaskId=modality==='video'&&task.providerCreateResponse&&Core?.extractTaskId?String(Core.extractTaskId(task.providerCreateResponse,route)||'').trim():'';
+  const existingUpstreamTaskId=modality==='video'?String(recoveredUpstreamTaskId||task.upstreamTaskId||'').trim():'';
   const resumingUpstream=Boolean(existingUpstreamTaskId);
   const refs=resumingUpstream?[]:await makePortableReferences(task.references||[]),body=resumingUpstream?null:defaultRequestBody(provider,model,task,route,refs);
   let portableVideoJsonBodyPromise=null;const videoJsonBody=()=>portableVideoJsonBodyPromise||(portableVideoJsonBodyPromise=portableizeVideoJsonBody(body,route));
   let created=null,usedCreatePath=String(task.upstreamCreatePath||task.videoProtocolDiagnostics?.createPath||route.createPath),lastCreateError=null;
   updateTask(task.id,{status:resumingUpstream?(task.providerStatus==='succeeded'?'result_pending':'polling'):'running',progress:resumingUpstream?Math.max(5,Number(task.progress||5)):2,error:null});
+  if(resumingUpstream&&recoveredUpstreamTaskId&&recoveredUpstreamTaskId!==String(task.upstreamTaskId||'')){
+    updateTask(task.id,{upstreamTaskId:recoveredUpstreamTaskId,lastError:null,videoProtocolDiagnostics:{...(task.videoProtocolDiagnostics||{}),recoveredTaskId:true,recoveredTaskIdAt:now()}});
+  }
 
   if(!resumingUpstream){
     const paths=modality==='video'?alternateVideoCreatePaths(route,model):[route.createPath];
@@ -522,18 +526,21 @@ async function executeTask(task){
     }
     if(!taskId){const error=new Error('异步接口没有返回任务 ID，也没有返回可用的视频结果；为避免重复扣费不会自动重新提交');error.noRetry=true;throw error}
     if(modality==='video')pollCandidates=videoPollUrlCandidates(provider,created.value,usedCreatePath,taskId,route);
-    updateTask(task.id,{status:'polling',providerStatus:'processing',resultStatus:'pending',upstreamTaskId:String(taskId),upstreamCreatePath:usedCreatePath,providerCreateResponse:created.kind==='json'?clone(created.value):null,progress:5,videoProtocolDiagnostics:modality==='video'?{createPath:usedCreatePath,pollCandidates}:undefined});
+    const providerVideoId=modality==='video'&&Core?.firstPath?Core.firstPath(created.value,['video_id','videoId','data.video_id','data.videoId']):'';
+    const providerTaskId=modality==='video'&&Core?.firstPath?Core.firstPath(created.value,['task_id','taskId','data.task_id','data.taskId','id','data.id']):'';
+    updateTask(task.id,{status:'polling',providerStatus:'processing',resultStatus:'pending',upstreamTaskId:String(taskId),providerVideoId:providerVideoId==null?'':String(providerVideoId),providerTaskId:providerTaskId==null?'':String(providerTaskId),upstreamCreatePath:usedCreatePath,providerCreateResponse:created.kind==='json'?clone(created.value):null,progress:5,videoProtocolDiagnostics:modality==='video'?{createPath:usedCreatePath,pollCandidates}:undefined});
   }else{
     if(route?.strictPollPath===true){pollCandidates=videoPollUrlCandidates(provider,null,usedCreatePath,taskId,route);activePollUrl=''}
     else if(!pollCandidates.length)pollCandidates=videoPollUrlCandidates(provider,null,usedCreatePath,taskId,route);
     updateTask(task.id,{status:task.providerStatus==='succeeded'?'result_pending':'polling',providerStatus:task.providerStatus||'processing',resultStatus:task.providerStatus==='succeeded'?'pending':(task.resultStatus||'pending'),upstreamTaskId:String(taskId),upstreamCreatePath:usedCreatePath,videoProtocolDiagnostics:{...(task.videoProtocolDiagnostics||{}),createPath:usedCreatePath,pollCandidates}});
   }
 
-  const started=Date.now();let attempt=0;
+  const started=Date.now();let pollCount=0,retryAttempt=0;
   while(Date.now()-started<Number(route.timeoutMs||1200000)){
     const current=findTask(task.id);if(current?.cancelRequested)return updateTask(task.id,{status:'canceled',error:'已取消'});
     const pollPath=matchingPollPath(usedCreatePath,taskId,route),pollUrl=joinUrl(provider.baseUrl,pollPath);
-    await sleep(attempt?Math.min(30000,Core?.nextPollDelay?Core.nextPollDelay(route.pollIntervalMs||1500,attempt):route.pollIntervalMs||1500):Math.max(500,Number(route.pollIntervalMs||1500)));
+    const delay=retryAttempt>0?(Core?.nextPollDelay?Core.nextPollDelay(route.pollIntervalMs||1500,retryAttempt):Math.min(30000,(route.pollIntervalMs||1500)*Math.pow(2,retryAttempt))):Math.max(500,Number(route.pollIntervalMs||1500));
+    await sleep(delay);
     let polled;
     try{
       if(modality==='video'){
@@ -541,25 +548,27 @@ async function executeTask(task){
         const result=await pollVideoJson(provider,ordered.length?ordered:[pollUrl],route);polled=result.parsed;activePollUrl=result.url;
         updateTask(task.id,{lastPollAt:now(),videoProtocolDiagnostics:{createPath:usedCreatePath,pollUrl:activePollUrl,pollCandidates}});
       }else polled=await providerJson(provider,pollUrl,{method:route.pollMethod||'GET',headers:{'content-type':'application/json'}});
+      retryAttempt=0;
     }catch(error){
       const latest=findTask(task.id);
       if(latest?.providerStatus==='succeeded'){
-        updateTask(task.id,{status:'result_pending',lastPollAt:now(),lastError:runtimeErrorText(error)||'上游已成功，结果同步暂时失败',error:null});attempt++;continue;
+        updateTask(task.id,{status:'result_pending',lastPollAt:now(),lastError:runtimeErrorText(error)||'上游已成功，结果同步暂时失败',error:null});retryAttempt++;continue;
       }
       if(Core?.isRetryableProviderFailure?.(error)){
-        updateTask(task.id,{status:'retrying',providerStatus:latest?.providerStatus||'processing',resultStatus:latest?.resultStatus||'pending',lastPollAt:now(),lastError:runtimeErrorText(error)||'上游轮询暂时不可用，将继续重试',error:null});attempt++;continue;
+        updateTask(task.id,{status:'retrying',providerStatus:latest?.providerStatus||'processing',resultStatus:latest?.resultStatus||'pending',lastPollAt:now(),lastError:runtimeErrorText(error)||'上游轮询暂时不可用，将继续重试',error:null});retryAttempt++;continue;
       }
       throw error;
     }
     if(polled.kind!=='json')throw new Error('轮询接口没有返回 JSON');
+    pollCount++;
     const assessment=Core?.classifyAsyncPoll?Core.classifyAsyncPoll(polled.value,route,modality):{state:'pending',output:null};
-    updateTask(task.id,{lastPollAt:now(),progress:assessment.progress==null?Math.min(95,8+attempt*3):Number(assessment.progress)});
+    updateTask(task.id,{lastPollAt:now(),providerRawStatus:assessment.status||'',providerProgress:assessment.progress==null?null:Number(assessment.progress),progress:assessment.progress==null?Math.min(95,8+pollCount*3):Number(assessment.progress)});
     if(assessment.state==='retryable'){
-      updateTask(task.id,{status:'retrying',providerStatus:'processing',resultStatus:'pending',lastError:Core?.formatFailure?Core.formatFailure(assessment,'上游轮询暂时不可用'):'上游轮询暂时不可用，将继续重试',error:null});attempt++;continue;
+      updateTask(task.id,{status:'retrying',providerStatus:'processing',resultStatus:'pending',lastError:Core?.formatFailure?Core.formatFailure(assessment,'上游轮询暂时不可用'):'上游轮询暂时不可用，将继续重试',error:null});retryAttempt++;continue;
     }
     if(assessment.state==='failure'){
       const latest=findTask(task.id);
-      if(latest?.providerStatus==='succeeded'){updateTask(task.id,{status:'result_pending',lastError:Core?.formatFailure?Core.formatFailure(assessment):'上游成功后的旧状态响应被忽略',error:null});attempt++;continue}
+      if(latest?.providerStatus==='succeeded'){updateTask(task.id,{status:'result_pending',lastError:Core?.formatFailure?Core.formatFailure(assessment):'上游成功后的旧状态响应被忽略',error:null});continue}
       throw new Error(Core?.formatFailure?Core.formatFailure(assessment):'上游任务失败');
     }
     if(assessment.state==='success'){
@@ -571,21 +580,20 @@ async function executeTask(task){
         else if((output==null||output==='')&&route.contentPath){const contentUrl=joinUrl(provider.baseUrl,fillTemplate(route.contentPath,{taskId}));const content=await fetchWithAuth(provider,contentUrl,{method:'GET'});if(!content.ok)throw new Error(`结果下载失败 ${content.status}`);const parsed=await readResponse(content);output=parsed.value}
       }catch(error){resultError=runtimeErrorText(error)||'上游已生成成功，视频结果地址暂未就绪'}
       if(output==null||output===''){
-        updateTask(task.id,{status:'result_pending',lastError:resultError||'上游已生成成功，正在等待视频结果地址',error:null,progress:99});attempt++;continue;
+        updateTask(task.id,{status:'result_pending',lastError:resultError||'上游已生成成功，正在等待视频结果地址',error:null,progress:99});continue;
       }
       output=await normalizeGeneratedOutput(output,modality,provider);
       if(modality==='video'){
         try{output=await materializeGeneratedVideoOutput(output,provider)}
-        catch(error){updateTask(task.id,{status:'result_pending',providerStatus:'succeeded',resultStatus:'pending',providerResultUrl:String(output||''),lastError:runtimeErrorText(error)||'上游已成功，但视频结果保存到浏览器本地失败，将继续重试',error:null,progress:99});attempt++;continue}
+        catch(error){updateTask(task.id,{status:'result_pending',providerStatus:'succeeded',resultStatus:'pending',providerResultUrl:String(output||''),lastError:runtimeErrorText(error)||'上游已成功，但视频结果保存到浏览器本地失败，将继续重试',error:null,progress:99});retryAttempt++;continue}
       }
       if(modality==='image'&&!validMediaOutput(output))throw new Error('上游任务已成功，但未识别到图片结果字段');
       if(modality==='video'&&!validMediaOutput(output)){
-        updateTask(task.id,{status:'result_pending',lastError:'上游已生成成功，但返回的视频结果地址暂不可识别',error:null,progress:99});attempt++;continue;
+        updateTask(task.id,{status:'result_pending',lastError:'上游已生成成功，但返回的视频结果地址暂不可识别',error:null,progress:99});continue;
       }
       let dimensionInfo=null;if(modality==='image'){dimensionInfo=await enforceGeneratedImageDimensions(output,provider,model,task.parameters||{});output=dimensionInfo.value}
       return updateTask(task.id,{status:'succeeded',providerStatus:'succeeded',resultStatus:'saved',providerResultUrl:modality==='video'?String(output||''):'',progress:100,output:outputObject(output,modality),resultSavedAt:now(),lastError:null,error:null,...imageDimensionTaskPatch(dimensionInfo)});
     }
-    attempt++;
   }
   const current=findTask(task.id);
   if(current?.providerStatus==='succeeded'){

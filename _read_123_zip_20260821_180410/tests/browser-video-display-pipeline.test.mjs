@@ -10,7 +10,7 @@ const app=fs.readFileSync(path.join(ROOT,'app.js'),'utf8');
 const index=fs.readFileSync(path.join(ROOT,'index.html'),'utf8');
 const models=fs.readFileSync(path.join(ROOT,'models.html'),'utf8');
 const bootstrap=fs.readFileSync(path.join(ROOT,'browser-bootstrap.js'),'utf8');
-const BUILD='20260829-video-display-3';
+const BUILD='20260829-agnes-live-poll-4';
 
 test('canvas deployment cache busts the fixed video runtime and application display code',()=>{
   for(const src of [index,models,bootstrap])assert.ok(src.includes(BUILD),'missing fresh video display build id');

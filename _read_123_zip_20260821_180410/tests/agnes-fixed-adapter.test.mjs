@@ -4,8 +4,9 @@ import fs from 'node:fs';
 await import('../image-request-parameters.js');
 await import('../model-image-capabilities.js');
 await import('../video-protocol-registry.js');
+await import('../provider-runtime-core.js');
 await import('../provider-adapter-contract.js');
-const A=globalThis.CanvasProviderAdapters,I=globalThis.CanvasModelImageCapabilities,V=globalThis.CanvasVideoProtocolRegistry;
+const A=globalThis.CanvasProviderAdapters,I=globalThis.CanvasModelImageCapabilities,V=globalThis.CanvasVideoProtocolRegistry,C=globalThis.CanvasProviderRuntimeCore;
 const provider={id:'agnes',name:'Agnes',baseUrl:'https://apihub.agnes-ai.com/v1',protocol:'auto',models:[]};
 
 test('Agnes provider injects documented Flash text image and video models',()=>{
@@ -29,6 +30,15 @@ test('Agnes Video 2.5 Flash uses video_id query and metadata.url result',()=>{
   const model={id:'agnes-video-2.5-flash',modality:'video'};const route=V.resolve(provider,model,'text-to-video');
   assert.equal(route.createPath,'/v1/videos');assert.equal(route.taskIdPaths[0],'video_id');assert.equal(route.outputPaths[0],'metadata.url');
   assert.match(route.pollPath,/\/agnesapi\?video_id=\{\{taskId\}\}&model_name=agnes-video-2.5-flash/);assert.equal(route.referenceTransport,'url');
+});
+
+test('Agnes Video 2.5 Flash prefers video_id and recognizes live completed response shapes',()=>{
+  const model={id:'agnes-video-2.5-flash',modality:'video'};const route=V.resolve(provider,model,'text-to-video');
+  assert.equal(C.extractTaskId({id:'task_old',task_id:'task_old',video_id:'video_live'},route),'video_live');
+  const done=C.classifyAsyncPoll({status:'completed',progress:100,metadata:{url:'https://cdn.example.com/final.mp4'}},route,'video');
+  assert.equal(done.state,'success');assert.equal(done.output,'https://cdn.example.com/final.mp4');
+  const legacy=C.classifyAsyncPoll({status:'completed',progress:100,remixed_from_video_id:'https://cdn.example.com/legacy.mp4'},route,'video');
+  assert.equal(legacy.state,'success');assert.equal(legacy.output,'https://cdn.example.com/legacy.mp4');
 });
 
 test('Agnes Video 2.5 Flash text request is exact and fixed to 720P',()=>{
