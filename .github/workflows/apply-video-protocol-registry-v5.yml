@@ -19,6 +19,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Normalize legacy models cache marker
+        working-directory: _read_123_zip_20260821_180410
+        run: sed -i 's/provider-adapter-contract.js?v=20260828-video-runtime-1/provider-adapter-contract.js?v=20260828-video-error-reporting-1/' models.html
       - name: Apply registry patch
         working-directory: _read_123_zip_20260821_180410
         run: node scripts/apply-video-protocol-registry-v5.cjs
