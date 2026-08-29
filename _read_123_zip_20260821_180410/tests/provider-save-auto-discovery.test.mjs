@@ -41,9 +41,11 @@ test('saving only Base URL + API Key auto-discovers models, auth style and execu
     const byId=Object.fromEntries(data.provider.models.map(m=>[m.id,m]));
     assert.equal(byId['gpt-5'].createPath,'/v1/chat/completions');
     assert.equal(byId['gpt-image-1'].createPath,'/v1/images/generations');
-    assert.equal(byId['sora-2'].createPath,'/v1/videos');
-    assert.equal(byId['sora-2'].pollPath,'/v1/videos/{{taskId}}');
-    assert.equal(byId['sora-2'].contentPath,'/v1/videos/{{taskId}}/content');
+    assert.ok(byId['sora-2']);
+    assert.equal(byId['sora-2'].enabled,false,'non-Agnes video is retained for discovery metadata but disabled');
+    assert.equal(byId['sora-2'].createPath||'','');
+    assert.equal(byId['sora-2'].adapterResolved?.ready,false);
+    assert.match(String(byId['sora-2'].unsupportedReason||''),/固定为 Agnes API/);
     assert.equal(bearerWasTried,true,'Bearer is tried before x-api-key');
     assert.equal(xApiKeySeen,'key-123');
   } finally {await stop(fx.child);fs.rmSync(fx.tmp,{recursive:true,force:true});await close(upstream);}
