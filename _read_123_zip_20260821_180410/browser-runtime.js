@@ -388,15 +388,20 @@ async function executeTask(task){
       const createUrl=joinUrl(provider.baseUrl,createPath);
       try{
         if(route.adapterKey==='standard-video-async-v1'){
-          try{
-            updateTask(task.id,{videoRequestDiagnostics:videoRequestDiagnostics(model,task,refs,createPath,'multipart',route)});
-            const form=await buildStandardVideoForm(model,task,refs);
-            created=await providerJson(provider,createUrl,{method:route.method||'POST',headers:{},body:form});
-          }catch(error){
-            if(!VIDEO_AUTO_RETRY_STATUSES.has(Number(error?.status)))throw error;
-            lastCreateError=error;
+          if(route.requestTransport==='json'){
             updateTask(task.id,{videoRequestDiagnostics:videoRequestDiagnostics(model,task,refs,createPath,'json',route)});
             created=await providerJson(provider,createUrl,{method:route.method||'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+          }else{
+            try{
+              updateTask(task.id,{videoRequestDiagnostics:videoRequestDiagnostics(model,task,refs,createPath,'multipart',route)});
+              const form=await buildStandardVideoForm(model,task,refs);
+              created=await providerJson(provider,createUrl,{method:route.method||'POST',headers:{},body:form});
+            }catch(error){
+              if(!VIDEO_AUTO_RETRY_STATUSES.has(Number(error?.status)))throw error;
+              lastCreateError=error;
+              updateTask(task.id,{videoRequestDiagnostics:videoRequestDiagnostics(model,task,refs,createPath,'json',route)});
+              created=await providerJson(provider,createUrl,{method:route.method||'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+            }
           }
         }else if(modality==='image'&&route.adapterKey==='openai-image'){
           const candidates=imageRequestBodies(provider,model,task,route,refs);let imageError=null;

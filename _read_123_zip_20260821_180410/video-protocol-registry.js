@@ -46,7 +46,7 @@ const COMMON_OUTPUTS=[
   'artifacts.0.url','data.artifacts.0.url','data.outputs.0.url','url','data.url'
 ];
 function genericProfile(family){
-  return{family,profile:`${family}:gateway`,adapterKey:'standard-video-async-v1',responseMode:'async',method:'POST',pollMethod:'GET',successValues:SUCCESS,failureValues:FAILURE,allowOutputWithoutTerminalStatus:true,pollIntervalMs:1800,timeoutMs:3600000,taskIdPaths:COMMON_TASK_IDS,statusPaths:COMMON_STATUS,progressPaths:COMMON_PROGRESS,outputPaths:COMMON_OUTPUTS,contentPathCandidates:[]};
+  return{family,profile:`${family}:gateway`,adapterKey:'standard-video-async-v1',responseMode:'async',method:'POST',pollMethod:'GET',requestTransport:'json',successValues:SUCCESS,failureValues:FAILURE,allowOutputWithoutTerminalStatus:true,pollIntervalMs:1800,timeoutMs:3600000,taskIdPaths:COMMON_TASK_IDS,statusPaths:COMMON_STATUS,progressPaths:COMMON_PROGRESS,outputPaths:COMMON_OUTPUTS,contentPathCandidates:[]};
 }
 function gatewayCandidates(family,operation){
   const standard=['/v1/video/generations','/v1/videos','/v1/videos/generations'];
@@ -56,7 +56,7 @@ function gatewayCandidates(family,operation){
   if(family==='vidu')return{createCandidates:standard,pollPathCandidates:['/v1/tasks/{{taskId}}','/v1/video/generations/{{taskId}}','/v1/videos/{{taskId}}']};
   if(family==='veo')return{createCandidates:standard,pollPathCandidates:['/v1/tasks/{{taskId}}','/v1/videos/{{taskId}}','/v1/video/generations/{{taskId}}']};
   if(family==='wan')return{createCandidates:standard,pollPathCandidates:['/v1/tasks/{{taskId}}','/v1/video/generations/{{taskId}}','/v1/videos/{{taskId}}']};
-  if(family==='sora-openai')return{createCandidates:['/v1/videos','/v1/video/generations','/v1/videos/generations'],pollPathCandidates:['/v1/videos/{{taskId}}','/v1/video/generations/{{taskId}}','/v1/tasks/{{taskId}}'],contentPathCandidates:['/v1/videos/{{taskId}}/content']};
+  if(family==='sora-openai')return{requestTransport:'multipart-fallback-json',createCandidates:['/v1/videos','/v1/video/generations','/v1/videos/generations'],pollPathCandidates:['/v1/videos/{{taskId}}','/v1/video/generations/{{taskId}}','/v1/tasks/{{taskId}}'],contentPathCandidates:['/v1/videos/{{taskId}}/content']};
   if(family==='grok')return{createCandidates:['/v1/videos/generations','/v1/video/generations','/v1/videos'],pollPathCandidates:['/v1/videos/generations/{{taskId}}','/v1/tasks/{{taskId}}','/v1/videos/{{taskId}}']};
   return{createCandidates:standard,pollPathCandidates:['/v1/video/generations/{{taskId}}','/v1/videos/{{taskId}}','/v1/tasks/{{taskId}}']};
 }
@@ -80,7 +80,7 @@ function resolve(provider={},model={},operation='generate'){
   const family=detectFamily(provider,model),op=operation==='generate'?detectOperation({references:model.__references||[],parameters:model.__parameters||{}}):operation;
   const specialized=dataEyesProfile(provider,model,op);if(specialized)return specialized;
   const base=genericProfile(family),candidates=gatewayCandidates(family,op);
-  return{...base,...candidates,profile:`${family}:${op}`,createPath:candidates.createCandidates?.[0]||'/v1/video/generations',pollPath:candidates.pollPathCandidates?.[0]||'/v1/video/generations/{{taskId}}',contentPath:(candidates.contentPathCandidates||[])[0]||''};
+  return{...base,...candidates,profile:`${family}:${op}`,videoOperation:op,createPath:candidates.createCandidates?.[0]||'/v1/video/generations',pollPath:candidates.pollPathCandidates?.[0]||'/v1/video/generations/{{taskId}}',contentPath:(candidates.contentPathCandidates||[])[0]||''};
 }
 function mapRequest(provider={},model={},task={},route={},refs=[]){
   const family=String(route.protocolFamily||route.family||detectFamily(provider,model));

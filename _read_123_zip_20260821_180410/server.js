@@ -1015,13 +1015,17 @@ function standardVideoStatus(polled,config={}){return ProviderRuntimeCore.extrac
 function standardVideoProgress(polled,config={}){return ProviderRuntimeCore.extractProgress(polled,config);}
 function standardVideoOutput(polled,config={}){return ProviderRuntimeCore.extractOutput(polled,config,'video');}
 async function downloadStandardVideoContent(task,provider,config,taskId){
-  const templates=[...(Array.isArray(config.contentPathCandidates)?config.contentPathCandidates:[]),String(config.contentPath||'').trim()].filter(Boolean);
+  const templates=[...new Set([...(Array.isArray(config.contentPathCandidates)?config.contentPathCandidates:[]),String(config.contentPath||'').trim()].filter(Boolean))];
   if(!templates.length)return null;
-  const template=templates[0];
-  const contentPath=template.replace(/\{\{taskId\}\}/g,encodeURIComponent(String(taskId)));
-  const contentUrl=joinUrl(provider.baseUrl,contentPath);
-  const res=await fetchSafe(contentUrl,{method:'GET',headers:providerHeaders(provider),timeoutMs:120000},provider,{allowCredentiallessCrossOriginRedirect:true});
-  if(!res.ok)throw new Error(`视频内容下载失败 HTTP ${res.status}：${(await res.text()).slice(0,300)}`);
+  let res=null,contentUrl='',lastError=null;
+  for(const template of templates){
+    const contentPath=template.replace(/\{\{taskId\}\}/g,encodeURIComponent(String(taskId)));contentUrl=joinUrl(provider.baseUrl,contentPath);
+    res=await fetchSafe(contentUrl,{method:'GET',headers:providerHeaders(provider),timeoutMs:120000},provider,{allowCredentiallessCrossOriginRedirect:true});
+    if(res.ok)break;
+    const detail=(await res.text()).slice(0,300);lastError=new Error(`视频内容下载失败 HTTP ${res.status}：${detail}`);
+    if(![404,405].includes(res.status))throw lastError;res=null;
+  }
+  if(!res)throw lastError||new Error('视频结果内容接口暂不可用');
   const mime=String(res.headers.get('content-type')||'video/mp4').split(';')[0].trim().toLowerCase();
   if(mime.includes('json')){
     const parsed=await res.json();const output=standardVideoOutput(parsed,config);
@@ -1038,8 +1042,8 @@ async function executeStandardVideoAsync(task,provider,model,payload){
   if(task.nodeType!=='video')throw new Error('标准异步视频协议只能用于视频模型');
   const sharedRoute=ProviderAdapterContract.resolveVideoRoute?ProviderAdapterContract.resolveVideoRoute(provider,model,{parameters:payload.parameters||{}},payload.references||[]):ProviderAdapterContract.resolveRoute(provider,model,'video','generate');
   const config=normalizeVideoProtocolConfig(sharedRoute,sharedRoute);
-  const createPath=String(config.createPath||'/v1/videos');
-  const createUrl=joinUrl(provider.baseUrl,createPath);
+  const createPaths=[...new Set([String(config.createPath||'/v1/videos'),...(Array.isArray(config.createCandidates)?config.createCandidates:[])].filter(Boolean))];
+  let createPath=createPaths[0];
   const ctx={model:model.id,modelId:model.id,prompt:payload.prompt||'',parameters:payload.parameters||{},params:payload.parameters||{},references:payload.references||[]};
   const mapped=ProviderAdapterContract.mapVideoRequest?.(provider,model,{prompt:payload.prompt||'',parameters:payload.parameters||{}},sharedRoute,payload.references||[]);
   const body=config.requestTemplate&&Object.keys(config.requestTemplate).length?renderTemplate(config.requestTemplate,ctx):(mapped?.body||standardVideoBody(model,payload,config));
@@ -1048,9 +1052,14 @@ async function executeStandardVideoAsync(task,provider,model,payload){
   const resume=payload._upstream&&payload._upstream.protocol==='standard-video-async-v1'&&payload._upstream.modelId===model.id?payload._upstream:null;
   if(resume?.id){taskId=String(resume.id);taskLog(task,`恢复标准视频任务：${taskId}`)}
   else{
-    const createMethod=String(config.createMethod||'POST').toUpperCase();
-    taskLog(task,`标准异步视频：${createMethod} ${createPath}`);
-    const created=await fetchJson(createUrl,{method:createMethod,headers:providerHeaders(provider),body:['GET','HEAD'].includes(createMethod)?undefined:JSON.stringify(body),timeoutMs:Math.min(config.timeoutMs,120000),provider});
+    const createMethod=String(config.createMethod||config.method||'POST').toUpperCase();
+    let created=null,lastCreateError=null;
+    for(const candidate of createPaths){
+      createPath=candidate;taskLog(task,`标准异步视频 [${config.protocolFamily||'generic-video'}]：${createMethod} ${createPath}`);
+      try{created=await fetchJson(joinUrl(provider.baseUrl,createPath),{method:createMethod,headers:providerHeaders(provider),body:['GET','HEAD'].includes(createMethod)?undefined:JSON.stringify(body),timeoutMs:Math.min(config.timeoutMs,120000),provider});break}
+      catch(error){lastCreateError=error;if(![400,404,405,415,422].includes(Number(error?.status)))throw error}
+    }
+    if(!created)throw lastCreateError||new Error('没有可用的视频创建接口');
     taskId=standardVideoTaskId(created,config);
     if(!taskId)throw new Error('视频任务已提交，但响应中未找到任务 ID。可在供应商/模型高级配置中设置 taskIdPath。');
     payload._upstream={protocol:'standard-video-async-v1',modelId:model.id,id:String(taskId),createdAt:new Date().toISOString()};
@@ -1061,10 +1070,12 @@ async function executeStandardVideoAsync(task,provider,model,payload){
   while(Date.now()-started<config.timeoutMs){
     assertTaskActive(task);await new Promise(r=>setTimeout(r,config.pollIntervalMs));checks++;
     const pollCtx={...ctx,taskId};
-    const pollPath=renderPathTemplate(config.pollPath||'/v1/videos/{{taskId}}',pollCtx);
+    const pollTemplates=[...new Set([String(config.pollPath||'/v1/videos/{{taskId}}'),...(Array.isArray(config.pollPathCandidates)?config.pollPathCandidates:[])].filter(Boolean))];
     const pollMethod=String(config.pollMethod||'GET').toUpperCase();
     const pollBody=config.pollBodyTemplate&&typeof config.pollBodyTemplate==='object'?renderTemplate(config.pollBodyTemplate,pollCtx):undefined;
-    const polled=await fetchJson(joinUrl(provider.baseUrl,pollPath),{method:pollMethod,headers:providerHeaders(provider),body:['GET','HEAD'].includes(pollMethod)?undefined:(pollBody===undefined?undefined:JSON.stringify(pollBody)),timeoutMs:60000,provider});
+    let polled=null,lastPollError=null;
+    for(const template of pollTemplates){const pollPath=renderPathTemplate(template,pollCtx);try{polled=await fetchJson(joinUrl(provider.baseUrl,pollPath),{method:pollMethod,headers:providerHeaders(provider),body:['GET','HEAD'].includes(pollMethod)?undefined:(pollBody===undefined?undefined:JSON.stringify(pollBody)),timeoutMs:60000,provider});break}catch(error){lastPollError=error;if(![404,405].includes(Number(error?.status)))throw error}}
+    if(!polled)throw lastPollError||new Error('没有可用的视频轮询接口');
     const assessment=ProviderRuntimeCore.classifyAsyncPoll(polled,config,'video');
     const status=assessment.status,progressRaw=assessment.progress;
     const pollPatch={status:'polling',lastPollAt:new Date().toISOString(),progress:Number.isFinite(progressRaw)?Math.max(20,Math.min(96,progressRaw)):Math.min(94,20+checks*4)};

@@ -52,3 +52,13 @@ test('DataEyes Kling chooses text or image operation route',()=>{
   assert.equal(text.createPath,'/kling/v1/videos/text2video');
   assert.equal(image.createPath,'/kling/v1/videos/image2video');
 });
+
+ test('gateway model families use JSON while Sora keeps multipart-compatible transport',()=>{
+  const p={baseUrl:'https://gateway.example.com'};
+  const seed=A.resolveVideoRoute(p,{id:'seedance-2.0',modality:'video'},{parameters:{}},[]);
+  const sora=A.resolveVideoRoute(p,{id:'sora-2',modality:'video'},{parameters:{}},[]);
+  assert.equal(seed.requestTransport,'json');
+  assert.equal(sora.requestTransport,'multipart-fallback-json');
+  assert.ok(seed.createCandidates.length>1);
+  assert.ok(seed.pollPathCandidates.length>1);
+});
