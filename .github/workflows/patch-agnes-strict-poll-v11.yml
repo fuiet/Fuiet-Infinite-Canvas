@@ -1,0 +1,43 @@
+name: Patch Agnes strict poll v11
+
+on:
+  push:
+    branches: [agnes-poll-exact-v11]
+    paths:
+      - '.github/workflows/patch-agnes-strict-poll-v11.yml'
+      - '_read_123_zip_20260821_180410/scripts/patch-agnes-strict-poll-v11.cjs'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agnes-poll-exact-v11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply fix
+        working-directory: _read_123_zip_20260821_180410
+        run: node scripts/patch-agnes-strict-poll-v11.cjs
+      - name: Check
+        working-directory: _read_123_zip_20260821_180410
+        run: npm run check
+      - name: Agnes regression
+        working-directory: _read_123_zip_20260821_180410
+        run: node --test tests/agnes-fixed-adapter.test.mjs tests/video-result-cache-bust.test.mjs tests/video-error-reporting.test.mjs tests/video-task-reconciliation.test.mjs
+      - name: Full tests
+        working-directory: _read_123_zip_20260821_180410
+        run: timeout 90s npm test
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add _read_123_zip_20260821_180410
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Use Agnes documented poll endpoint exactly"
+          git push origin HEAD:agnes-poll-exact-v11
