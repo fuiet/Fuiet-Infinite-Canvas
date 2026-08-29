@@ -13,6 +13,7 @@ function detectFamily(provider={},model={}){
   const explicit=String(model.videoProtocolFamily||model.protocolFamily||model.videoFamily||'').trim().toLowerCase();
   if(explicit)return explicit;
   const hint=hintOf(model);
+  if(/agnes[-_. ]?video/.test(hint))return'agnes-video';
   if(/kling|kwaivgi|可灵/.test(hint))return'kling';
   if(/seedance|seed[-_. ]?ance|art[-_. ]?sdance|artsdance|dance\s*2(?:\.0)?|doubao[-_. ]?video|豆包.*视频/.test(hint))return'seedance';
   if(/hailuo|minimax|海螺|\bh3\b/.test(hint))return'minimax-hailuo';
@@ -62,6 +63,24 @@ function gatewayCandidates(family,operation){
   if(family==='grok')return{createCandidates:['/v1/videos/generations','/v1/video/generations','/v1/videos'],pollPathCandidates:['/v1/videos/generations/{{taskId}}','/v1/tasks/{{taskId}}','/v1/videos/{{taskId}}']};
   return{createCandidates:standard,pollPathCandidates:['/v1/video/generations/{{taskId}}','/v1/videos/{{taskId}}','/v1/tasks/{{taskId}}']};
 }
+function agnesVideoProfile(provider,model,operation){
+  const host=hostOf(provider),hint=hintOf(model);if(!((host==='apihub.agnes-ai.com'||host.endsWith('.agnes-ai.com'))&&/agnes[-_. ]?video/.test(hint)))return null;
+  const modelId=String(model.id||'agnes-video-2.5-flash'),origin=(()=>{try{return new URL(String(provider.baseUrl||'https://apihub.agnes-ai.com/v1')).origin}catch{return'https://apihub.agnes-ai.com'}})();
+  const poll=origin+'/agnesapi?video_id={{taskId}}&model_name='+encodeURIComponent(modelId),base=genericProfile('agnes-video');
+  return{...base,profile:'agnes:'+modelId,createPath:'/v1/videos',createCandidates:['/v1/videos'],pollPath:poll,pollPathCandidates:[poll],taskIdPath:'video_id',taskIdPaths:['video_id','videoId','data.video_id','data.videoId',...COMMON_TASK_IDS],statusPath:'status',statusPaths:['status',...COMMON_STATUS],progressPath:'progress',progressPaths:['progress',...COMMON_PROGRESS],outputPath:'metadata.url',outputPaths:['metadata.url','data.metadata.url',...COMMON_OUTPUTS],contentPath:'',contentPathCandidates:[],requestTransport:'json',referenceTransport:'url',pollIntervalMs:1500,timeoutMs:3600000,videoOperation:operation};
+}
+function agnesPublicMediaUrl(value,label){const text=String(value||'').trim();if(!/^https?:\/\//i.test(text))throw new Error('Agnes Video 2.5 Flash 的'+label+'必须是 Agnes 可公开访问的 HTTP/HTTPS URL；浏览器本地地址、blob URL 和 Base64 Data URI 不能直接作为视频参考素材');return text}
+function mapAgnesVideoRequest(model={},task={},refs=[]){
+  const p={...(task.parameters||{})},prompt=String(task.prompt||''),flash=/agnes-video-2\.5-flash/i.test(String(model.id||''));
+  const seconds=String(Math.max(4,Math.min(12,Math.round(Number(p.seconds??p.duration??5)||5)))),allowedRatios=['21:9','16:9','4:3','1:1','3:4','9:16'],ratio=allowedRatios.includes(String(p.aspectRatio||p.aspect_ratio||''))?String(p.aspectRatio||p.aspect_ratio):'16:9';
+  const body={model:model.id,prompt,seconds,mode:'text',size:flash?'720P':String(p.size||p.resolution||'720P').toUpperCase(),aspect_ratio:ratio,n:1};
+  const list=Array.isArray(refs)?refs:[],images=list.filter(r=>String(r?.type||r?.kind||'').toLowerCase()==='image'||/frame|image|picture/.test(String(r?.role||r?.semanticRole||'').toLowerCase())),audios=list.filter(r=>String(r?.type||r?.kind||'').toLowerCase()==='audio'),videos=list.filter(r=>String(r?.type||r?.kind||'').toLowerCase()==='video');
+  if(!images.length&&!audios.length&&!videos.length)return body;
+  if(flash&&videos.length)throw new Error('Agnes Video 2.5 Flash 不支持 reference 视频输入');
+  const first=images.find(r=>/first/.test(String(r?.role||r?.semanticRole||'').toLowerCase())),last=images.find(r=>/last/.test(String(r?.role||r?.semanticRole||'').toLowerCase()));
+  if(images.length===1||first||last){body.mode='keyframe';if(first||images[0])body.first_frame=agnesPublicMediaUrl((first||images[0])?.url||(first||images[0])?.value,'首帧图片');if(last)body.last_frame=agnesPublicMediaUrl(last.url||last.value,'尾帧图片');return body}
+  body.mode='reference';if(flash&&images.length>5)throw new Error('Agnes Video 2.5 Flash 最多支持 5 张参考图片');if(images.length)body.images=images.slice(0,flash?5:images.length).map(r=>agnesPublicMediaUrl(r.url||r.value,'参考图片'));if(audios.length)body.audios=audios.map(r=>agnesPublicMediaUrl(r.url||r.value,'参考音频'));return body;
+}
 function dataEyesProfile(provider,model,operation){
   const host=hostOf(provider);if(!(host==='platform.dataeyes.ai'||host.endsWith('.dataeyes.ai')))return null;
   const family=detectFamily(provider,model),base=genericProfile(family);
@@ -80,7 +99,7 @@ function dataEyesProfile(provider,model,operation){
 }
 function resolve(provider={},model={},operation='generate'){
   const family=detectFamily(provider,model),op=operation==='generate'?detectOperation({references:model.__references||[],parameters:model.__parameters||{}}):operation;
-  const specialized=dataEyesProfile(provider,model,op);if(specialized)return specialized;
+  const specialized=agnesVideoProfile(provider,model,op)||dataEyesProfile(provider,model,op);if(specialized)return specialized;
   const base=genericProfile(family),candidates=gatewayCandidates(family,op);
   return{...base,...candidates,profile:`${family}:${op}`,videoOperation:op,createPath:candidates.createCandidates?.[0]||'/v1/video/generations',pollPath:candidates.pollPathCandidates?.[0]||'/v1/video/generations/{{taskId}}',contentPath:(candidates.contentPathCandidates||[])[0]||''};
 }
@@ -88,6 +107,7 @@ function mapRequest(provider={},model={},task={},route={},refs=[]){
   const family=String(route.protocolFamily||route.family||detectFamily(provider,model));
   const operation=String(route.videoOperation||detectOperation({references:refs,parameters:task.parameters||{}}));
   const p={...(task.parameters||{})},prompt=String(task.prompt||''),first=(refs||[]).find(r=>r?.url&&(/first|image|reference/.test(String(r.role||r.semanticRole||'').toLowerCase())||r.type==='image')),last=(refs||[]).find(r=>r?.url&&/last/.test(String(r.role||r.semanticRole||'').toLowerCase()));
+  if(family==='agnes-video')return{family,operation,body:mapAgnesVideoRequest(model,task,refs)};
   const body={model:model.id,prompt,...p};
   const duration=Number(p.duration??p.seconds??0);if(duration){body.duration=duration;body.seconds=String(p.seconds||duration)}
   const ratio=String(p.aspectRatio||p.aspect_ratio||'');if(ratio){body.aspect_ratio=ratio;body.ratio=ratio}
@@ -99,6 +119,6 @@ function mapRequest(provider={},model={},task={},route={},refs=[]){
   if(family==='seedance'&&first?.url&&!body.image_url)body.image_url=first.url;
   return{family,operation,body};
 }
-function publicProfiles(){return['kling','seedance','minimax-hailuo','vidu','veo','sora-openai','wan','grok','generic-video'];}
+function publicProfiles(){return['agnes-video','kling','seedance','minimax-hailuo','vidu','veo','sora-openai','wan','grok','generic-video'];}
 globalThis.CanvasVideoProtocolRegistry=Object.freeze({SUCCESS,FAILURE,detectFamily,detectOperation,resolve,mapRequest,publicProfiles,COMMON_TASK_IDS,COMMON_STATUS,COMMON_PROGRESS,COMMON_OUTPUTS});
 })();

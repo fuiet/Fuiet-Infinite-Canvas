@@ -9,11 +9,14 @@ const dns = require('dns').promises;
 const net = require('net');
 const { CanvasStore } = require('./store');
 const { verifyLocalMediaProcessResult } = require('./local-media-result');
+require('./image-request-parameters.js');
+require('./model-image-capabilities.js');
 require('./video-protocol-registry.js');
 require('./provider-adapter-contract.js');
 require('./provider-runtime-core.js');
 const ProviderAdapterContract = globalThis.CanvasProviderAdapters;
 const ProviderRuntimeCore = globalThis.CanvasProviderRuntimeCore;
+const ImageCapabilities = globalThis.CanvasModelImageCapabilities;
 const execFileAsync = promisify(execFile);
 
 const ROOT = __dirname;
@@ -949,9 +952,11 @@ async function executeOpenAIChat(task, provider, model, payload, useResponses=fa
 }
 async function executeOpenAIImage(task, provider, model, payload) {
   updateTask(task,{progress:10});const sem=semanticContext(payload.references||[]);
-  const body={model:model.id,prompt:payload.prompt||'',n:payload.parameters?.count||1};
-  if(payload.parameters?.size)body.size=payload.parameters.size;
-  if(payload.parameters?.aspectRatio)body.aspect_ratio=payload.parameters.aspectRatio;
+  let body={model:model.id,prompt:payload.prompt||'',n:payload.parameters?.count||1};
+  if(ProviderAdapterContract.isAgnesProvider?.(provider)&&ImageCapabilities?.mapRequest){
+    const refs=[];for(const ref of (payload.references||[])){let url=String(ref?.url||ref?.value||'');if(/^\/media\/[A-Za-z0-9._-]+$/.test(url)){const file=mediaPathFromUrl(url);url='data:'+localMediaMime(file)+';base64,'+fs.readFileSync(file).toString('base64')}refs.push({...ref,url})}
+    body=ImageCapabilities.mapRequest(provider,model,payload.parameters||{},payload.prompt||'',Number(payload.parameters?.count||1),refs).body;
+  }else{if(payload.parameters?.size)body.size=payload.parameters.size;if(payload.parameters?.aspectRatio)body.aspect_ratio=payload.parameters.aspectRatio}
   const data=await fetchJson(joinUrl(provider.baseUrl,'/v1/images/generations'),{method:'POST',headers:providerHeaders(provider),body:JSON.stringify(body),timeoutMs:120000,provider});
   const url=deepGet(data,'data.0.url'),b64=deepGet(data,'data.0.b64_json');
   return normalizeOutput(url||(b64?`data:image/png;base64,${b64}`:data),'image',provider);
@@ -1459,7 +1464,7 @@ const server = http.createServer(async (req, res) => {
           const finalized=ProviderAdapterContract.finalizeProvider(saved);
           saved.models=finalized.models||saved.models;
           autoConfigured=true;discoveredEndpoint=discovered.endpoint||'';
-        }catch(error){warning=`供应商已保存，但没有发现模型列表：${String(error?.message||error)}`;}
+        }catch(error){warning=`供应商已保存，但没有发现模型列表：${String(error?.message||error)}`;const finalized=ProviderAdapterContract.finalizeProvider(saved);saved.models=finalized.models||saved.models;if((!saved.protocol||saved.protocol==='auto')&&finalized.protocol)saved.protocol=finalized.protocol;}
       }else{
         const finalized=ProviderAdapterContract.finalizeProvider(saved);
         saved.models=finalized.models||saved.models;

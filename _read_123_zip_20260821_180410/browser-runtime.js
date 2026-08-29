@@ -289,7 +289,7 @@ function imageRequestBodies(provider,model,task,route,refs){
   if(route.requestTemplate&&Object.keys(route.requestTemplate).length)return[{profile:'template',body:strict,capability:null,selection:null}];
   if(route.adapterKey!=='openai-image')return[{profile:'generic',body:strict,capability:null,selection:null}];
   if(ImageCapabilities?.mapRequest){
-    const mapped=ImageCapabilities.mapRequest(provider,model,task.parameters||{},String(task.prompt||''),Number(task.parameters?.count||1));
+    const mapped=ImageCapabilities.mapRequest(provider,model,task.parameters||{},String(task.prompt||''),Number(task.parameters?.count||1),refs);
     return[{profile:mapped.profile,body:mapped.body,capability:{family:mapped.capability?.family||'',source:mapped.capability?.source||'',confidence:mapped.capability?.confidence??0,requestMode:mapped.capability?.requestMode||''},selection:{aspectRatio:mapped.selection?.aspectRatio||'',resolution:mapped.selection?.resolution||'',imageQuality:mapped.selection?.imageQuality||'',size:mapped.selection?.size||''}}];
   }
   return[{profile:'openai-fallback',body:strict,capability:null,selection:null}];
@@ -311,6 +311,7 @@ function defaultRequestBody(provider,model,task,route,refs){
   if(route.requestTemplate&&Object.keys(route.requestTemplate).length)return fillTemplate(route.requestTemplate,ctx);
   if(route.adapterKey==='openai-chat'){
     const images=refs.filter(r=>r.url&&r.type==='image');
+    if(Adapters?.isAgnesProvider?.(provider)&&images.some(r=>!/^https?:\/\//i.test(String(r.url||''))))throw new Error('Agnes 文本模型的图像理解仅支持公开可访问的 image_url；浏览器本地图片不能直接提交');
     const content=images.length?[{type:'text',text:prompt},...images.map(r=>({type:'image_url',image_url:{url:r.url}}))]:prompt;
     return{model:modelId,messages:[{role:'user',content}],...(p.responseFormat==='json_object'?{response_format:{type:'json_object'}}:{})};
   }

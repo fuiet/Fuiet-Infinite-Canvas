@@ -8,6 +8,7 @@ const Params=()=>globalThis.CanvasImageRequestParameters;
 const UI_RATIOS=['1:1','1:2','2:1','9:16','16:9','3:4','4:3','3:2','2:3','5:4','4:5','21:9','9:21'];
 const GEMINI_RATIOS=['1:1','1:4','4:1','1:8','8:1','2:3','3:2','3:4','4:3','4:5','5:4','9:16','16:9','21:9'];
 const SEEDREAM_RATIOS=[...UI_RATIOS];
+const AGNES_RATIOS=['1:1','3:4','4:3','16:9','9:16','2:3','3:2','21:9'];
 const QUALITY={
   auto:{label:'自动画质',value:'auto'},
   low:{label:'低画质',value:'low'},
@@ -44,6 +45,7 @@ function areaSize(resolution,ratio){
 }
 function defaultCapability(provider={},model={}){
   const h=hint(provider,model);
+  if(/agnes[-_. ]?image[-_. ]?2\.1[-_. ]?flash/.test(h))return{family:'agnes-image-2.1-flash',source:'registry',confidence:1,requestMode:'agnes-image',aspectRatios:AGNES_RATIOS,resolutions:['1K','2K','3K','4K'],qualities:[QUALITY.native],maxImages:8};
   if(/gpt[-_. ]?image/.test(h))return{family:'gpt-image',source:'registry',confidence:.99,requestMode:'openai-size',aspectRatios:['1:1','3:2','2:3'],resolutions:['原生'],qualities:[QUALITY.auto,QUALITY.low,QUALITY.medium,QUALITY.high],exactSizes:{'1:1':'1024x1024','3:2':'1536x1024','2:3':'1024x1536'},maxImages:4};
   if(/dall[-_. ]?e[-_. ]?3/.test(h))return{family:'dall-e-3',source:'registry',confidence:.99,requestMode:'openai-size',aspectRatios:['1:1','7:4','4:7'],resolutions:['原生'],qualities:[QUALITY.standard,QUALITY.hd],exactSizes:{'1:1':'1024x1024','7:4':'1792x1024','4:7':'1024x1792'},maxImages:1};
   if(/gemini[-_. /]?(3(?:\.1)?|3-pro).*image|gemini.*image.*(3(?:\.1)?|3-pro)/.test(h))return{family:'gemini-3-image',source:'registry',confidence:.97,requestMode:'aspect-image-size',aspectRatios:GEMINI_RATIOS,resolutions:['512','1K','2K','4K'],qualities:[QUALITY.native],maxImages:1};
@@ -85,10 +87,12 @@ function normalizeSelection(provider,model,parameters={}){
   if(!size&&!['原生','自动'].includes(resolution)){const p=Params();size=p?.dimensions?p.dimensions(resolution,ratio).size:''}
   return{...parameters,aspectRatio:ratio,aspect_ratio:ratio,resolution,imageQuality:q.label,qualityLabel:q.label,quality:q.value,size:size||parameters.size||'',capability:{family:cap.family,source:cap.source,confidence:cap.confidence,requestMode:cap.requestMode},imageCapabilities:cap};
 }
-function mapRequest(provider,model,parameters={},prompt='',count=1){
+function mapRequest(provider,model,parameters={},prompt='',count=1,references=[]){
   const p=normalizeSelection(provider,model,parameters),cap=p.imageCapabilities,n=Math.max(1,Math.min(Number(cap.maxImages||4),Number(count||parameters.count||1))),common={model:model.id,prompt:String(prompt||'')};
   let body,profile=cap.requestMode;
-  if(cap.requestMode==='openai-size')body={...common,n,...(p.size?{size:p.size}:{}),...(p.quality?{quality:p.quality}:{})};
+  const referenceImages=(Array.isArray(references)?references:[]).filter(r=>String(r?.type||r?.kind||'').toLowerCase()==='image'&&String(r?.url||r?.value||'').trim()).map(r=>String(r.url||r.value).trim()).slice(0,Number(cap.maxImages||8));
+  if(cap.requestMode==='agnes-image')body={...common,size:['1K','2K','3K','4K'].includes(String(p.resolution||'').toUpperCase())?String(p.resolution).toUpperCase():'1K',ratio:AGNES_RATIOS.includes(p.aspectRatio)?p.aspectRatio:'1:1',extra_body:{...(referenceImages.length?{image:referenceImages}:{}),response_format:'url'}};
+  else if(cap.requestMode==='openai-size')body={...common,n,...(p.size?{size:p.size}:{}),...(p.quality?{quality:p.quality}:{})};
   else if(cap.requestMode==='seedream-size')body={...common,size:p.size||p.resolution,sequential_image_generation:'disabled',stream:false,response_format:'url'};
   else if(cap.requestMode==='siliconflow-image-size')body={...common,image_size:p.size||Params()?.dimensions?.('1K',p.aspectRatio)?.size||'1024x1024',...(n>1?{batch_size:n}:{})};
   else if(cap.requestMode==='aspect-image-size')body={...common,aspect_ratio:p.aspectRatio,image_size:p.resolution};
