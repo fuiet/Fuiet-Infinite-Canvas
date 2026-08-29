@@ -734,15 +734,22 @@ async function prepareReferences(provider,model,references=[]){
   }
   return out;
 }
-async function materializeRemoteOutput(output,provider){
+function isProviderOutputOrigin(provider,value){
+  try{return Boolean(provider?.baseUrl)&&new URL(String(value||'')).origin===new URL(String(provider.baseUrl)).origin}catch{return false}
+}
+async function materializeRemoteOutput(output,provider,modality=''){
   if(!output||output.type!=='url'||provider.downloadOutputs===false)return output;
   const value=String(output.value||'');if(value.startsWith('/media/')||value.startsWith('data:'))return output;
   if(!/^https?:\/\//i.test(value))return output;
   try{
-    const res=await fetchSafe(value,{method:'GET',headers:{},timeoutMs:120000},provider,{sameOrigin:false});if(!res.ok)return output;
-    const len=Number(res.headers.get('content-length')||0);if(len>MAX_UPLOAD_BYTES)return output;
-    const buf=Buffer.from(await res.arrayBuffer());if(buf.length>MAX_UPLOAD_BYTES)return output;
-    const ct=String(res.headers.get('content-type')||'').split(';')[0];const ext=safeExt(new URL(value).pathname,ct);const file=outFile(ext);fs.writeFileSync(file,buf);return {...output,sourceUrl:value,value:mediaUrl(file)};
+    const sameProviderOrigin=isProviderOutputOrigin(provider,value);
+    const headers=sameProviderOrigin?providerHeaders(provider):{};
+    const policy=sameProviderOrigin?{allowCredentiallessCrossOriginRedirect:true}:{sameOrigin:false};
+    const res=await fetchSafe(value,{method:'GET',headers,timeoutMs:120000},provider,policy);if(!res.ok)return output;
+    const limit=modality==='video'?Math.max(MAX_UPLOAD_BYTES,250*1024*1024):MAX_UPLOAD_BYTES;
+    const len=Number(res.headers.get('content-length')||0);if(len>limit)return output;
+    const buf=Buffer.from(await res.arrayBuffer());if(buf.length>limit)return output;
+    const ct=String(res.headers.get('content-type')||'').split(';')[0];const ext=safeExt(new URL(value).pathname,ct);const file=outFile(ext);fs.writeFileSync(file,buf);return {...output,sourceUrl:value,value:mediaUrl(file),persisted:true};
   }catch{return output}
 }
 
@@ -1236,7 +1243,7 @@ async function runTask(task, payload) {
   else if(adapter==='standard-video-async-v1')output=await executeStandardVideoAsync(task,provider,model,payload);
   else if(adapter.startsWith('openai-'))output=await executeOpenAI(task,provider,model,payload);
   else output=await executeGeneric(task,provider,model,payload);
-  assertTaskActive(task);output=await materializeRemoteOutput(output,provider);
+  assertTaskActive(task);output=await materializeRemoteOutput(output,provider,task.nodeType);
   updateTask(task,{status:'succeeded',progress:100,output,error:null});taskLog(task,'任务完成');
 }
 async function runTaskById(id){
