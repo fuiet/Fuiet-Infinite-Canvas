@@ -10,6 +10,8 @@ models_path=ROOT/'models.html'
 bootstrap_path=ROOT/'browser-bootstrap.js'
 old_test_path=ROOT/'tests/browser-video-result-persistence.test.mjs'
 new_test_path=ROOT/'tests/browser-video-display-pipeline.test.mjs'
+error_test_path=ROOT/'tests/video-error-reporting.test.mjs'
+cache_test_path=ROOT/'tests/video-result-cache-bust.test.mjs'
 
 runtime=runtime_path.read_text(encoding='utf-8')
 old="await navigator.serviceWorker.register('./browser-media-sw.js?v=20260828-idb-1',{scope:'./'});"
@@ -85,6 +87,16 @@ bootstrap_path.write_text(bootstrap,encoding='utf-8')
 old_test=old_test_path.read_text(encoding='utf-8')
 old_test=old_test.replace("  assert.match(helper,/parsed\\.kind!==['\"]blob['\"]/);", "  assert.match(helper,/res\\.blob\\(\\)/);\n  assert.match(helper,/typedGeneratedVideoBlob\\(blob,url,res\\)/);\n  assert.match(helper,/storeMediaBlob\\(typed,\\{name:'generated-video'\\}\\)/);")
 old_test_path.write_text(old_test,encoding='utf-8')
+
+error_test=error_test_path.read_text(encoding='utf-8')
+error_test=error_test.replace('20260829-agnes-poll-exact-1',BUILD)
+error_test_path.write_text(error_test,encoding='utf-8')
+
+cache_test=cache_test_path.read_text(encoding='utf-8')
+cache_test=cache_test.replace("const REGISTRY_VERSION='20260829-agnes-poll-exact-1';",f"const REGISTRY_VERSION='{BUILD}';")
+cache_test=cache_test.replace("const APP_VERSION='20260829-agnes-poll-exact-1';",f"const APP_VERSION='{BUILD}';")
+cache_test=cache_test.replace("const BOOTSTRAP_VERSION='20260829-agnes-poll-exact-1';",f"const BOOTSTRAP_VERSION='{BUILD}';")
+cache_test_path.write_text(cache_test,encoding='utf-8')
 
 new_test_path.write_text(f"""import test from 'node:test';
 import assert from 'node:assert/strict';
