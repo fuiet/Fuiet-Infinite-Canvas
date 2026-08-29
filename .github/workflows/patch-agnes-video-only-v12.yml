@@ -1,4 +1,3 @@
-# rerun after Agnes-only regression update
 name: Patch Agnes video only v12
 
 on:
@@ -7,6 +6,7 @@ on:
     paths:
       - '.github/workflows/patch-agnes-video-only-v12.yml'
       - '_read_123_zip_20260821_180410/scripts/patch-agnes-video-only-v12.cjs'
+      - '_read_123_zip_20260821_180410/scripts/patch-agnes-video-only-tests-v12.cjs'
 
 permissions:
   contents: write
@@ -24,13 +24,15 @@ jobs:
           node-version: 22
       - name: Apply Agnes-only video changes
         working-directory: _read_123_zip_20260821_180410
-        run: node scripts/patch-agnes-video-only-v12.cjs
+        run: |
+          node scripts/patch-agnes-video-only-v12.cjs
+          node scripts/patch-agnes-video-only-tests-v12.cjs
       - name: Syntax check
         working-directory: _read_123_zip_20260821_180410
         run: npm run check
       - name: Agnes video contract tests
         working-directory: _read_123_zip_20260821_180410
-        run: node --test tests/agnes-fixed-adapter.test.mjs tests/video-protocol-registry.test.mjs tests/video-result-cache-bust.test.mjs tests/video-error-reporting.test.mjs
+        run: node --test tests/agnes-fixed-adapter.test.mjs tests/video-protocol-registry.test.mjs tests/video-generation-runtime.test.mjs tests/video-provider-result-parsing.test.mjs tests/video-reference-transport.test.mjs tests/video-result-cache-bust.test.mjs tests/video-error-reporting.test.mjs
       - name: Full test suite
         working-directory: _read_123_zip_20260821_180410
         run: timeout 120s npm test
