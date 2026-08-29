@@ -29,6 +29,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add _read_123_zip_20260821_180410/provider-runtime-core.js _read_123_zip_20260821_180410/browser-runtime.js _read_123_zip_20260821_180410/server.js _read_123_zip_20260821_180410/tests/provider-runtime-core.test.mjs _read_123_zip_20260821_180410/tests/desktop-video-poll-parity.test.mjs
+          git add _read_123_zip_20260821_180410/provider-runtime-core.js _read_123_zip_20260821_180410/browser-runtime.js _read_123_zip_20260821_180410/server.js _read_123_zip_20260821_180410/tests/provider-runtime-core.test.mjs _read_123_zip_20260821_180410/tests/desktop-video-poll-parity.test.mjs _read_123_zip_20260821_180410/tests/video-generation-runtime.test.mjs
           git commit -m "Share async poll URL extraction across runtimes"
           git push
