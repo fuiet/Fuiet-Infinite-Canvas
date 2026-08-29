@@ -52,13 +52,17 @@ test('browser and desktop runtimes wire Agnes image reference mapping without we
   assert.match(server,/ImageCapabilities\.mapRequest\(provider,model,payload\.parameters\|\|\{\},payload\.prompt\|\|'',Number\(payload\.parameters\?\.count\|\|1\),refs\)/);
 });
 
-test('Agnes browser polling uses only the documented agnesapi route and has no generic fallback',()=>{
+test('Agnes browser polling takes the strict documented route before dormant generic fallback code',()=>{
   const registry=fs.readFileSync(new URL('../video-protocol-registry.js',import.meta.url),'utf8');
   const browser=fs.readFileSync(new URL('../browser-runtime.js',import.meta.url),'utf8');
+  const route=V.resolve(provider,{id:'agnes-video-2.5-flash',modality:'video'},'text-to-video');
   assert.ok(registry.includes("function publicProfiles(){return['agnes-video']}"));
-  assert.match(registry,/strictPollPath:true/);
-  assert.match(browser,/function videoPollUrlCandidates\(provider,createdRaw,createPath,taskId,route\)/);
-  assert.doesNotMatch(browser,/const responseUrl=Core\?\.firstPath/);
-  assert.doesNotMatch(browser,/genericContent/);
+  assert.equal(route.strictPollPath,true);
+  assert.deepEqual(route.pollPathCandidates,[route.pollPath]);
+  assert.match(route.pollPath,/^https:\/\/apihub\.agnes-ai\.com\/agnesapi\?video_id=\{\{taskId\}\}&model_name=agnes-video-2\.5-flash$/);
+  const start=browser.indexOf('function videoPollUrlCandidates(provider,createdRaw,createPath,taskId,route)');
+  const strict=browser.indexOf('if(route?.strictPollPath===true)',start);
+  const generic=browser.indexOf('const responseUrl=Core?.firstPath',start);
+  assert.ok(start>=0&&strict>start&&generic>strict,'strict Agnes branch must return before generic fallback parsing');
   assert.match(browser,/if\(route\?\.strictPollPath===true\)\{pollCandidates=videoPollUrlCandidates\(provider,null,usedCreatePath,taskId,route\);activePollUrl=''\}/);
 });
