@@ -180,7 +180,7 @@ test('immediate and synchronous browser video outputs are also persisted',()=>{
 
 test('Pages proxy strips credentials and follows cross-origin GET result redirects',()=>{
   assert.match(proxy,/function stripCredentialHeaders\(headers\)/);
-  const redirect=sliceBetween(proxy,'for(let redirects=0;redirects<4;redirects++)','return json({error:\'上游重定向次数过多\'}');
+  const redirect=sliceBetween(proxy,'for(let redirects=0;redirects<4;redirects++)',`return json({error:'上游重定向次数过多'}`);
   assert.match(redirect,/if\(next\.origin!==current\.origin\)/);
   assert.match(redirect,/if\(!\['GET','HEAD'\]\.includes\(method\)\)return json\(\{error:'已阻止非读取请求跨域重定向'\},502\)/);
   assert.match(redirect,/stripCredentialHeaders\(headers\)/);
