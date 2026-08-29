@@ -44,6 +44,13 @@ function sanitizeHeaders(input){
   }
   return out;
 }
+function stripCredentialHeaders(headers){
+  for(const name of [...headers.keys()]){
+    const n=String(name).toLowerCase();
+    if(n==='authorization'||n==='proxy-authorization'||n==='x-api-key'||n==='api-key'||/(^|[-_])(token|secret|api[-_]?key)([-_]|$)/i.test(n))headers.delete(name);
+  }
+  return headers;
+}
 function responseHeaders(source){
   const out=new Headers();
   for(const [k,v] of source.entries()){
@@ -85,12 +92,15 @@ async function proxy(request){
   }else if(payload!==null&&payload!==undefined&&typeof payload!=='string')return json({error:'代理请求体必须是文本、JSON 字符串或 multipart'},400);
   if(['GET','HEAD'].includes(method))payload=undefined;
 
-  const originalOrigin=current.origin;
   for(let redirects=0;redirects<4;redirects++){
     const upstream=await fetch(current.toString(),{method,headers,body:payload,redirect:'manual'});
     if([301,302,303,307,308].includes(upstream.status)&&upstream.headers.get('location')){
       let next;try{next=validateTarget(new URL(upstream.headers.get('location'),current).toString())}catch(e){return json({error:e.message},502)}
-      if(next.origin!==originalOrigin)return json({error:'已阻止携带供应商认证信息跨域重定向'},502);
+      if(next.origin!==current.origin){
+        if(!['GET','HEAD'].includes(method))return json({error:'已阻止非读取请求跨域重定向'},502);
+        stripCredentialHeaders(headers);
+        payload=undefined;
+      }
       current=next;
       continue;
     }

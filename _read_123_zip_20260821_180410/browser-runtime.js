@@ -224,6 +224,27 @@ async function normalizeGeneratedOutput(value,modality,provider){
   }
   return text;
 }
+async function materializeGeneratedVideoOutput(value,provider){
+  const text=String(value||'').trim();
+  if(!text||text.startsWith('/__browser_media/')||text.startsWith('/media/')||text.startsWith('data:')||text.startsWith('blob:'))return text;
+  if(!/^(https?:\/\/|\/\/)/i.test(text))return text;
+  const url=text.startsWith('//')?`${location.protocol}${text}`:text;
+  const res=await fetchProviderResource(provider,url,{method:'GET',headers:{accept:'video/*,application/octet-stream;q=0.9,*/*;q=0.1'}});
+  if(!res.ok)throw new Error(`视频结果下载失败 ${res.status}`);
+  const ct=String(res.headers.get('content-type')||'').toLowerCase();
+  if(ct.includes('application/json')||ct.includes('+json')||ct.startsWith('text/')){
+    const parsed=await readResponse(res);
+    if(parsed.kind==='json'){
+      const nested=Core?.extractOutput?Core.extractOutput(parsed.value,{},'video'):undefined;
+      const candidate=nested!==undefined?nested:(Core?.firstPath?Core.firstPath(parsed.value,['url','video_url','videoUrl','download_url','downloadUrl','content.url','data.url','data.video_url','data.videoUrl','result.url','result.video_url']):undefined);
+      if(candidate&&String(candidate)!==url)return materializeGeneratedVideoOutput(candidate,provider);
+    }
+    throw new Error('视频结果地址没有返回可播放的视频文件');
+  }
+  const parsed=await readResponse(res);
+  if(parsed.kind!=='blob'||!parsed.value)throw new Error('视频结果下载后未能保存到浏览器本地媒体库');
+  return parsed.value;
+}
 function imageTargetSelection(provider,model,parameters={}){
   const selection=ImageCapabilities?.normalizeSelection?.(provider||{},model||{},parameters||{});
   const target=ImageOutputDimensions?.parseSize?.(selection?.size||parameters?.size||'');
@@ -456,7 +477,9 @@ async function executeTask(task){
       const raw=created.value,extracted=Core?.extractOutput?Core.extractOutput(raw,route,modality):undefined;
       let value=extracted!==undefined?extracted:(modality==='text'?(raw?.choices?.[0]?.message?.content??raw?.text??raw?.content??JSON.stringify(raw)):raw?.url??raw?.data?.url);
       value=await normalizeGeneratedOutput(value,modality,provider);
+      if(modality==='video')value=await materializeGeneratedVideoOutput(value,provider);
       if(modality==='image'&&!validMediaOutput(value))throw new Error('上游已返回成功响应，但未识别到图片结果字段');
+      if(modality==='video'&&!validMediaOutput(value))throw new Error('上游已返回成功响应，但未识别到视频结果字段');
       let dimensionInfo=null;if(modality==='image'){dimensionInfo=await enforceGeneratedImageDimensions(value,provider,model,task.parameters||{});value=dimensionInfo.value}
       const upstreamSize=modality==='image'?imageResponseSize(raw):'';
       return updateTask(task.id,{status:'succeeded',progress:100,output:outputObject(value,modality),...imageDimensionTaskPatch(dimensionInfo),...(upstreamSize?{upstreamSize}:{})});
@@ -469,8 +492,9 @@ async function executeTask(task){
     const immediateOutput=modality==='video'&&Core?.extractOutput?Core.extractOutput(created.value,route,'video'):undefined;
     taskId=Core?.extractTaskId?Core.extractTaskId(created.value,route):created.value?.id;
     if(modality==='video'&&immediateOutput&&!taskId){
-      const value=await normalizeGeneratedOutput(immediateOutput,'video',provider);
-      return updateTask(task.id,{status:'succeeded',progress:100,output:outputObject(value,'video'),providerOutput:clone(created.value),videoProtocolDiagnostics:{createPath:usedCreatePath,mode:'immediate-output'}});
+      let value=await normalizeGeneratedOutput(immediateOutput,'video',provider);
+      value=await materializeGeneratedVideoOutput(value,provider);
+      return updateTask(task.id,{status:'succeeded',providerStatus:'succeeded',resultStatus:'saved',progress:100,output:outputObject(value,'video'),providerOutput:clone(created.value),providerResultUrl:String(value||''),resultSavedAt:now(),videoProtocolDiagnostics:{createPath:usedCreatePath,mode:'immediate-output'}});
     }
     if(!taskId){const error=new Error('异步接口没有返回任务 ID，也没有返回可用的视频结果；为避免重复扣费不会自动重新提交');error.noRetry=true;throw error}
     if(modality==='video')pollCandidates=videoPollUrlCandidates(provider,created.value,usedCreatePath,taskId,route);
@@ -526,6 +550,10 @@ async function executeTask(task){
         updateTask(task.id,{status:'result_pending',lastError:resultError||'上游已生成成功，正在等待视频结果地址',error:null,progress:99});attempt++;continue;
       }
       output=await normalizeGeneratedOutput(output,modality,provider);
+      if(modality==='video'){
+        try{output=await materializeGeneratedVideoOutput(output,provider)}
+        catch(error){updateTask(task.id,{status:'result_pending',providerStatus:'succeeded',resultStatus:'pending',providerResultUrl:String(output||''),lastError:runtimeErrorText(error)||'上游已成功，但视频结果保存到浏览器本地失败，将继续重试',error:null,progress:99});attempt++;continue}
+      }
       if(modality==='image'&&!validMediaOutput(output))throw new Error('上游任务已成功，但未识别到图片结果字段');
       if(modality==='video'&&!validMediaOutput(output)){
         updateTask(task.id,{status:'result_pending',lastError:'上游已生成成功，但返回的视频结果地址暂不可识别',error:null,progress:99});attempt++;continue;
