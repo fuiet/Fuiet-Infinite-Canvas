@@ -149,6 +149,16 @@ function isRetryableProviderFailure(value){
   if(!text)return false;
   return /circuit(?: breaker)?(?: is)? open|retry (?:later|after|again)|temporar(?:y|ily) unavailable|service unavailable|upstream[^.;\n]*(?:unavailable|overload|timeout)|gateway timeout|timed? out|timeout|too many requests|rate[ _-]?limit(?:ed)?|over(?:loaded| capacity)|connection (?:reset|refused|closed)|bad gateway|http\s*(?:408|425|429|500|502|503|504)\b/.test(text);
 }
+async function mapNestedStrings(value,mapper,depth=0){
+  if(typeof mapper!=='function'||depth>20)return value;
+  if(typeof value==='string')return await mapper(value);
+  if(Array.isArray(value)){const out=[];for(const item of value)out.push(await mapNestedStrings(item,mapper,depth+1));return out}
+  if(value&&typeof value==='object'){
+    const proto=Object.getPrototypeOf(value);if(proto!==Object.prototype&&proto!==null)return value;
+    const out={};for(const [key,item] of Object.entries(value))out[key]=await mapNestedStrings(item,mapper,depth+1);return out;
+  }
+  return value;
+}
 function classifyAsyncPoll(response,config={},modality='video'){
   const rawStatus=extractStatus(response,config);
   const status=String(rawStatus??'').trim().toLowerCase();
@@ -191,6 +201,6 @@ function formatFailure(assessment,prefix='上游任务失败'){
 
 globalThis.CanvasProviderRuntimeCore=Object.freeze({
   DEFAULT_SUCCESS,DEFAULT_FAILURE,getPath,firstPath,extractTaskId,extractStatus,extractProgress,extractImageOutput,extractOutput,
-  classifyAsyncPoll,nextPollDelay,formatFailure,providerErrorText,isRetryableProviderFailure
+  classifyAsyncPoll,nextPollDelay,formatFailure,providerErrorText,isRetryableProviderFailure,mapNestedStrings
 });
 })();

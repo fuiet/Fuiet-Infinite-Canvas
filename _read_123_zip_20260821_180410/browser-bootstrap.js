@@ -5,7 +5,7 @@
 'use strict';
 const manager=globalThis.CanvasBrowserStorageManager;
 if(!manager?.ready)throw new Error('Browser Storage Manager 未加载');
-const v='20260829-video-task-reconcile-1';
+const v='20260829-portable-video-refs-1';
 const canvasScripts=[
   `./provider-auto-config-v1.js?v=${v}`,
   `./app.js?v=${v}`,

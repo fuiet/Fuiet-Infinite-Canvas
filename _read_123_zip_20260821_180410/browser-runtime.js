@@ -265,6 +265,23 @@ function refsForRequest(refs=[]){return (Array.isArray(refs)?refs:[]).map(r=>({r
 async function blobToDataUrl(blob){return new Promise((resolve,reject)=>{const fr=new FileReader();fr.onload=()=>resolve(fr.result);fr.onerror=reject;fr.readAsDataURL(blob)})}
 async function referenceBlob(url){const value=String(url||'');if(!value)return null;try{if(value.startsWith('data:')){const res=await rawFetch(value);return await res.blob()}if(value.startsWith('blob:')||value.startsWith('/__browser_media/')){const res=await rawFetch(value);if(res.ok)return await res.blob()}if(/^https?:\/\//i.test(value)){try{const res=await rawFetch(value,{mode:'cors'});if(res.ok)return await res.blob()}catch{}const proxied=await proxyFetch(value,{method:'GET'});if(proxied.ok)return await proxied.blob()}}catch{}return null}
 async function makePortableReferences(refs=[]){const out=[];for(const r of refsForRequest(refs)){let url=r.url;if(url&&(url.startsWith('blob:')||url.startsWith('/__browser_media/'))){try{const blob=await referenceBlob(url);if(blob&&blob.size<=20*1024*1024)url=await blobToDataUrl(blob)}catch{}}out.push({...r,url})}return out}
+function browserLocalMediaReference(value){
+  const text=String(value||'').trim();if(!text)return'';if(text.startsWith('blob:')||text.startsWith('/__browser_media/'))return text;
+  try{const u=new URL(text,location.href);if(u.origin===location.origin&&u.pathname.startsWith('/__browser_media/'))return u.pathname+u.search}catch{}
+  return'';
+}
+async function portableizeVideoJsonBody(body,route={}){
+  if(!Core?.mapNestedStrings)return body;
+  const transport=Adapters?.normalizeReferenceTransport?Adapters.normalizeReferenceTransport(route.referenceTransport||'auto',{cloud:true}):'data-url';
+  return await Core.mapNestedStrings(body,async value=>{
+    const local=browserLocalMediaReference(value);if(!local)return value;
+    if(transport==='url')throw new Error('当前视频协议要求公共 URL，但参考媒体仅存在浏览器本地；请把模型 referenceTransport 改为 data-url，或配置供应商上传接口');
+    if(transport==='upload')throw new Error('当前视频协议要求先上传参考媒体，但尚未配置供应商上传接口；不能把浏览器本地地址直接发送给上游');
+    const blob=await referenceBlob(local);if(!blob)throw new Error('浏览器本地参考媒体无法读取，已阻止发送不可访问的本地 URL');
+    if(blob.size>20*1024*1024)throw new Error('浏览器本地参考媒体超过 20MB，JSON data-url 传输已阻止；请使用供应商上传接口');
+    return await blobToDataUrl(blob);
+  });
+}
 function providerHost(provider){try{return new URL(String(provider?.baseUrl||'')).hostname.toLowerCase()}catch{return''}}
 function officialOpenAIImageProvider(provider){const h=providerHost(provider);return h==='api.openai.com'||h.endsWith('.openai.com')}
 function imageRequestBodies(provider,model,task,route,refs){
@@ -379,6 +396,7 @@ async function executeTask(task){
   const existingUpstreamTaskId=modality==='video'?String(task.upstreamTaskId||'').trim():'';
   const resumingUpstream=Boolean(existingUpstreamTaskId);
   const refs=resumingUpstream?[]:await makePortableReferences(task.references||[]),body=resumingUpstream?null:defaultRequestBody(provider,model,task,route,refs);
+  let portableVideoJsonBodyPromise=null;const videoJsonBody=()=>portableVideoJsonBodyPromise||(portableVideoJsonBodyPromise=portableizeVideoJsonBody(body,route));
   let created=null,usedCreatePath=String(task.upstreamCreatePath||task.videoProtocolDiagnostics?.createPath||route.createPath),lastCreateError=null;
   updateTask(task.id,{status:resumingUpstream?(task.providerStatus==='succeeded'?'result_pending':'polling'):'running',progress:resumingUpstream?Math.max(5,Number(task.progress||5)):2,error:null});
 
@@ -390,7 +408,7 @@ async function executeTask(task){
         if(route.adapterKey==='standard-video-async-v1'){
           if(route.requestTransport==='json'){
             updateTask(task.id,{videoRequestDiagnostics:videoRequestDiagnostics(model,task,refs,createPath,'json',route)});
-            created=await providerJson(provider,createUrl,{method:route.method||'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+            created=await providerJson(provider,createUrl,{method:route.method||'POST',headers:{'content-type':'application/json'},body:JSON.stringify(await videoJsonBody())});
           }else{
             try{
               updateTask(task.id,{videoRequestDiagnostics:videoRequestDiagnostics(model,task,refs,createPath,'multipart',route)});
@@ -400,7 +418,7 @@ async function executeTask(task){
               if(!VIDEO_AUTO_RETRY_STATUSES.has(Number(error?.status)))throw error;
               lastCreateError=error;
               updateTask(task.id,{videoRequestDiagnostics:videoRequestDiagnostics(model,task,refs,createPath,'json',route)});
-              created=await providerJson(provider,createUrl,{method:route.method||'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+              created=await providerJson(provider,createUrl,{method:route.method||'POST',headers:{'content-type':'application/json'},body:JSON.stringify(await videoJsonBody())});
             }
           }
         }else if(modality==='image'&&route.adapterKey==='openai-image'){
@@ -413,7 +431,7 @@ async function executeTask(task){
           }
           if(!created&&imageError)throw imageError;
         }else{
-          created=await providerJson(provider,createUrl,{method:route.method||'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+          created=await providerJson(provider,createUrl,{method:route.method||'POST',headers:{'content-type':'application/json'},body:JSON.stringify(modality==='video'?await videoJsonBody():body)});
         }
         usedCreatePath=createPath;break;
       }catch(error){
