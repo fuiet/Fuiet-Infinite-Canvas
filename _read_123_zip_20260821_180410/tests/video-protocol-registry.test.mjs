@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 await import('../video-protocol-registry.js');
 await import('../provider-adapter-contract.js');
 await import('../provider-runtime-core.js');
-const R=globalThis.CanvasVideoProtocolRegistry,A=globalThis.CanvasProviderAdapters,C=globalThis.CanvasProviderRuntimeCore;
+const R=globalThis.CanvasVideoProtocolRegistry;
+const A=globalThis.CanvasProviderAdapters;
+const C=globalThis.CanvasProviderRuntimeCore;
 
 test('video registry detects major model families including artsdance as seedance gateway',()=>{
   assert.equal(R.detectFamily({}, {id:'kling-v2.1-master'}),'kling');
@@ -35,25 +37,23 @@ test('model-level video protocol override wins over family and provider defaults
   assert.ok(route.outputPaths.includes('data.final.url'));
 });
 
-test('runtime core consumes ordered plural task/status/output paths',()=>{
-  const cfg={taskIdPaths:['meta.task'],'statusPaths:['meta.state'],outputPaths:['meta.video.url'],successValues:['ready']};
+test('runtime core consumes ordered plural task status and output paths',()=>{
+  const cfg={taskIdPaths:['meta.task'],statusPaths:['meta.state'],outputPaths:['meta.video.url'],successValues:['ready']};
   const raw={meta:{task:'abc',state:'ready',video:{url:'https://cdn.example.com/a.mp4'}}};
   assert.equal(C.extractTaskId(raw,cfg),'abc');
-  const a=C.classifyAsyncPoll(raw,cfg,'video');
-  assert.equal(a.state,'success');
-  assert.equal(a.output,'https://cdn.example.com/a.mp4');
+  const result=C.classifyAsyncPoll(raw,cfg,'video');
+  assert.equal(result.state,'success');
+  assert.equal(result.output,'https://cdn.example.com/a.mp4');
 });
 
 test('DataEyes Kling chooses text or image operation route',()=>{
   const p={baseUrl:'https://platform.dataeyes.ai'};
   const m={id:'kling-v2.1',modality:'video'};
-  const text=A.resolveVideoRoute(p,m,{parameters:{}},[]);
-  const image=A.resolveVideoRoute(p,m,{parameters:{}},[{type:'image',url:'x'}]);
-  assert.equal(text.createPath,'/kling/v1/videos/text2video');
-  assert.equal(image.createPath,'/kling/v1/videos/image2video');
+  assert.equal(A.resolveVideoRoute(p,m,{parameters:{}},[]).createPath,'/kling/v1/videos/text2video');
+  assert.equal(A.resolveVideoRoute(p,m,{parameters:{}},[{type:'image',url:'x'}]).createPath,'/kling/v1/videos/image2video');
 });
 
- test('gateway model families use JSON while Sora keeps multipart-compatible transport',()=>{
+test('gateway model families use JSON while Sora keeps multipart-compatible transport',()=>{
   const p={baseUrl:'https://gateway.example.com'};
   const seed=A.resolveVideoRoute(p,{id:'seedance-2.0',modality:'video'},{parameters:{}},[]);
   const sora=A.resolveVideoRoute(p,{id:'sora-2',modality:'video'},{parameters:{}},[]);
@@ -63,10 +63,11 @@ test('DataEyes Kling chooses text or image operation route',()=>{
   assert.ok(seed.pollPathCandidates.length>1);
 });
 
-test('generic generate and t2v/i2v aliases normalize before Kling operation routing',()=>{
+test('generic generate and t2v i2v aliases normalize before Kling operation routing',()=>{
   assert.equal(R.detectOperation({parameters:{operation:'t2v'}}),'text-to-video');
   assert.equal(R.detectOperation({parameters:{operation:'i2v'}}),'image-to-video');
   assert.equal(R.detectOperation({parameters:{operation:'generate'},references:[{type:'image',url:'x'}]}),'image-to-video');
-  const p={baseUrl:'https://platform.dataeyes.ai'},m={id:'kling-v2.1',modality:'video'};
+  const p={baseUrl:'https://platform.dataeyes.ai'};
+  const m={id:'kling-v2.1',modality:'video'};
   assert.equal(A.resolveVideoRoute(p,m,{parameters:{operation:'generate'}},[{type:'image',url:'x'}]).createPath,'/kling/v1/videos/image2video');
 });

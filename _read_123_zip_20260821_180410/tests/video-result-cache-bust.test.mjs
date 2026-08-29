@@ -4,23 +4,22 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-const VERSION='20260828-video-result-reconciliation-1';
+const REGISTRY_VERSION='20260829-video-protocol-registry-1';
+const APP_VERSION='20260828-video-result-reconciliation-1';
 const read=name=>fs.readFileSync(path.join(ROOT,name),'utf8');
 
-test('canvas loads reconciled browser runtime and bootstrap with a fresh cache version',()=>{
+test('canvas loads video registry runtime and bootstrap with a fresh cache version',()=>{
   const index=read('index.html');
-  assert.ok(index.includes(`./browser-runtime.js?v=${VERSION}`));
-  assert.ok(index.includes(`./browser-bootstrap.js?v=${VERSION}`));
+  for(const file of ['video-protocol-registry.js','provider-adapter-contract.js','provider-runtime-core.js','browser-runtime.js','browser-bootstrap.js'])assert.ok(index.includes(`./${file}?v=${REGISTRY_VERSION}`),file);
 });
 
-test('model page uses the same fresh browser runtime cache version',()=>{
+test('model page uses the same fresh video registry runtime cache version',()=>{
   const models=read('models.html');
-  assert.ok(models.includes(`./browser-runtime.js?v=${VERSION}`));
-  assert.ok(models.includes(`./browser-bootstrap.js?v=${VERSION}`));
+  for(const file of ['video-protocol-registry.js','provider-adapter-contract.js','provider-runtime-core.js','browser-runtime.js','browser-bootstrap.js'])assert.ok(models.includes(`./${file}?v=${REGISTRY_VERSION}`),file);
 });
 
-test('bootstrap propagates reconciliation version to app.js and dynamic canvas scripts',()=>{
+test('bootstrap may keep unchanged app scripts on the reconciliation version',()=>{
   const bootstrap=read('browser-bootstrap.js');
-  assert.ok(bootstrap.includes(`const v='${VERSION}'`));
+  assert.ok(bootstrap.includes(`const v='${APP_VERSION}'`));
   assert.match(bootstrap,/`\.\/app\.js\?v=\$\{v\}`/);
 });

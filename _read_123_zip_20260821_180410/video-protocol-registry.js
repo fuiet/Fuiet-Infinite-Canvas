@@ -19,7 +19,7 @@ function detectFamily(provider={},model={}){
   if(/vidu/.test(hint))return'vidu';
   if(/\bveo(?:[-_. ]|$)|google.*video/.test(hint))return'veo';
   if(/\bsora(?:[-_. ]|$)|openai.*video/.test(hint))return'sora-openai';
-  if(/\bwan(?:[-_. ]|$)|wanx|qwen.*video|通义.*视频/.test(hint))return'wan';
+  if(/\bwan(?:\d|[-_. ]|$)|wanx|qwen.*video|通义.*视频/.test(hint))return'wan';
   if(/grok.*video/.test(hint))return'grok';
   return'generic-video';
 }
