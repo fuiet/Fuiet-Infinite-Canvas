@@ -12,6 +12,7 @@ const COMMON_TASK_IDS=['video_id','videoId','id','task_id','taskId','data.video_
 const COMMON_STATUS=['status','data.status'];
 const COMMON_PROGRESS=['progress','data.progress'];
 const COMMON_OUTPUTS=['metadata.url','data.metadata.url','url','data.url'];
+const UNSUPPORTED_REASON='视频生成已固定为 Agnes API，目前仅支持 agnes-video-2.5-flash；通用视频接口和其他供应商视频协议已停用';
 const hostOf=provider=>{try{return new URL(String(provider?.baseUrl||'')).hostname.toLowerCase()}catch{return''}};
 const modelIdOf=model=>String(model?.id||'').trim().toLowerCase();
 function isAgnesVideo(provider={},model={}){
@@ -19,7 +20,7 @@ function isAgnesVideo(provider={},model={}){
   return (host===AGNES_HOST||host.endsWith('.agnes-ai.com'))&&modelId===AGNES_VIDEO_MODEL;
 }
 function assertAgnesVideo(provider={},model={}){
-  if(!isAgnesVideo(provider,model))throw new Error('视频生成已固定为 Agnes API，目前仅支持 agnes-video-2.5-flash；通用视频接口和其他供应商视频协议已停用');
+  if(!isAgnesVideo(provider,model))throw new Error(UNSUPPORTED_REASON);
 }
 function detectFamily(provider={},model={}){return isAgnesVideo(provider,model)?'agnes-video':'unsupported-video'}
 function detectOperation({references=[],parameters={}}={}){
@@ -34,8 +35,18 @@ function detectOperation({references=[],parameters={}}={}){
   if(images.length)return'image-to-video';
   return'text-to-video';
 }
+function unsupportedProfile(){
+  return{
+    family:'unsupported-video',protocolFamily:'unsupported-video',profile:'disabled:agnes-only',protocolProfile:'disabled:agnes-only',
+    adapterKey:'standard-video-async-v1',responseMode:'async',method:'POST',pollMethod:'GET',requestTransport:'json',referenceTransport:'url',
+    createPath:'',createCandidates:[],pollPath:'',pollPathCandidates:[],strictPollPath:true,
+    taskIdPath:'',taskIdPaths:[],statusPath:'',statusPaths:[],progressPath:'',progressPaths:[],outputPath:'',outputPaths:[],contentPath:'',contentPathCandidates:[],
+    successValues:SUCCESS,failureValues:FAILURE,allowOutputWithoutTerminalStatus:false,pollIntervalMs:1500,timeoutMs:3600000,
+    unsupported:true,unsupportedReason:UNSUPPORTED_REASON
+  };
+}
 function resolve(provider={},model={},operation='generate'){
-  assertAgnesVideo(provider,model);
+  if(!isAgnesVideo(provider,model))return unsupportedProfile();
   const op=operation==='generate'?detectOperation({references:model.__references||[],parameters:model.__parameters||{}}):operation;
   const origin=(()=>{try{return new URL(String(provider.baseUrl||'https://apihub.agnes-ai.com/v1')).origin}catch{return'https://apihub.agnes-ai.com'}})();
   const poll=origin+'/agnesapi?video_id={{taskId}}&model_name='+AGNES_VIDEO_MODEL;
@@ -86,5 +97,5 @@ function mapRequest(provider={},model={},task={},route={},refs=[]){
   return{family:'agnes-video',operation,body:mapAgnesVideoRequest(model,task,refs)};
 }
 function publicProfiles(){return['agnes-video']}
-globalThis.CanvasVideoProtocolRegistry=Object.freeze({SUCCESS,FAILURE,AGNES_VIDEO_MODEL,isAgnesVideo,detectFamily,detectOperation,resolve,mapRequest,publicProfiles,COMMON_TASK_IDS,COMMON_STATUS,COMMON_PROGRESS,COMMON_OUTPUTS});
+globalThis.CanvasVideoProtocolRegistry=Object.freeze({SUCCESS,FAILURE,AGNES_VIDEO_MODEL,UNSUPPORTED_REASON,isAgnesVideo,detectFamily,detectOperation,resolve,mapRequest,publicProfiles,COMMON_TASK_IDS,COMMON_STATUS,COMMON_PROGRESS,COMMON_OUTPUTS});
 })();
