@@ -95,7 +95,7 @@ function mediaUrl(id){return `/__browser_media/${encodeURIComponent(id)}`}
 async function ensureMediaServiceWorker(){
   if(!('serviceWorker'in navigator))return false;
   try{
-    const registration=await navigator.serviceWorker.register('./browser-media-sw.js?v=20260831-provider-rate-limit-1',{scope:'./',updateViaCache:'none'});try{await registration.update()}catch{}
+    const registration=await navigator.serviceWorker.register('./browser-media-sw.js?v=20260831-agnes-poll-nocache-1',{scope:'./',updateViaCache:'none'});try{await registration.update()}catch{}
     await navigator.serviceWorker.ready;
     if(navigator.serviceWorker.controller)return true;
     return await new Promise(resolve=>{let done=false;const finish=value=>{if(done)return;done=true;clearTimeout(timer);resolve(value)};const timer=setTimeout(()=>finish(Boolean(navigator.serviceWorker.controller)),5000);navigator.serviceWorker.addEventListener('controllerchange',()=>finish(true),{once:true})});
@@ -190,8 +190,10 @@ async function proxyFetch(url,init={}){
   return res;
 }
 async function providerFetch(url,init={}){
+  const method=String(init.method||'GET').toUpperCase();
+  const fetchInit={...init,mode:'cors',redirect:'follow',...(['GET','HEAD'].includes(method)?{cache:'no-store'}:{})};
   try{
-    return await rawFetch(url,{...init,mode:'cors',redirect:'follow'});
+    return await rawFetch(url,fetchInit);
   }catch(error){
     if(error?.name==='AbortError')throw error;
     return proxyFetch(url,init);
@@ -397,7 +399,8 @@ function videoPollUrlCandidates(provider,createdRaw,createPath,taskId,route){
   for(const path of [`/v1/tasks/${taskId}`,`/v1/video/tasks/${taskId}`,`/v1/videos/${taskId}`,`/v1/video/generations/${taskId}`,`/v1/videos/generations/${taskId}`,`/api/v1/tasks/${taskId}`,`/api/v1/video/generations/${taskId}`])add(joinUrl(provider.baseUrl,path));
   return out;
 }
-async function pollVideoJson(provider,candidates,route){let last=null;for(const url of candidates){try{return{parsed:await providerJson(provider,url,{method:route.pollMethod||'GET',headers:{'content-type':'application/json'}}),url}}catch(error){last=error;if(![404,405].includes(Number(error?.status)))throw error}}throw last||new Error('没有可用的视频任务轮询接口')}
+function freshVideoPollUrl(url,route){const profile=String(route?.protocolProfile||route?.profile||''),family=String(route?.protocolFamily||route?.family||'');if(family!=='agnes-video'&&!profile.startsWith('agnes:'))return String(url);try{const u=new URL(String(url));u.searchParams.set('_canvas_poll',String(Date.now()));return u.toString()}catch{return String(url)}}
+async function pollVideoJson(provider,candidates,route){let last=null;for(const url of candidates){const requestUrl=freshVideoPollUrl(url,route);try{return{parsed:await providerJson(provider,requestUrl,{method:route.pollMethod||'GET',headers:{'content-type':'application/json'}}),url,requestUrl}}catch(error){last=error;if(![404,405].includes(Number(error?.status)))throw error}}throw last||new Error('没有可用的视频任务轮询接口')}
 async function fetchVideoContent(provider,createdRaw,taskId,route,activePollUrl=''){
   const candidates=[],add=value=>{const url=videoResourceCandidate(provider,value);if(url&&!candidates.includes(url))candidates.push(url)};
   const explicit=Core?.firstPath?Core.firstPath(createdRaw,['content_url','contentUrl','download_url','downloadUrl','links.content','links.download']):'';add(explicit);
@@ -560,7 +563,7 @@ async function executeTask(task){
       if(modality==='video'){
         const ordered=activePollUrl?[activePollUrl,...pollCandidates.filter(x=>x!==activePollUrl)]:pollCandidates;
         const result=await pollVideoJson(provider,ordered.length?ordered:[pollUrl],route);polled=result.parsed;activePollUrl=result.url;
-        updateTask(task.id,{lastPollAt:now(),videoProtocolDiagnostics:{createPath:usedCreatePath,pollUrl:activePollUrl,pollCandidates}});
+        updateTask(task.id,{lastPollAt:now(),videoProtocolDiagnostics:{createPath:usedCreatePath,pollUrl:activePollUrl,lastPollRequestUrl:result.requestUrl||activePollUrl,pollCandidates}});
       }else polled=await providerJson(provider,pollUrl,{method:route.pollMethod||'GET',headers:{'content-type':'application/json'}});
       retryAttempt=0;
     }catch(error){
@@ -576,7 +579,9 @@ async function executeTask(task){
     if(polled.kind!=='json')throw new Error('轮询接口没有返回 JSON');
     pollCount++;
     const assessment=Core?.classifyAsyncPoll?Core.classifyAsyncPoll(polled.value,route,modality):{state:'pending',output:null};
-    updateTask(task.id,{lastPollAt:now(),providerRawStatus:assessment.status||'',providerProgress:assessment.progress==null?null:Number(assessment.progress),progress:assessment.progress==null?Math.min(95,8+pollCount*3):Number(assessment.progress)});
+    const pollVideoId=modality==='video'&&Core?.firstPath?Core.firstPath(polled.value,['video_id','videoId','data.video_id','data.videoId']):'';
+    const pollTaskId=modality==='video'&&Core?.firstPath?Core.firstPath(polled.value,['task_id','taskId','data.task_id','data.taskId','id','data.id']):'';
+    updateTask(task.id,{lastPollAt:now(),providerRawStatus:assessment.status||'',providerProgress:assessment.progress==null?null:Number(assessment.progress),...(pollVideoId?{providerVideoId:String(pollVideoId)}:{}),...(pollTaskId?{providerTaskId:String(pollTaskId)}:{}),progress:assessment.progress==null?Math.min(95,8+pollCount*3):Number(assessment.progress)});
     if(assessment.state==='retryable'){
       updateTask(task.id,{status:'retrying',providerStatus:'processing',resultStatus:'pending',lastError:Core?.formatFailure?Core.formatFailure(assessment,'上游轮询暂时不可用'):'上游轮询暂时不可用，将继续重试',error:null});retryAttempt++;continue;
     }
