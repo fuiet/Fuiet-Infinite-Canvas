@@ -239,17 +239,11 @@ function finalizeProvider(provider={}){
   if(isXogpuProvider(next)){
     if(!String(next.authHeader||'').trim())next.authHeader='Authorization';
     if(!String(next.authScheme||'').trim())next.authScheme='Bearer';
-    const knownById=new Map(xogpuKnownModels().map(model=>[String(model.id||'').toLowerCase(),model]));
-    models=models.filter(model=>{
-      const id=String(model?.id||'').toLowerCase(),known=knownById.get(id);
-      if(!known)return true;
-      const source=String(model?.modalitySource||'').trim().toLowerCase();
-      const staleInjected=!source&&String(model?.videoProtocolFamily||'')==='xogpu-minimax-h3'&&String(model?.capabilities?.billingGroup||'')==='discount_video_generation';
-      return !staleInjected;
-    }).map(model=>{
-      const known=knownById.get(String(model?.id||'').toLowerCase());if(!known)return model;
-      return{...model,...known,id:known.id,name:model.name||known.name,enabled:model.enabled!==false,pricing:model.pricing||known.pricing,modalitySource:model.modalitySource||'user'};
-    });
+    for(const known of xogpuKnownModels()){
+      const current=models.find(model=>String(model?.id||'').toLowerCase()===known.id.toLowerCase());
+      models=models.filter(model=>String(model?.id||'').toLowerCase()!==known.id.toLowerCase());
+      models.push(current?{...current,...known,id:known.id,name:current.name||known.name,enabled:current.enabled!==false,pricing:current.pricing||known.pricing}:known);
+    }
   }
   next.models=models.map(model=>finalizeModel(next,model,model?.modality));
   return next;

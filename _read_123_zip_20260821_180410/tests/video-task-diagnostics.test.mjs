@@ -4,7 +4,7 @@ import fs from 'node:fs';
 const app=fs.readFileSync(new URL('../app.js',import.meta.url),'utf8');
 const css=fs.readFileSync(new URL('../styles/video-node.css',import.meta.url),'utf8');
 const index=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
-const BUILD='20260831-xogpu-minimax-h3-1';
+const BUILD='20260831-xogpu-strict-request-1';
 
 test('provider success and result pending stay visually active',()=>{
   assert.match(app,/\['queued','polling','retrying','running','fallback','provider_succeeded','result_pending'\]/);

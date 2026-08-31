@@ -95,7 +95,7 @@ function mediaUrl(id){return `/__browser_media/${encodeURIComponent(id)}`}
 async function ensureMediaServiceWorker(){
   if(!('serviceWorker'in navigator))return false;
   try{
-    const registration=await navigator.serviceWorker.register('./browser-media-sw.js?v=20260831-xogpu-minimax-h3-1',{scope:'./',updateViaCache:'none'});try{await registration.update()}catch{}
+    const registration=await navigator.serviceWorker.register('./browser-media-sw.js?v=20260831-xogpu-strict-request-1',{scope:'./',updateViaCache:'none'});try{await registration.update()}catch{}
     await navigator.serviceWorker.ready;
     if(navigator.serviceWorker.controller)return true;
     return await new Promise(resolve=>{let done=false;const finish=value=>{if(done)return;done=true;clearTimeout(timer);resolve(value)};const timer=setTimeout(()=>finish(Boolean(navigator.serviceWorker.controller)),5000);navigator.serviceWorker.addEventListener('controllerchange',()=>finish(true),{once:true})});
@@ -377,9 +377,21 @@ function imageRequestDiagnostics(profile,body,path){
   return{profile,path:String(path||''),parameters:safe,at:now()};
 }
 
+function xogpuStrictVideoBody(body={},route={}){
+  const family=String(route?.protocolFamily||route?.family||'').trim().toLowerCase();
+  if(family!=='xogpu-minimax-h3')return body;
+  const src=body&&typeof body==='object'?body:{};
+  const duration=Math.max(1,Math.min(15,Math.round(Number(src.duration)||5)));
+  const allowedRatios=['16:9','9:16','1:1','4:3','3:4','21:9','adaptive'];
+  const ratio=allowedRatios.includes(String(src.ratio||''))?String(src.ratio):'16:9';
+  const out={model:'MiniMax-H3',prompt:String(src.prompt||''),duration,ratio,group:'discount_video_generation',n:Math.max(1,Math.round(Number(src.n)||1))};
+  if(Array.isArray(src.content)&&src.content.length)out.content=src.content;
+  return out;
+}
 function defaultRequestBody(provider,model,task,route,refs){
   const mod=normalizeMod(task.nodeType||model.modality),rawParams=task.parameters||{},p=mod==='image'?(ImageParams?.normalize?.(rawParams)||rawParams):mod==='video'?(VideoParams?.normalize?.(rawParams)||rawParams):rawParams,prompt=String(task.prompt||''),modelId=model.id;
   const ctx={model:modelId,prompt,references:refs,parameters:p,task};
+  if(mod==='video'&&String(route?.protocolFamily||route?.family||'').toLowerCase()==='xogpu-minimax-h3'){const mapped=Adapters?.mapVideoRequest?.(provider,model,{...task,parameters:p},route,refs);if(mapped?.body)return xogpuStrictVideoBody(mapped.body,route);}
   if(route.requestTemplate&&Object.keys(route.requestTemplate).length)return fillTemplate(route.requestTemplate,ctx);
   if(route.adapterKey==='openai-chat'){
     const images=refs.filter(r=>r.url&&r.type==='image');
@@ -391,7 +403,7 @@ function defaultRequestBody(provider,model,task,route,refs){
   if(route.adapterKey==='openai-image')return{model:modelId,prompt,n:Number(p.count||1),...(p.size?{size:p.size}:{}),...(p.quality?{quality:p.quality}:{}),...(p.aspectRatio?{aspect_ratio:p.aspectRatio}:{})};
   if(route.adapterKey==='openai-audio-speech')return{model:modelId,input:prompt,voice:p.voice||'alloy',...(p.format?{format:p.format}:{})};
   if(route.adapterKey==='comfyui-workflow')return{prompt:p.workflow||p.promptGraph||{},client_id:uid('browser_')};
-  if(mod==='video'){const mapped=Adapters?.mapVideoRequest?.(provider,model,{...task,parameters:p},route,refs);if(mapped?.body)return mapped.body;const first=refs.find(r=>['first_frame','image','image_reference'].includes(r.role)||r.type==='image');const last=refs.find(r=>r.role==='last_frame');const duration=Number(p.duration??p.seconds??4);const ratio=String(p.aspectRatio||p.aspect_ratio||'16:9');return{model:modelId,prompt,...p,duration,seconds:String(p.seconds||duration),aspect_ratio:ratio,ratio,...(p.size?{size:p.size}:{}),...(first?.url?{image:first.url,image_url:first.url,input_image:first.url,first_frame:first.url,input_reference:first.url}:{}),...(last?.url?{last_frame:last.url,last_frame_url:last.url}:{}),...(refs.length?{references:refs}:{})};}
+  if(mod==='video'){const mapped=Adapters?.mapVideoRequest?.(provider,model,{...task,parameters:p},route,refs);if(mapped?.body)return xogpuStrictVideoBody(mapped.body,route);const first=refs.find(r=>['first_frame','image','image_reference'].includes(r.role)||r.type==='image');const last=refs.find(r=>r.role==='last_frame');const duration=Number(p.duration??p.seconds??4);const ratio=String(p.aspectRatio||p.aspect_ratio||'16:9');return{model:modelId,prompt,...p,duration,seconds:String(p.seconds||duration),aspect_ratio:ratio,ratio,...(p.size?{size:p.size}:{}),...(first?.url?{image:first.url,image_url:first.url,input_image:first.url,first_frame:first.url,input_reference:first.url}:{}),...(last?.url?{last_frame:last.url,last_frame_url:last.url}:{}),...(refs.length?{references:refs}:{})};}
 
   return{model:modelId,prompt,...p,...(refs.length?{references:refs}:{})};
 }
@@ -499,7 +511,7 @@ async function executeTask(task){
   const existingUpstreamTaskId=modality==='video'?String(recoveredUpstreamTaskId||task.upstreamTaskId||'').trim():'';
   const resumingUpstream=Boolean(existingUpstreamTaskId);
   const refs=resumingUpstream?[]:await makePortableReferences(task.references||[]),body=resumingUpstream?null:defaultRequestBody(provider,model,task,route,refs);
-  let portableVideoJsonBodyPromise=null;const videoJsonBody=()=>portableVideoJsonBodyPromise||(portableVideoJsonBodyPromise=portableizeVideoJsonBody(body,route));
+  let portableVideoJsonBodyPromise=null;const videoJsonBody=()=>portableVideoJsonBodyPromise||(portableVideoJsonBodyPromise=portableizeVideoJsonBody(body,route).then(value=>xogpuStrictVideoBody(value,route)));
   let created=null,usedCreatePath=String(task.upstreamCreatePath||task.videoProtocolDiagnostics?.createPath||route.createPath),lastCreateError=null;
   updateTask(task.id,{status:resumingUpstream?(task.providerStatus==='succeeded'?'result_pending':'polling'):'running',progress:resumingUpstream?Math.max(5,Number(task.progress||5)):2,error:null});
   if(resumingUpstream&&recoveredUpstreamTaskId&&recoveredUpstreamTaskId!==String(task.upstreamTaskId||'')){
