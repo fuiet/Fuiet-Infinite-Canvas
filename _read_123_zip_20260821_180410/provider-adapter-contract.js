@@ -38,9 +38,15 @@ function isAgnesProvider(provider={}){
 function agnesKnownModels(){
   return[
     {id:'agnes-2.5-flash',name:'Agnes 2.5 Flash',modality:'text',adapterKey:'openai-chat',createPath:'/v1/chat/completions',method:'POST',responseMode:'sync',outputPath:'choices.0.message.content'},
-    {id:'agnes-image-2.1-flash',name:'Agnes Image 2.1 Flash',modality:'image',adapterKey:'openai-image',createPath:'/v1/images/generations',method:'POST',responseMode:'sync',outputPath:'data.0.url',imageCapabilities:{family:'agnes-image-2.1-flash',source:'provider-profile',confidence:1,requestMode:'agnes-image',aspectRatios:['1:1','3:4','4:3','16:9','9:16','2:3','3:2','21:9'],resolutions:['1K','2K','3K','4K'],qualities:[{label:'模型默认',value:''}],maxImages:8}},
-    {id:'agnes-video-2.5-flash',name:'Agnes Video 2.5 Flash',modality:'video',adapterKey:'standard-video-async-v1',createPath:'/v1/videos',method:'POST',responseMode:'async',videoProtocolFamily:'agnes-video',capabilities:{supportedResolutions:['720p'],supportedDurations:[4,5,6,7,8,9,10,11,12],supportedAspectRatios:['21:9','16:9','4:3','1:1','3:4','9:16'],maxReferenceImages:5}}
+    {id:'agnes-image-2.1-flash',name:'Agnes Image 2.1 Flash',modality:'image',adapterKey:'openai-image',createPath:'/v1/images/generations',method:'POST',responseMode:'sync',outputPath:'data.0.url',imageCapabilities:{family:'agnes-image-2.1-flash',source:'provider-profile',confidence:1,requestMode:'agnes-image',aspectRatios:['1:1','3:4','4:3','16:9','9:16','2:3','3:2','21:9'],resolutions:['1K','2K','3K','4K'],qualities:[{label:'模型默认',value:''}],maxImages:8}}
   ];
+}
+function isXogpuProvider(provider={}){
+  const h=providerHost(provider);return h==='xogpu.com'||h.endsWith('.xogpu.com');
+}
+function xogpuKnownModels(){
+  const durations=Array.from({length:15},(_,i)=>i+1),aspectRatios=['16:9','9:16','1:1','4:3','3:4','21:9','adaptive'];
+  return[{id:'MiniMax-H3',name:'MiniMax H3',modality:'video',enabled:true,adapterKey:'standard-video-async-v1',createPath:'/v1/videos',method:'POST',responseMode:'async',videoProtocolFamily:'xogpu-minimax-h3',referenceTransport:'url',capabilities:{durations,resolutions:['768p'],aspectRatios,supportedDurations:durations,supportedResolutions:['768p'],supportedAspectRatios:aspectRatios,maxImages:9,maxVideos:3,maxAudios:3,maxReferences:12,maxReferenceImages:9,maxReferenceVideos:3,maxReferenceAudios:3,supportsTextToVideo:true,supportsFirstFrame:true,supportsLastFrame:true,supportsImageReference:true,supportsVideoReference:true,supportsAudioReference:true,supportsNativeAudio:true,generationModes:['text2video','image2video','audio2video','frame2video'],outputResolution:'768p',fps:24,videoCodec:'H.264',audioCodec:'AAC',billingGroup:'discount_video_generation'}}];
 }
 function normalizeModelModality(value,model={}){
   const raw=String(value||'').trim().toLowerCase().replace(/\s+/g,'-');
@@ -225,9 +231,19 @@ function finalizeProvider(provider={}){
   let models=Array.isArray(next.models)?next.models:[];
   if(isAgnesProvider(next)){
     if(!next.protocol||next.protocol==='auto')next.protocol='openai-compatible';
+    models=models.filter(model=>!/^agnes[-_. ]?video/i.test(String(model?.id||model?.name||'')));
     const byId=new Map(models.map(model=>[String(model?.id||''),model]));
     for(const known of agnesKnownModels()){const current=byId.get(known.id);byId.set(known.id,current?{...known,...current,id:known.id}:known)}
     models=[...byId.values()];
+  }
+  if(isXogpuProvider(next)){
+    if(!String(next.authHeader||'').trim())next.authHeader='Authorization';
+    if(!String(next.authScheme||'').trim())next.authScheme='Bearer';
+    for(const known of xogpuKnownModels()){
+      const current=models.find(model=>String(model?.id||'').toLowerCase()===known.id.toLowerCase());
+      models=models.filter(model=>String(model?.id||'').toLowerCase()!==known.id.toLowerCase());
+      models.push(current?{...current,...known,id:known.id,name:current.name||known.name,enabled:current.enabled!==false,pricing:current.pricing||known.pricing}:known);
+    }
   }
   next.models=models.map(model=>finalizeModel(next,model,model?.modality));
   return next;
@@ -243,5 +259,5 @@ function detectModelListProtocol(data,endpoint=''){
   if(objects.length>0&&withIds/objects.length>=.8&&/\/models(?:$|\?)/i.test(String(endpoint||'')))return{protocol:'openai-compatible',confidence:.9,reason:'models endpoint + model ids'};
   return{protocol:'',confidence:0,reason:`generic-model-list:${endpoint||'unknown'}`};
 }
-globalThis.CanvasProviderAdapters=Object.freeze({SUCCESS,FAILURE,normalizeReferenceTransport,normalizeModelModality,providerLooksOpenAIStyle,isAgnesProvider,agnesKnownModels,inferAdapterKey,adapterDefaults,knownVideoResultProfile,resolveRoute,resolveVideoRoute,mapVideoRequest,finalizeModel,finalizeProvider,detectModelListProtocol});
+globalThis.CanvasProviderAdapters=Object.freeze({SUCCESS,FAILURE,normalizeReferenceTransport,normalizeModelModality,providerLooksOpenAIStyle,isAgnesProvider,agnesKnownModels,isXogpuProvider,xogpuKnownModels,inferAdapterKey,adapterDefaults,knownVideoResultProfile,resolveRoute,resolveVideoRoute,mapVideoRequest,finalizeModel,finalizeProvider,detectModelListProtocol});
 })();

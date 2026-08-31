@@ -4,7 +4,7 @@ import fs from 'node:fs';
 const app=fs.readFileSync(new URL('../app.js',import.meta.url),'utf8');
 const bootstrap=fs.readFileSync(new URL('../browser-bootstrap.js',import.meta.url),'utf8');
 const index=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
-const BUILD='20260831-low-zoom-media-visible-1';
+const BUILD='20260831-xogpu-minimax-h3-1';
 
 test('canvas startup reattaches monitors for persisted active node tasks',()=>{
   assert.match(app,/function resumePersistedNodeTaskMonitors\(\)/);

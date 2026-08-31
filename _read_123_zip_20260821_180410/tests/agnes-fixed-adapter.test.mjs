@@ -9,13 +9,13 @@ await import('../provider-adapter-contract.js');
 const A=globalThis.CanvasProviderAdapters,I=globalThis.CanvasModelImageCapabilities,V=globalThis.CanvasVideoProtocolRegistry,C=globalThis.CanvasProviderRuntimeCore;
 const provider={id:'agnes',name:'Agnes',baseUrl:'https://apihub.agnes-ai.com/v1',protocol:'auto',models:[]};
 
-test('Agnes provider injects documented Flash text image and video models',()=>{
+test('Agnes provider no longer auto-injects a video model after XOGPU migration',()=>{
   const p=A.finalizeProvider(provider);const ids=p.models.map(m=>m.id);
   assert.equal(p.protocol,'openai-compatible');
-  assert.deepEqual(['agnes-2.5-flash','agnes-image-2.1-flash','agnes-video-2.5-flash'].every(id=>ids.includes(id)),true);
+  assert.deepEqual(['agnes-2.5-flash','agnes-image-2.1-flash'].every(id=>ids.includes(id)),true);
+  assert.equal(ids.includes('agnes-video-2.5-flash'),false);
   assert.equal(p.models.find(m=>m.id==='agnes-2.5-flash').createPath,'/v1/chat/completions');
   assert.equal(p.models.find(m=>m.id==='agnes-image-2.1-flash').createPath,'/v1/images/generations');
-  assert.equal(p.models.find(m=>m.id==='agnes-video-2.5-flash').createPath,'/v1/videos');
 });
 
 test('Agnes Image 2.1 Flash uses size ratio extra_body and Data URI references',()=>{

@@ -12,7 +12,8 @@ const hintOf=model=>`${model?.id||''} ${model?.name||''}`.trim().toLowerCase();
 function detectFamily(provider={},model={}){
   const explicit=String(model.videoProtocolFamily||model.protocolFamily||model.videoFamily||'').trim().toLowerCase();
   if(explicit)return explicit;
-  const hint=hintOf(model);
+  const hint=hintOf(model),host=hostOf(provider);
+  if((host==='xogpu.com'||host.endsWith('.xogpu.com'))&&/minimax[-_. ]?h3|\bh3\b/.test(hint))return'xogpu-minimax-h3';
   if(/agnes[-_. ]?video/.test(hint))return'agnes-video';
   if(/kling|kwaivgi|可灵/.test(hint))return'kling';
   if(/seedance|seed[-_. ]?ance|art[-_. ]?sdance|artsdance|dance\s*2(?:\.0)?|doubao[-_. ]?video|豆包.*视频/.test(hint))return'seedance';
@@ -31,8 +32,8 @@ function detectOperation({references=[],parameters={}}={}){
   if(explicit&&!['generate','generation','video','video-generation','video_generation'].includes(explicit))return explicit;
   const refs=Array.isArray(references)?references:[];
   const images=refs.filter(r=>String(r?.type||r?.kind||'').toLowerCase()==='image'||/frame|image|reference/.test(String(r?.role||r?.semanticRole||'').toLowerCase()));
-  if(images.length>1)return'reference-to-video';
   if(images.some(r=>/last/.test(String(r?.role||r?.semanticRole||'').toLowerCase())))return'first-last-frame';
+  if(images.length>1)return'reference-to-video';
   if(images.length)return'image-to-video';
   return'text-to-video';
 }
@@ -62,6 +63,27 @@ function gatewayCandidates(family,operation){
   if(family==='sora-openai')return{requestTransport:'multipart-fallback-json',createCandidates:['/v1/videos','/v1/video/generations','/v1/videos/generations'],pollPathCandidates:['/v1/videos/{{taskId}}','/v1/video/generations/{{taskId}}','/v1/tasks/{{taskId}}'],contentPathCandidates:['/v1/videos/{{taskId}}/content']};
   if(family==='grok')return{createCandidates:['/v1/videos/generations','/v1/video/generations','/v1/videos'],pollPathCandidates:['/v1/videos/generations/{{taskId}}','/v1/tasks/{{taskId}}','/v1/videos/{{taskId}}']};
   return{createCandidates:standard,pollPathCandidates:['/v1/video/generations/{{taskId}}','/v1/videos/{{taskId}}','/v1/tasks/{{taskId}}']};
+}
+function xogpuVideoProfile(provider,model,operation){
+  const host=hostOf(provider),hint=hintOf(model);if(!((host==='xogpu.com'||host.endsWith('.xogpu.com'))&&/minimax[-_. ]?h3|\bh3\b/.test(hint)))return null;
+  const base=genericProfile('xogpu-minimax-h3');
+  return{...base,profile:'xogpu:minimax-h3',createPath:'/v1/videos',createCandidates:['/v1/videos'],pollPath:'/v1/videos/{{taskId}}',pollPathCandidates:['/v1/videos/{{taskId}}'],strictPollPath:true,taskIdPath:'id',taskIdPaths:['id','task_id','taskId',...COMMON_TASK_IDS],statusPath:'status',statusPaths:['status',...COMMON_STATUS],progressPath:'progress',progressPaths:['progress',...COMMON_PROGRESS],outputPath:'',outputPaths:[],contentPath:'/v1/videos/{{taskId}}/content',contentPathCandidates:['/v1/videos/{{taskId}}/content'],requestTransport:'json',referenceTransport:'url',allowOutputWithoutTerminalStatus:false,pollIntervalMs:15000,timeoutMs:3600000,videoOperation:operation};
+}
+function xogpuPublicMediaUrl(value,label){const text=String(value||'').trim();if(!/^https:\/\//i.test(text))throw new Error('XOGPU MiniMax-H3 的'+label+'必须是公网可访问的 HTTPS URL；不支持浏览器本地地址、HTTP、blob URL、Base64 或 data URI');return text}
+function mapXogpuVideoRequest(model={},task={},refs=[],operation='generate'){
+  const p={...(task.parameters||{})},prompt=String(task.prompt||'').trim();if(!prompt)throw new Error('XOGPU MiniMax-H3 必须填写 prompt');if(prompt.length>7000)throw new Error('XOGPU MiniMax-H3 prompt 最长 7000 字符');
+  const duration=Math.max(1,Math.min(15,Math.round(Number(p.duration??p.seconds??5)||5))),list=Array.isArray(refs)?refs:[];
+  const entries=list.map((r,index)=>{const type=String(r?.type||r?.kind||'').toLowerCase(),role=String(r?.role||r?.semanticRole||'').toLowerCase(),url=r?.url||r?.value||r?.outputUrl||'';let kind='';if(type==='image'||/image|frame|picture/.test(role))kind='image';else if(type==='video'||/video|motion/.test(role))kind='video';else if(type==='audio'||/audio|voice|sound/.test(role))kind='audio';return{r,index,type:kind,role,url}}).filter(x=>x.type&&x.url);
+  const images=entries.filter(x=>x.type==='image'),videos=entries.filter(x=>x.type==='video'),audios=entries.filter(x=>x.type==='audio');
+  if(images.length>9)throw new Error('XOGPU MiniMax-H3 最多支持 9 张图片');if(videos.length>3)throw new Error('XOGPU MiniMax-H3 最多支持 3 段参考视频');if(audios.length>3)throw new Error('XOGPU MiniMax-H3 最多支持 3 段参考音频');if(entries.length>12)throw new Error('XOGPU MiniMax-H3 全部参考媒体合计最多 12 个');
+  const hasVisual=images.length>0||videos.length>0,allowed=['16:9','9:16','1:1','4:3','3:4','21:9','adaptive'];let ratio=String(p.ratio||p.aspectRatio||p.aspect_ratio||(hasVisual?'adaptive':'16:9')).trim().toLowerCase();if(!allowed.includes(ratio))ratio=hasVisual?'adaptive':'16:9';if(ratio==='adaptive'&&!hasVisual)throw new Error('XOGPU MiniMax-H3 的 adaptive 比例仅适用于包含图片或视频参考的模式；文生视频请使用固定比例');
+  const body={model:'MiniMax-H3',prompt,duration,ratio,group:'discount_video_generation',n:1};
+  if(entries.length){
+    const explicitFirst=images.find(x=>/first/.test(x.role)),explicitLast=images.find(x=>/last/.test(x.role));
+    const firstFallback=operation==='first-last-frame'&&!explicitFirst?images[0]:null,lastFallback=operation==='first-last-frame'&&!explicitLast&&images.length>1?images[1]:null;
+    body.content=[{type:'text',text:prompt},...entries.map(x=>{const url=xogpuPublicMediaUrl(x.url,x.type==='image'?'图片':x.type==='video'?'参考视频':'参考音频');if(x.type==='video')return{type:'video_url',video_url:{url},role:'reference_video'};if(x.type==='audio')return{type:'audio_url',audio_url:{url},role:'reference_audio'};let role='reference_image';if(x===explicitFirst||x===firstFallback||(operation==='image-to-video'&&images.length===1&&!videos.length&&!audios.length))role='first_frame';else if(x===explicitLast||x===lastFallback)role='last_frame';return{type:'image_url',image_url:{url},role}})];
+  }
+  return body;
 }
 function agnesVideoProfile(provider,model,operation){
   const host=hostOf(provider),hint=hintOf(model);if(!((host==='apihub.agnes-ai.com'||host.endsWith('.agnes-ai.com'))&&/agnes[-_. ]?video/.test(hint)))return null;
@@ -99,7 +121,7 @@ function dataEyesProfile(provider,model,operation){
 }
 function resolve(provider={},model={},operation='generate'){
   const family=detectFamily(provider,model),op=operation==='generate'?detectOperation({references:model.__references||[],parameters:model.__parameters||{}}):operation;
-  const specialized=agnesVideoProfile(provider,model,op)||dataEyesProfile(provider,model,op);if(specialized)return specialized;
+  const specialized=xogpuVideoProfile(provider,model,op)||agnesVideoProfile(provider,model,op)||dataEyesProfile(provider,model,op);if(specialized)return specialized;
   const base=genericProfile(family),candidates=gatewayCandidates(family,op);
   return{...base,...candidates,profile:`${family}:${op}`,videoOperation:op,createPath:candidates.createCandidates?.[0]||'/v1/video/generations',pollPath:candidates.pollPathCandidates?.[0]||'/v1/video/generations/{{taskId}}',contentPath:(candidates.contentPathCandidates||[])[0]||''};
 }
@@ -107,6 +129,7 @@ function mapRequest(provider={},model={},task={},route={},refs=[]){
   const family=String(route.protocolFamily||route.family||detectFamily(provider,model));
   const operation=String(route.videoOperation||detectOperation({references:refs,parameters:task.parameters||{}}));
   const p={...(task.parameters||{})},prompt=String(task.prompt||''),first=(refs||[]).find(r=>r?.url&&(/first|image|reference/.test(String(r.role||r.semanticRole||'').toLowerCase())||r.type==='image')),last=(refs||[]).find(r=>r?.url&&/last/.test(String(r.role||r.semanticRole||'').toLowerCase()));
+  if(family==='xogpu-minimax-h3')return{family,operation,body:mapXogpuVideoRequest(model,task,refs,operation)};
   if(family==='agnes-video')return{family,operation,body:mapAgnesVideoRequest(model,task,refs)};
   const body={model:model.id,prompt,...p};
   const duration=Number(p.duration??p.seconds??0);if(duration){body.duration=duration;body.seconds=String(p.seconds||duration)}
@@ -119,6 +142,6 @@ function mapRequest(provider={},model={},task={},route={},refs=[]){
   if(family==='seedance'&&first?.url&&!body.image_url)body.image_url=first.url;
   return{family,operation,body};
 }
-function publicProfiles(){return['agnes-video','kling','seedance','minimax-hailuo','vidu','veo','sora-openai','wan','grok','generic-video'];}
+function publicProfiles(){return['xogpu-minimax-h3','agnes-video','kling','seedance','minimax-hailuo','vidu','veo','sora-openai','wan','grok','generic-video'];}
 globalThis.CanvasVideoProtocolRegistry=Object.freeze({SUCCESS,FAILURE,detectFamily,detectOperation,resolve,mapRequest,publicProfiles,COMMON_TASK_IDS,COMMON_STATUS,COMMON_PROGRESS,COMMON_OUTPUTS});
 })();

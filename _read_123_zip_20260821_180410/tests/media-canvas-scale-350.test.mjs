@@ -16,5 +16,5 @@ test('legacy image and video nodes migrate once to compact media scale',()=>{
 });
 
 test('canvas cache key advances for compact media scale',()=>{
-  assert.match(boot,/20260831-low-zoom-media-visible-1/);
+  assert.match(boot,/20260831-xogpu-minimax-h3-1/);
 });
