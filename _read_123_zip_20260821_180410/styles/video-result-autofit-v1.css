@@ -1,0 +1,63 @@
+/* Video result auto-fit v1
+ * Generated/uploaded videos own the node silhouette. A stale pre-generation n.h
+ * must never vertically center the video away from its header. */
+.node.node-video[data-content-state="result"],
+.node.node-video.ui-v23-media-result[data-content-state="result"]{
+  height:auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  padding:0!important;
+  background:transparent!important;
+  overflow:visible!important;
+}
+.node.node-video[data-content-state="result"]>.node-body,
+.node.node-video.ui-v23-media-result[data-content-state="result"]>.node-body{
+  height:auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  padding:0!important;
+  margin:0!important;
+  align-items:flex-start!important;
+  justify-content:flex-start!important;
+  background:transparent!important;
+  overflow:visible!important;
+}
+.node.node-video[data-content-state="result"] .video-node-shell.has-output,
+.node.node-video.ui-v23-media-result[data-content-state="result"] .video-node-shell.has-output{
+  display:block!important;
+  width:100%!important;
+  height:auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  padding:0!important;
+  margin:0!important;
+  background:transparent!important;
+  line-height:0!important;
+}
+.node.node-video[data-content-state="result"] .media-clip.video-node-stage,
+.node.node-video.ui-v23-media-result[data-content-state="result"] .media-clip.video-node-stage{
+  display:block!important;
+  width:100%!important;
+  height:auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  margin:0!important;
+  padding:0!important;
+}
+.node.node-video[data-content-state="result"] video.node-media-video,
+.node.node-video.ui-v23-media-result[data-content-state="result"] video.node-media-video{
+  display:block!important;
+  width:100%!important;
+  height:auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  margin:0!important;
+  padding:0!important;
+  vertical-align:top!important;
+}
+/* Keep the result header immediately above the media. */
+.node.node-video[data-content-state="result"] .node-header{
+  top:-25px!important;
+  height:21px!important;
+  margin:0!important;
+}

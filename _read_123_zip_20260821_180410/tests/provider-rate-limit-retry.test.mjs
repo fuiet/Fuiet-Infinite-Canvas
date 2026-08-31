@@ -4,7 +4,7 @@ import fs from 'node:fs';
 const runtime=fs.readFileSync(new URL('../browser-runtime.js',import.meta.url),'utf8');
 const app=fs.readFileSync(new URL('../app.js',import.meta.url),'utf8');
 const index=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
-const BUILD='20260831-video-clean-result-1';
+const BUILD='20260831-video-result-autofit-1';
 
 test('HTTP 429 captures provider Retry-After instead of immediate retry',()=>{
   assert.match(runtime,/function providerRetryAfterMs\(res,detail=''\)/);
