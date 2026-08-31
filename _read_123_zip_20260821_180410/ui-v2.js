@@ -103,8 +103,10 @@
     document.querySelectorAll(scope).forEach(media=>{
       if(media.dataset.mediaPreviewReady)return;media.dataset.mediaPreviewReady='1';
       const host=mediaHost(media);if(!host)return;host.classList.add('ui-media-preview-host');
+      const canvasVideoResult=media.tagName==='VIDEO'&&Boolean(media.closest('.node.node-video[data-content-state="result"]'));
       const compact=host.matches('button,[data-inline-version]')||Boolean(host.closest('.quality-version-strip,.node-candidate-rail,.v36-ver,.v35-version'));
       let trigger=[...host.children].find(x=>x.classList?.contains('ui-media-preview-trigger'));
+      if(canvasVideoResult){if(trigger)trigger.remove();return}
       if(!compact&&!trigger){trigger=document.createElement('span');trigger.className='ui-media-preview-trigger';trigger.setAttribute('role','button');trigger.setAttribute('tabindex','0');trigger.setAttribute('title','点击放大预览');trigger.innerHTML=icon('expand');host.appendChild(trigger)}
       if(trigger){
         trigger.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();openMedia(media)});

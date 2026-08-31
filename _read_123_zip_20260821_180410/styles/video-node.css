@@ -400,3 +400,13 @@
 .video-task-diagnostics-meta i{color:#747474;font-style:normal}
 .video-task-diagnostics-meta code{color:#bdbdbd;font:500 9px/13px var(--ui-font-mono,monospace);overflow-wrap:anywhere;user-select:text}
 .video-task-diagnostics-error{margin-top:6px;padding-top:6px;border-top:1px solid #323232;color:#d68b8b;overflow-wrap:anywhere;user-select:text}
+
+/* Video results are media-only: no expand/lightbox trigger and no resize corner. */
+.node.node-video[data-content-state="result"] .ui-media-preview-trigger,
+.node.node-video.ui-v23-media-result[data-content-state="result"] .ui-media-preview-trigger,
+.node.node-video[data-content-state="result"] .node-resize-handle,
+.node.node-video[data-content-state="result"] .ui-v23-resize-handle{
+  display:none!important;
+  opacity:0!important;
+  pointer-events:none!important;
+}
