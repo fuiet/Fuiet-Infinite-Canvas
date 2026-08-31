@@ -1105,9 +1105,7 @@
     const bigImage=n.type==='image'&&contentState==='empty'&&(interactionState==='selected'||n.id===expandedNodeId);
     el.style.left = n.x+'px'; el.style.top=n.y+'px'; el.style.width=(n.w||320)+'px';if(n.h)el.style.height=nodeHeight(n)+'px';
     let body = '';
-    const lowDetail=state.viewport.zoom<.34&&n.id!==selectedId&&n.id!==expandedNodeId;
-    if(lowDetail&&['image','video'].includes(n.type)){body=`<div class="node-low-detail ${n.type}"><i>${n.type==='video'?'▶':'▧'}</i><span>${escapeHtml(nodeTitleBase(n))}</span></div>`;}
-    else if(n.type==='image'){
+    if(n.type==='image'){
       const imageGenerating=['queued','running'].includes(String(n.taskStatus||''));
       const targetRatio=String(n.aspectRatio||n.cropRatio||'1:1').trim()||'1:1';
       const ratioCss=targetRatio.replace(':','/');

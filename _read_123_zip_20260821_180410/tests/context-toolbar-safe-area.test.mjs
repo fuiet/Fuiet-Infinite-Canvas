@@ -20,5 +20,5 @@ test('context toolbar itself never blurs workspace behind it',()=>{
 });
 
 test('canvas cache key advances for clear context toolbar',()=>{
-  assert.match(boot,/20260831-media-canvas-scale-350-1/);
+  assert.match(boot,/20260831-low-zoom-media-visible-1/);
 });

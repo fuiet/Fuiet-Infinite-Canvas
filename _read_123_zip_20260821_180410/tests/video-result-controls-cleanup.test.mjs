@@ -22,5 +22,5 @@ test('video result CSS hard-hides stale expand and resize controls',()=>{
 });
 
 test('production browser build is cache-busted for video control cleanup',()=>{
-  assert.match(boot,/20260831-media-canvas-scale-350-1/);
+  assert.match(boot,/20260831-low-zoom-media-visible-1/);
 });

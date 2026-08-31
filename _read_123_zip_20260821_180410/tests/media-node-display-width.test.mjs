@@ -16,5 +16,5 @@ test('legacy small video nodes migrate to the shared media width',()=>{
 });
 
 test('browser cache key is bumped for unified media sizing',()=>{
-  assert.match(boot,/20260831-media-canvas-scale-350-1/);
+  assert.match(boot,/20260831-low-zoom-media-visible-1/);
 });

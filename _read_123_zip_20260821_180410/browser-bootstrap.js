@@ -5,7 +5,7 @@
 'use strict';
 const manager=globalThis.CanvasBrowserStorageManager;
 if(!manager?.ready)throw new Error('Browser Storage Manager 未加载');
-const v='20260831-media-canvas-scale-350-1';
+const v='20260831-low-zoom-media-visible-1';
 const canvasScripts=[
   `./provider-auto-config-v1.js?v=${v}`,
   `./app.js?v=${v}`,
