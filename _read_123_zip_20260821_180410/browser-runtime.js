@@ -95,7 +95,7 @@ function mediaUrl(id){return `/__browser_media/${encodeURIComponent(id)}`}
 async function ensureMediaServiceWorker(){
   if(!('serviceWorker'in navigator))return false;
   try{
-    const registration=await navigator.serviceWorker.register('./browser-media-sw.js?v=20260831-node-task-reattach-1',{scope:'./',updateViaCache:'none'});try{await registration.update()}catch{}
+    const registration=await navigator.serviceWorker.register('./browser-media-sw.js?v=20260831-agnes-provider-throttle-1',{scope:'./',updateViaCache:'none'});try{await registration.update()}catch{}
     await navigator.serviceWorker.ready;
     if(navigator.serviceWorker.controller)return true;
     return await new Promise(resolve=>{let done=false;const finish=value=>{if(done)return;done=true;clearTimeout(timer);resolve(value)};const timer=setTimeout(()=>finish(Boolean(navigator.serviceWorker.controller)),5000);navigator.serviceWorker.addEventListener('controllerchange',()=>finish(true),{once:true})});
@@ -164,6 +164,25 @@ function scheduleRateLimitRetry(id,delay=65000){
   const previous=runtime.rateLimitRetryTimers.get(id);if(previous)clearTimeout(previous);
   const timer=setTimeout(()=>{runtime.rateLimitRetryTimers.delete(id);const current=findTask(id);if(!current||current.cancelRequested||current.status!=='retrying'||current.retryReason!=='rate_limit')return;updateTask(id,{status:'queued',error:null,lastError:null,nextRetryAt:null,rateLimitRetryAt:null,retryReason:null});pump()},wait);
   runtime.rateLimitRetryTimers.set(id,timer);
+}
+function providerCreateThrottleKey(provider,route={}){
+  let origin='';try{origin=new URL(String(provider?.baseUrl||''),location.href).origin}catch{}
+  const family=String(route?.protocolFamily||route?.protocolProfile||route?.adapterKey||'').toLowerCase();
+  const host=(()=>{try{return new URL(String(provider?.baseUrl||''),location.href).hostname.toLowerCase()}catch{return''}})();
+  if(!(host.includes('agnes-ai.com')||host.includes('agnes-ai.cn')||family.includes('agnes')))return'';
+  return `${String(provider?.id||'agnes')}|${origin||host||'agnes'}|video-create`;
+}
+function reserveProviderCreateSlot(provider,route={}){
+  const key=providerCreateThrottleKey(provider,route);if(!key)return null;
+  const q=queueState(),last={...(q.providerCreateLastAt||{})},cooldowns={...(q.providerCreateCooldownUntil||{})},nowMs=Date.now();
+  const minGap=65000,due=Math.max(Number(cooldowns[key]||0),Number(last[key]||0)+minGap);
+  if(due>nowMs){const wait=Math.max(1000,due-nowMs);const err=new Error(`供应商创建限流：约 ${Math.ceil(wait/1000)} 秒后自动提交`);err.status=429;err.retryAfterMs=wait+250;err.localRateLimit=true;err.providerRateLimitKey=key;throw err}
+  last[key]=nowMs;setQueue({providerCreateLastAt:last});return key;
+}
+function recordProviderCreateRateLimit(provider,route={},delay=65000){
+  const key=providerCreateThrottleKey(provider,route);if(!key)return null;
+  const q=queueState(),cooldowns={...(q.providerCreateCooldownUntil||{})},wait=Math.max(65000,Math.min(15*60*1000,Number(delay)||65000));
+  cooldowns[key]=Math.max(Number(cooldowns[key]||0),Date.now()+wait);setQueue({providerCreateCooldownUntil:cooldowns});return cooldowns[key];
 }
 function upsertTask(task){const list=tasks(),i=list.findIndex(t=>t.id===task.id);if(i>=0)list[i]=task;else list.unshift(task);saveTasks(list);return task}
 function normalizeMod(v,model={}){return Adapters?.normalizeModelModality?Adapters.normalizeModelModality(v,model):(String(v||'text').toLowerCase()==='script'?'text':String(v||'text').toLowerCase())}
@@ -488,6 +507,7 @@ async function executeTask(task){
   }
 
   if(!resumingUpstream){
+    if(modality==='video')reserveProviderCreateSlot(provider,route);
     const paths=modality==='video'?alternateVideoCreatePaths(route,model):[route.createPath];
     for(const createPath of paths){
       const createUrl=joinUrl(provider.baseUrl,createPath);
@@ -523,6 +543,7 @@ async function executeTask(task){
         usedCreatePath=createPath;break;
       }catch(error){
         lastCreateError=error;
+        if(Number(error?.status)===429&&modality==='video')recordProviderCreateRateLimit(provider,route,error?.retryAfterMs);
         if(!autoVideoRoute(model,route)||!VIDEO_AUTO_RETRY_STATUSES.has(Number(error?.status)))throw error;
       }
     }
@@ -649,7 +670,7 @@ async function runTask(task){
     if(current.providerStatus==='succeeded'||['provider_succeeded','result_pending'].includes(current.status)){
       const pending=updateTask(task.id,{status:'result_pending',providerStatus:'succeeded',resultStatus:'pending',lastError:message,error:null,progress:Math.max(99,Number(current.progress||0))});scheduleTaskResume(task.id,3000);return pending;
     }
-    if(Number(error?.status)===429&&!error?.noRetry&&!current.cancelRequested&&attempt<max){const delay=Math.max(1000,Number(error?.retryAfterMs)||65000),retryAt=new Date(Date.now()+delay).toISOString(),waiting=updateTask(task.id,{status:'retrying',attempt:attempt+1,...failurePatch,error:null,lastError:message,retryReason:'rate_limit',nextRetryAt:retryAt,rateLimitRetryAt:retryAt,rateLimitDelayMs:delay});scheduleRateLimitRetry(task.id,delay);return waiting}
+    if(Number(error?.status)===429&&!error?.noRetry&&!current.cancelRequested){const delay=Math.max(1000,Number(error?.retryAfterMs)||65000),retryAt=new Date(Date.now()+delay).toISOString(),waiting=updateTask(task.id,{status:'retrying',attempt,...failurePatch,error:null,lastError:message,retryReason:'rate_limit',nextRetryAt:retryAt,rateLimitRetryAt:retryAt,rateLimitDelayMs:delay,rateLimitRetryCount:Number(current.rateLimitRetryCount||0)+1});scheduleRateLimitRetry(task.id,delay);return waiting}
     if(!error?.noRetry&&!current.cancelRequested&&attempt<max){updateTask(task.id,{status:'queued',attempt:attempt+1,...failurePatch});pump();return}
     return updateTask(task.id,{status:current.cancelRequested?'canceled':'failed',...failurePatch,progress:current.progress||0});
   }
@@ -685,7 +706,7 @@ async function handleApi(info,input,init){
     try{const found=await discover(provider);if(path==='/api/providers/discover-models')return json({ok:true,endpoint:found.endpoint,models:found.models,provider:safeProvider(found.provider),modelCount:found.models.length,protocol:found.provider.protocol||'auto',suggestedProtocol:found.suggestedProtocol||''});return json({ok:true,endpoint:found.endpoint,modelCount:found.models.length,protocol:found.provider.protocol||'auto',suggestedProtocol:found.suggestedProtocol||'',warning:''});}catch(e){return json({error:String(e.message||e)},400)}
   }
   if(path==='/api/tasks'&&method==='GET'){const limit=Math.max(1,Math.min(300,Number(info.url.searchParams.get('limit')||120)));return json({tasks:tasks().slice(0,limit)});}
-  if(path==='/api/tasks'&&method==='POST'){const task={id:uid('task_'),status:'queued',providerStatus:'pending',resultStatus:'pending',upstreamTaskId:'',upstreamCreatePath:'',providerOutput:null,providerResultUrl:'',providerSucceededAt:null,resultSavedAt:null,lastPollAt:null,lastError:null,progress:0,providerId:String(body.providerId||''),modelId:String(body.modelId||''),providerSnapshot:clone(body.providerSnapshot||null),modelSnapshot:clone(body.modelSnapshot||null),nodeId:String(body.nodeId||''),nodeType:String(body.nodeType||body.modelSnapshot?.modality||'text'),prompt:String(body.prompt||''),references:clone(body.references||[]),parameters:clone(body.parameters||{}),priority:Number(body.priority??50),attempt:0,maxRetries:Number(body.maxRetries??1),cancelRequested:false,output:null,error:null,createdAt:now(),updatedAt:now()};upsertTask(task);pump();return json({task:clone(task)});}
+  if(path==='/api/tasks'&&method==='POST'){const task={id:uid('task_'),status:'queued',providerStatus:'pending',resultStatus:'pending',upstreamTaskId:'',upstreamCreatePath:'',providerOutput:null,providerResultUrl:'',providerSucceededAt:null,resultSavedAt:null,lastPollAt:null,lastError:null,progress:0,providerId:String(body.providerId||''),modelId:String(body.modelId||''),providerSnapshot:clone(body.providerSnapshot||null),modelSnapshot:clone(body.modelSnapshot||null),nodeId:String(body.nodeId||''),nodeType:String(body.nodeType||body.modelSnapshot?.modality||'text'),prompt:String(body.prompt||''),references:clone(body.references||[]),parameters:clone(body.parameters||{}),priority:Number(body.priority??50),attempt:0,maxRetries:Number(body.maxRetries??1),rateLimitRetryCount:0,cancelRequested:false,output:null,error:null,createdAt:now(),updatedAt:now()};upsertTask(task);pump();return json({task:clone(task)});}
   if(path==='/api/queue'&&method==='GET'){const q=queueState(),list=tasks();return json({...q,running:runtime.running,queued:list.filter(t=>t.status==='queued').length});}
   if(path==='/api/queue'&&method==='PUT'){const q=setQueue({paused:Boolean(body.paused),...(body.concurrency!=null?{concurrency:Math.max(1,Math.min(8,Number(body.concurrency)))}:{})});pump();return json(q);}
   if(path.startsWith('/api/tasks/')){const parts=path.split('/').filter(Boolean),id=decodeURIComponent(parts[2]||''),task=findTask(id);if(!task)return json({error:'任务不存在'},404);if(parts[3]==='retry'&&method==='POST'){const t=updateTask(id,{status:'queued',cancelRequested:false,error:null,progress:0});pump();return json({task:t});}if(method==='GET')return json({task});if(method==='PATCH'){const t=updateTask(id,{...(body.priority!=null?{priority:Number(body.priority)}:{})});return json({task:t});}if(method==='DELETE'){const t=updateTask(id,{cancelRequested:true,status:['queued'].includes(task.status)?'canceled':'cancelling'});return json({task:t});}}

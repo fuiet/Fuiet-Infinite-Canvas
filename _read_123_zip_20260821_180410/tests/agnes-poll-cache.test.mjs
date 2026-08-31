@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 const runtime=fs.readFileSync(new URL('../browser-runtime.js',import.meta.url),'utf8');
 const index=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
-const BUILD='20260831-node-task-reattach-1';
+const BUILD='20260831-agnes-provider-throttle-1';
 
 test('provider GET and HEAD requests bypass browser HTTP cache',()=>{
   assert.match(runtime,/const fetchInit=\{\.\.\.init,mode:'cors',redirect:'follow',\.\.\.\(\['GET','HEAD'\]\.includes\(method\)\?\{cache:'no-store'\}:\{\}\)\}/);
