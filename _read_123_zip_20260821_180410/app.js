@@ -4298,6 +4298,40 @@ async function fetchModelsFromModal(){
     if(expandedNodeId)renderGenerator();
     renderEmptyQuickBar();
   }
+  const resumedNodeTaskMonitors=new Map();
+  function persistedNodeTaskAttempt(n){
+    const providerId=String(n?.taskProviderId||n?.providerId||''),modelId=String(n?.taskModelId||n?.modelId||''),provider=providerById(providerId),model=provider?.models?.find(m=>String(m.id)===modelId)||null;
+    return{provider,model,providerId,modelId,modelName:model?.name||n?.modelName||modelId||'模型',primary:true};
+  }
+  function applyRecoveredTaskSuccess(n,info,attempt){
+    if(!n||!info||n.taskId!==info.id)return false;
+    syncNodeTaskDiagnostics(n,info);const out=info.output||{},resolvedUrl=resolveGeneratedOutputUrl(out.value??out);if(resolvedUrl)n.outputUrl=resolvedUrl;
+    if(out.type==='url'&&!n.outputUrl)n.outputUrl=String(out.value||'').trim();
+    else if(out.type==='text'){if(n.type==='text')n.text=out.value;else n.generatedText=out.value}
+    else if(out.type!=='url'&&out.value!==undefined)n.generatedResult=out.value;
+    if(!n.outputUrl&&n.type==='video'){const fallbackUrl=resolveGeneratedOutputUrl(n.generatedResult)||resolveGeneratedOutputUrl(n.toolParams?.output)||resolveGeneratedOutputUrl(n.toolParams?.result);if(fallbackUrl)n.outputUrl=fallbackUrl}
+    n.taskStatus='succeeded';n.taskProgress=100;n.taskError='';n.taskSyncMessage='';n.outputSourceUrl=out.sourceUrl||n.outputSourceUrl||'';n.lastUsedProviderId=attempt.providerId||n.taskProviderId||n.providerId||'';n.lastUsedModelId=attempt.modelId||n.taskModelId||n.modelId||'';n.lastUsedModelName=attempt.modelName||n.modelName||'';
+    const hasVersion=n.outputUrl&&(n.resultVersions||[]).some(v=>String(v.outputUrl||'')===String(n.outputUrl));if(n.outputUrl&&!hasVersion)recordNodeResultVersion(n,{providerId:n.lastUsedProviderId,modelId:n.lastUsedModelId,modelName:n.lastUsedModelName});
+    saveState();render();return true;
+  }
+  async function resumePersistedNodeTask(n){
+    if(!n?.taskId||resumedNodeTaskMonitors.has(n.id))return;
+    const taskId=String(n.taskId),attempt=persistedNodeTaskAttempt(n);
+    const work=(async()=>{try{
+      let info=(await apiJson('/api/tasks/'+encodeURIComponent(taskId))).task;if(!info||String(n.taskId)!==taskId)return;
+      syncNodeTaskDiagnostics(n,info);n.taskStatus=info.status;n.taskProgress=info.progress||0;n.taskError=['failed','canceled'].includes(info.status)?taskFailureText(info):'';n.taskSyncMessage=['provider_succeeded','result_pending'].includes(info.status)?'上游已生成，正在同步视频结果…':'';saveState();render();
+      if(info.status==='succeeded'){applyRecoveredTaskSuccess(n,info,attempt);return}
+      if(['failed','canceled'].includes(info.status))return;
+      if(!['queued','running','polling','retrying','provider_succeeded','result_pending','fallback'].includes(info.status))return;
+      info=await monitorNodeTask(n,taskId,attempt,info);if(info?.status==='succeeded'&&String(n.taskId)===taskId)applyRecoveredTaskSuccess(n,info,attempt);
+    }catch(error){if(String(n.taskId)!==taskId)return;n.taskSyncMessage='任务恢复监控暂时失败，页面会保留原任务 ID；请勿重新生成。';n.taskError=safeTaskDiagnosticText(errorText(error));saveState();render()}finally{resumedNodeTaskMonitors.delete(n.id)}})();
+    resumedNodeTaskMonitors.set(n.id,work);return work;
+  }
+  function resumePersistedNodeTaskMonitors(){
+    const active=new Set(['queued','running','polling','retrying','provider_succeeded','result_pending','fallback']);
+    for(const n of state.nodes){if(n?.taskId&&active.has(String(n.taskStatus||'')))resumePersistedNodeTask(n)}
+  }
+
   window.addEventListener('pagehide',()=>{if(!backendOnline||!authenticated||!state.projectId)return;try{const payload=deepClone(state);fetch('/api/projects/'+encodeURIComponent(state.projectId),{method:'PUT',headers:{'Content-Type':'application/json'},credentials:'same-origin',keepalive:true,body:JSON.stringify({name:payload.projectName,data:payload,forceSnapshot:false})})}catch{}});
   window.addEventListener('pageshow',()=>refreshProvidersFromServer(true));
   window.addEventListener('focus',()=>refreshProvidersFromServer(false));
@@ -4308,5 +4342,5 @@ async function fetchModelsFromModal(){
   viewport.addEventListener('dragleave',e=>{if(e.target===viewport)viewport.classList.remove('canvas-drop-active')});
   viewport.addEventListener('drop',async e=>{e.preventDefault();viewport.classList.remove('canvas-drop-active');const p=screenToWorld(e.clientX,e.clientY),files=[...(e.dataTransfer.files||[])];if(files.length){await importLocalFilesGrid(files,p);return}let payload=null;try{payload=JSON.parse(e.dataTransfer.getData('application/x-canvasstudio-item')||'null')}catch{}if(!payload){const text=e.dataTransfer.getData('text/plain')||'',m=text.match(/^canvasstudio:(asset|history):(.+)$/);if(m)payload={kind:m[1],id:m[2]}}if(payload?.kind==='asset'){const a=state.assets.find(x=>x.id===payload.id);if(a)useAsset(a,p);return}if(payload?.kind==='history'){const h=state.history.find(x=>x.id===payload.id);if(h){runTransaction('历史素材拖入画布',()=>{const n=historyToNode(h,p);state.nodes.push(n);state.selectedIds=[n.id];selectedId=n.id});saveState();render();showToast('历史素材已拖入画布')}return}});
 
-  (async function init(){const ok=await checkAuth();const params=new URLSearchParams(location.search),requestedProject=params.get('projectId');if(requestedProject)state.projectId=requestedProject;if(ok){await loadProviders();await ensureServerProject();}render();const open=params.get('open');if(open==='providers'&&ok)openProviderModal();})();
+  (async function init(){const ok=await checkAuth();const params=new URLSearchParams(location.search),requestedProject=params.get('projectId');if(requestedProject)state.projectId=requestedProject;if(ok){await loadProviders();await ensureServerProject();}render();resumePersistedNodeTaskMonitors();const open=params.get('open');if(open==='providers'&&ok)openProviderModal();})();
 })();
