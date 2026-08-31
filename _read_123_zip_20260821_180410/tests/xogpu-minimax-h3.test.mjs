@@ -7,17 +7,28 @@ await import('../provider-adapter-contract.js');
 const V=globalThis.CanvasVideoProtocolRegistry,A=globalThis.CanvasProviderAdapters,C=globalThis.CanvasProviderRuntimeCore,P=globalThis.CanvasVideoRequestParameters;
 const provider={id:'xogpu',name:'XOGPU',baseUrl:'https://xogpu.com',protocol:'auto',apiKey:'sk-test',models:[]};
 
-test('XOGPU provider injects the fixed MiniMax-H3 video model and Bearer auth defaults',()=>{
-  const p=A.finalizeProvider(provider),m=p.models.find(x=>x.id==='MiniMax-H3');
-  assert.ok(m);assert.equal(m.modality,'video');assert.equal(m.createPath,'/v1/videos');assert.equal(m.videoProtocolFamily,'xogpu-minimax-h3');
+test('XOGPU provider does not invent MiniMax-H3 when the real catalog omits it',()=>{
+  const p=A.finalizeProvider(provider);
+  assert.equal(p.models.some(x=>x.id==='MiniMax-H3'),false);
   assert.equal(p.authHeader,'Authorization');assert.equal(p.authScheme,'Bearer');
+});
+
+test('XOGPU provider decorates MiniMax-H3 only when it is present in the real or user model list',()=>{
+  const catalogProvider={...provider,models:[{id:'MiniMax-H3',name:'MiniMax H3',modality:'video',modalitySource:'provider',enabled:true}]};
+  const p=A.finalizeProvider(catalogProvider),m=p.models.find(x=>x.id==='MiniMax-H3');
+  assert.ok(m);assert.equal(m.modality,'video');assert.equal(m.createPath,'/v1/videos');assert.equal(m.videoProtocolFamily,'xogpu-minimax-h3');
   assert.deepEqual(m.capabilities.durations,Array.from({length:15},(_,i)=>i+1));
   assert.deepEqual(m.capabilities.resolutions,['768p']);assert.ok(m.capabilities.aspectRatios.includes('adaptive'));
   assert.equal(m.capabilities.maxImages,9);assert.equal(m.capabilities.maxVideos,3);assert.equal(m.capabilities.maxAudios,3);assert.equal(m.capabilities.maxReferences,12);
 });
 
+test('XOGPU stale auto-injected H3 is removed until catalog discovery confirms it',()=>{
+  const stale={...provider,models:[{id:'MiniMax-H3',name:'MiniMax H3',modality:'video',videoProtocolFamily:'xogpu-minimax-h3',capabilities:{billingGroup:'discount_video_generation'}}]};
+  assert.equal(A.finalizeProvider(stale).models.some(x=>x.id==='MiniMax-H3'),false);
+});
+
 test('XOGPU MiniMax-H3 uses exact create poll and content endpoints',()=>{
-  const model=A.finalizeProvider(provider).models.find(x=>x.id==='MiniMax-H3'),route=V.resolve(provider,model,'text-to-video');
+  const model=A.finalizeProvider({...provider,models:[{id:'MiniMax-H3',name:'MiniMax H3',modality:'video',modalitySource:'provider'}]}).models.find(x=>x.id==='MiniMax-H3'),route=V.resolve(provider,model,'text-to-video');
   assert.equal(route.profile,'xogpu:minimax-h3');assert.equal(route.createPath,'/v1/videos');assert.equal(route.pollPath,'/v1/videos/{{taskId}}');assert.equal(route.contentPath,'/v1/videos/{{taskId}}/content');
   assert.equal(route.strictPollPath,true);assert.equal(route.taskIdPath,'id');assert.equal(route.statusPath,'status');assert.equal(route.progressPath,'progress');assert.equal(route.referenceTransport,'url');assert.equal(route.pollIntervalMs,15000);
   assert.equal(C.extractTaskId({id:'task_123',task_id:'task_123'},route),'task_123');
