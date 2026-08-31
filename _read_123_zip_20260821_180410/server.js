@@ -1060,6 +1060,9 @@ function standardVideoResponsePollUrl(created,provider,config={}){
   if(config.strictPollPath===true)return'';
   return providerVideoRouteUrl(provider,ProviderRuntimeCore.extractPollUrl(created));
 }
+function isAgnesVideoConfig(config={}){const family=String(config.protocolFamily||config.family||''),profile=String(config.protocolProfile||config.profile||'');return family==='agnes-video'||profile.startsWith('agnes:')}
+function standardVideoProviderIdentity(raw={}){const videoId=ProviderRuntimeCore.firstPath?.(raw,['video_id','videoId','data.video_id','data.videoId']);const taskId=ProviderRuntimeCore.firstPath?.(raw,['task_id','taskId','data.task_id','data.taskId','id','data.id']);return{videoId:videoId==null?'':String(videoId).trim(),taskId:taskId==null?'':String(taskId).trim()}}
+function agnesDesktopPollTemplates(provider,config,{videoId='',taskId='',fallbackId=''}={}){const out=[],add=v=>{v=String(v||'').trim();if(v&&!out.includes(v))out.push(v)};if(videoId){if(config.pollPath)add(renderPathTemplate(config.pollPath,{taskId:videoId}));for(const t of (config.pollPathCandidates||[]))add(renderPathTemplate(t,{taskId:videoId}));if(taskId)add(`/v1/videos/${encodeURIComponent(taskId)}`)}else{const id=taskId||fallbackId;if(id){add(`/v1/videos/${encodeURIComponent(id)}`);if(config.pollPath)add(renderPathTemplate(config.pollPath,{taskId:id}))}}return out}
 async function downloadStandardVideoContent(task,provider,config,taskId){
   const templates=[...new Set([...(Array.isArray(config.contentPathCandidates)?config.contentPathCandidates:[]),String(config.contentPath||'').trim()].filter(Boolean))];
   if(!templates.length)return null;
@@ -1095,10 +1098,10 @@ async function executeStandardVideoAsync(task,provider,model,payload){
   const rawBody=config.requestTemplate&&Object.keys(config.requestTemplate).length?renderTemplate(config.requestTemplate,ctx):(mapped?.body||standardVideoBody(model,payload,config));
   const body=await portableizeLocalVideoJsonBody(rawBody,config);
   updateTask(task,{progress:8});
-  let taskId='',activePollUrl='';
+  let taskId='',activePollUrl='',providerVideoId='',providerTaskId='';
   const resume=payload._upstream&&payload._upstream.protocol==='standard-video-async-v1'&&payload._upstream.modelId===model.id?payload._upstream:null;
   if(resume?.id){
-    taskId=String(resume.id);
+    taskId=String(resume.id);providerVideoId=String(resume.videoId||'');providerTaskId=String(resume.taskId||'');
     activePollUrl=config.strictPollPath===true?'':providerVideoRouteUrl(provider,resume.pollUrl);
     if(config.strictPollPath===true&&resume.pollUrl){payload._upstream={...resume,pollUrl:''};task.payload=payload;updateTask(task,{payload})}
     taskLog(task,`恢复标准视频任务：${taskId}`);
@@ -1114,16 +1117,17 @@ async function executeStandardVideoAsync(task,provider,model,payload){
     if(!created)throw lastCreateError||new Error('没有可用的视频创建接口');
     taskId=standardVideoTaskId(created,config);
     if(!taskId)throw new Error('视频任务已提交，但响应中未找到任务 ID。可在供应商/模型高级配置中设置 taskIdPath。');
+    const identity=standardVideoProviderIdentity(created);providerVideoId=identity.videoId;providerTaskId=identity.taskId;
     activePollUrl=standardVideoResponsePollUrl(created,provider,config);
-    payload._upstream={protocol:'standard-video-async-v1',modelId:model.id,id:String(taskId),pollUrl:activePollUrl||'',createdAt:new Date().toISOString()};
-    task.payload=payload;updateTask(task,{payload,progress:20});taskLog(task,`已持久化视频任务 ID：${taskId}`);
+    payload._upstream={protocol:'standard-video-async-v1',modelId:model.id,id:String(taskId),videoId:providerVideoId||'',taskId:providerTaskId||'',pollUrl:activePollUrl||'',createdAt:new Date().toISOString()};
+    task.payload=payload;updateTask(task,{payload,providerVideoId:providerVideoId||'',providerTaskId:providerTaskId||'',progress:20});taskLog(task,`已持久化视频任务 ID：${taskId}`);
   }
   const started=Date.now();let checks=0;
   const success=(config.successValues||[]).map(x=>String(x).toLowerCase()),failure=(config.failureValues||[]).map(x=>String(x).toLowerCase());
   while(Date.now()-started<config.timeoutMs){
     assertTaskActive(task);await new Promise(r=>setTimeout(r,config.pollIntervalMs));checks++;
-    const pollCtx={...ctx,taskId};
-    const pollTemplates=[...new Set([...(config.strictPollPath===true?[]:[activePollUrl]),String(config.pollPath||'/v1/videos/{{taskId}}'),...(Array.isArray(config.pollPathCandidates)?config.pollPathCandidates:[])].filter(Boolean))];
+    const pollCtx={...ctx,taskId:providerVideoId||taskId};
+    const pollTemplates=isAgnesVideoConfig(config)?agnesDesktopPollTemplates(provider,config,{videoId:providerVideoId,taskId:providerTaskId,fallbackId:taskId}):[...new Set([...(config.strictPollPath===true?[]:[activePollUrl]),String(config.pollPath||'/v1/videos/{{taskId}}'),...(Array.isArray(config.pollPathCandidates)?config.pollPathCandidates:[])].filter(Boolean))];
     const pollMethod=String(config.pollMethod||'GET').toUpperCase();
     const pollBody=config.pollBodyTemplate&&typeof config.pollBodyTemplate==='object'?renderTemplate(config.pollBodyTemplate,pollCtx):undefined;
     let polled=null,lastPollError=null,retryablePollError=null;
@@ -1133,6 +1137,7 @@ async function executeStandardVideoAsync(task,provider,model,payload){
       throw lastPollError||new Error('没有可用的视频轮询接口');
     }
     const assessment=ProviderRuntimeCore.classifyAsyncPoll(polled,config,'video');
+    if(isAgnesVideoConfig(config)){const identity=standardVideoProviderIdentity(polled);let changed=false;if(identity.videoId&&identity.videoId!==providerVideoId){providerVideoId=identity.videoId;changed=true}if(identity.taskId&&identity.taskId!==providerTaskId){providerTaskId=identity.taskId;changed=true}if(changed){payload._upstream={...(payload._upstream||{}),videoId:providerVideoId||'',taskId:providerTaskId||''};task.payload=payload;updateTask(task,{payload,providerVideoId:providerVideoId||'',providerTaskId:providerTaskId||''});taskLog(task,`Agnes 轮询身份已更新：video_id=${providerVideoId||'未返回'} task_id=${providerTaskId||'未返回'}`)}}
     const status=assessment.status,progressRaw=assessment.progress;
     const pollPatch={status:'polling',lastPollAt:new Date().toISOString(),progress:Number.isFinite(progressRaw)?Math.max(20,Math.min(96,progressRaw)):Math.min(94,20+checks*4)};
     if(assessment.providerSucceeded){

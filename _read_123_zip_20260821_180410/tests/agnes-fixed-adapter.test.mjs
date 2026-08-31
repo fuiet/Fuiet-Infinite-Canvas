@@ -63,11 +63,15 @@ test('browser and desktop runtimes wire Agnes image reference mapping without we
 });
 
 
-test('Agnes browser polling uses only the documented agnesapi route and heals persisted generic poll urls',()=>{
+test('Agnes strict polling is identity-aware and never labels task_id as video_id',()=>{
   const registry=fs.readFileSync(new URL('../video-protocol-registry.js',import.meta.url),'utf8');
   const browser=fs.readFileSync(new URL('../browser-runtime.js',import.meta.url),'utf8');
+  const app=fs.readFileSync(new URL('../app.js',import.meta.url),'utf8');
   assert.match(registry,/strictPollPath:true/);
-  assert.match(browser,/if\(route\?\.strictPollPath===true\)\{/);
-  assert.match(browser,/return out;\n  \}\n  const responseUrl=/);
-  assert.match(browser,/if\(route\?\.strictPollPath===true\)\{pollCandidates=videoPollUrlCandidates\(provider,null,usedCreatePath,taskId,route\);activePollUrl=''\}/);
+  assert.match(browser,/function providerVideoIdentity\(raw=\{\}\)/);
+  assert.match(browser,/agnesLegacyTaskPollUrl\(provider,providerTaskId\)/);
+  assert.match(browser,/resumeIdentity=isAgnesVideoRoute\(route\)/);
+  assert.match(browser,/activePollUrl=upgraded\[0\]/);
+  assert.match(app,/video_id:\$\{d\.providerVideoId\}/);
+  assert.match(app,/task_id:\$\{d\.providerTaskId\}/);
 });

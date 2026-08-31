@@ -95,7 +95,7 @@ function mediaUrl(id){return `/__browser_media/${encodeURIComponent(id)}`}
 async function ensureMediaServiceWorker(){
   if(!('serviceWorker'in navigator))return false;
   try{
-    const registration=await navigator.serviceWorker.register('./browser-media-sw.js?v=20260831-agnes-poll-nocache-1',{scope:'./',updateViaCache:'none'});try{await registration.update()}catch{}
+    const registration=await navigator.serviceWorker.register('./browser-media-sw.js?v=20260831-agnes-id-route-1',{scope:'./',updateViaCache:'none'});try{await registration.update()}catch{}
     await navigator.serviceWorker.ready;
     if(navigator.serviceWorker.controller)return true;
     return await new Promise(resolve=>{let done=false;const finish=value=>{if(done)return;done=true;clearTimeout(timer);resolve(value)};const timer=setTimeout(()=>finish(Boolean(navigator.serviceWorker.controller)),5000);navigator.serviceWorker.addEventListener('controllerchange',()=>finish(true),{once:true})});
@@ -386,9 +386,24 @@ function alternateVideoCreatePaths(route,model){
 function matchingPollPath(createPath,taskId,route){if(createPath==='/v1/video/generations'||createPath==='/api/v1/video/generations')return `${createPath}/${taskId}`;if(createPath==='/v1/videos/generations'||createPath==='/video/generations'||createPath==='/videos/generations')return `${createPath}/${taskId}`;return fillTemplate(route.pollPath||'/v1/videos/{{taskId}}',{taskId})}
 function videoRouteCandidate(provider,value){return providerRouteUrl(provider,value)}
 function videoResourceCandidate(provider,value){return providerResourceUrl(provider,value)}
+function isAgnesVideoRoute(route={}){const family=String(route?.protocolFamily||route?.family||''),profile=String(route?.protocolProfile||route?.profile||'');return family==='agnes-video'||profile.startsWith('agnes:')}
+function providerVideoIdentity(raw={}){if(!raw||typeof raw!=='object')return{videoId:'',taskId:''};const videoId=Core?.firstPath?Core.firstPath(raw,['video_id','videoId','data.video_id','data.videoId']):'';const taskId=Core?.firstPath?Core.firstPath(raw,['task_id','taskId','data.task_id','data.taskId','id','data.id']):'';return{videoId:videoId==null?'':String(videoId).trim(),taskId:taskId==null?'':String(taskId).trim()}}
+function agnesLegacyTaskPollUrl(provider,taskId){const id=String(taskId||'').trim();return id?joinUrl(provider.baseUrl,`/v1/videos/${encodeURIComponent(id)}`):''}
 function videoPollUrlCandidates(provider,createdRaw,createPath,taskId,route){
   const out=[],add=value=>{const url=videoRouteCandidate(provider,value);if(url&&!out.includes(url))out.push(url)};
   if(route?.strictPollPath===true){
+    if(isAgnesVideoRoute(route)){
+      const identity=providerVideoIdentity(createdRaw),videoId=identity.videoId,providerTaskId=identity.taskId||(!videoId?String(taskId||'').trim():'');
+      if(videoId){
+        if(route.pollPath)add(joinUrl(provider.baseUrl,fillTemplate(route.pollPath,{taskId:videoId})));
+        for(const template of (Array.isArray(route.pollPathCandidates)?route.pollPathCandidates:[]))add(joinUrl(provider.baseUrl,fillTemplate(template,{taskId:videoId})));
+        if(providerTaskId)add(agnesLegacyTaskPollUrl(provider,providerTaskId));
+      }else if(providerTaskId){
+        add(agnesLegacyTaskPollUrl(provider,providerTaskId));
+        if(route.pollPath)add(joinUrl(provider.baseUrl,fillTemplate(route.pollPath,{taskId:providerTaskId})));
+      }else if(route.pollPath)add(joinUrl(provider.baseUrl,fillTemplate(route.pollPath,{taskId})));
+      return out;
+    }
     if(route.pollPath)add(joinUrl(provider.baseUrl,fillTemplate(route.pollPath,{taskId})));
     for(const template of (Array.isArray(route.pollPathCandidates)?route.pollPathCandidates:[]))add(joinUrl(provider.baseUrl,fillTemplate(template,{taskId})));
     return out;
@@ -547,7 +562,7 @@ async function executeTask(task){
     const providerTaskId=modality==='video'&&Core?.firstPath?Core.firstPath(created.value,['task_id','taskId','data.task_id','data.taskId','id','data.id']):'';
     updateTask(task.id,{status:'polling',providerStatus:'processing',resultStatus:'pending',upstreamTaskId:String(taskId),providerVideoId:providerVideoId==null?'':String(providerVideoId),providerTaskId:providerTaskId==null?'':String(providerTaskId),upstreamCreatePath:usedCreatePath,providerCreateResponse:created.kind==='json'?clone(created.value):null,progress:5,videoProtocolDiagnostics:modality==='video'?{createPath:usedCreatePath,pollCandidates}:undefined});
   }else{
-    if(route?.strictPollPath===true){pollCandidates=videoPollUrlCandidates(provider,null,usedCreatePath,taskId,route);activePollUrl=''}
+    if(route?.strictPollPath===true){const resumeIdentity=isAgnesVideoRoute(route)?{video_id:task.providerVideoId||'',task_id:task.providerTaskId||task.upstreamTaskId||taskId}:null;pollCandidates=videoPollUrlCandidates(provider,resumeIdentity,usedCreatePath,taskId,route);activePollUrl=''}
     else if(!pollCandidates.length)pollCandidates=videoPollUrlCandidates(provider,null,usedCreatePath,taskId,route);
     updateTask(task.id,{status:task.providerStatus==='succeeded'?'result_pending':'polling',providerStatus:task.providerStatus||'processing',resultStatus:task.providerStatus==='succeeded'?'pending':(task.resultStatus||'pending'),upstreamTaskId:String(taskId),upstreamCreatePath:usedCreatePath,videoProtocolDiagnostics:{...(task.videoProtocolDiagnostics||{}),createPath:usedCreatePath,pollCandidates}});
   }
@@ -581,7 +596,8 @@ async function executeTask(task){
     const assessment=Core?.classifyAsyncPoll?Core.classifyAsyncPoll(polled.value,route,modality):{state:'pending',output:null};
     const pollVideoId=modality==='video'&&Core?.firstPath?Core.firstPath(polled.value,['video_id','videoId','data.video_id','data.videoId']):'';
     const pollTaskId=modality==='video'&&Core?.firstPath?Core.firstPath(polled.value,['task_id','taskId','data.task_id','data.taskId','id','data.id']):'';
-    updateTask(task.id,{lastPollAt:now(),providerRawStatus:assessment.status||'',providerProgress:assessment.progress==null?null:Number(assessment.progress),...(pollVideoId?{providerVideoId:String(pollVideoId)}:{}),...(pollTaskId?{providerTaskId:String(pollTaskId)}:{}),progress:assessment.progress==null?Math.min(95,8+pollCount*3):Number(assessment.progress)});
+    if(modality==='video'&&isAgnesVideoRoute(route)&&pollVideoId){const upgraded=videoPollUrlCandidates(provider,{video_id:String(pollVideoId),task_id:pollTaskId||findTask(task.id)?.providerTaskId||''},usedCreatePath,String(pollVideoId),route);if(upgraded.length){pollCandidates=[...new Set([...upgraded,...pollCandidates])];activePollUrl=upgraded[0]}}
+    updateTask(task.id,{lastPollAt:now(),providerRawStatus:assessment.status||'',providerProgress:assessment.progress==null?null:Number(assessment.progress),...(pollVideoId?{providerVideoId:String(pollVideoId)}:{}),...(pollTaskId?{providerTaskId:String(pollTaskId)}:{}),progress:assessment.progress==null?Math.min(95,8+pollCount*3):Number(assessment.progress),videoProtocolDiagnostics:{...(findTask(task.id)?.videoProtocolDiagnostics||{}),createPath:usedCreatePath,pollUrl:activePollUrl,pollCandidates}});
     if(assessment.state==='retryable'){
       updateTask(task.id,{status:'retrying',providerStatus:'processing',resultStatus:'pending',lastError:Core?.formatFailure?Core.formatFailure(assessment,'上游轮询暂时不可用'):'上游轮询暂时不可用，将继续重试',error:null});retryAttempt++;continue;
     }
