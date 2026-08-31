@@ -288,7 +288,8 @@
     const base=errorText(task.error)||errorText(task.errorDetail)||errorText(task.detail);
     const request=task.videoRequestDiagnostics||{},protocol=task.videoProtocolDiagnostics||{};
     let stage='';
-    if(protocol.pollUrl){try{stage=`轮询 ${new URL(protocol.pollUrl,location.href).pathname}`}catch{stage='轮询视频任务'}}
+    const pollStageUrl=protocol.lastPollErrorUrl||protocol.lastPollRequestUrl||protocol.pollUrl;
+    if(pollStageUrl){try{stage=`轮询 ${new URL(pollStageUrl,location.href).pathname}`}catch{stage='轮询视频任务'}}
     else if(request.createPath)stage=`创建 ${request.createPath}${request.transport?` · ${request.transport}`:''}`;
     return base&&stage?`${base} [${stage}]`:(base||stage);
   }

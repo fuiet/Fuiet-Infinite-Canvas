@@ -13,11 +13,12 @@ test('XOGPU poll profile falls back from OpenAI video status to generic New API 
   assert.equal(route.strictPollPath,true);
 });
 
-test('browser treats XOGPU 501 as poll-route fallback rather than generation failure',()=>{
+test('browser treats XOGPU 501 as recoverable poll failure and probes video content',()=>{
   const src=fs.readFileSync(new URL('../browser-runtime.js',import.meta.url),'utf8');
   assert.match(src,/function isXogpuVideoRoute\(route=\{\}\)/);
-  assert.match(src,/isXogpuVideoRoute\(route\)&&status===501/);
-  assert.match(src,/if\(shouldFallbackVideoPollError\(error,route\)\)continue/);
+  assert.match(src,/function isXogpuNotImplementedError\(error,route=\{\}\)/);
+  assert.match(src,/function probeXogpuVideoContent\(provider,createdRaw,taskId,route\)/);
+  assert.match(src,/pollFallback:'content-probe'/);
 });
 
 test('browser recovers an already-paid XOGPU task failed only by not_implemented poll error',()=>{

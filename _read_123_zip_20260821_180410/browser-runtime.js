@@ -95,7 +95,7 @@ function mediaUrl(id){return `/__browser_media/${encodeURIComponent(id)}`}
 async function ensureMediaServiceWorker(){
   if(!('serviceWorker'in navigator))return false;
   try{
-    const registration=await navigator.serviceWorker.register('./browser-media-sw.js?v=20260831-xogpu-poll-fallback-1',{scope:'./',updateViaCache:'none'});try{await registration.update()}catch{}
+    const registration=await navigator.serviceWorker.register('./browser-media-sw.js?v=20260831-xogpu-content-probe-1',{scope:'./',updateViaCache:'none'});try{await registration.update()}catch{}
     await navigator.serviceWorker.ready;
     if(navigator.serviceWorker.controller)return true;
     return await new Promise(resolve=>{let done=false;const finish=value=>{if(done)return;done=true;clearTimeout(timer);resolve(value)};const timer=setTimeout(()=>finish(Boolean(navigator.serviceWorker.controller)),5000);navigator.serviceWorker.addEventListener('controllerchange',()=>finish(true),{once:true})});
@@ -447,8 +447,25 @@ function videoPollUrlCandidates(provider,createdRaw,createPath,taskId,route){
 }
 function freshVideoPollUrl(url,route){const profile=String(route?.protocolProfile||route?.profile||''),family=String(route?.protocolFamily||route?.family||'');if(family!=='agnes-video'&&!profile.startsWith('agnes:'))return String(url);try{const u=new URL(String(url));u.searchParams.set('_canvas_poll',String(Date.now()));return u.toString()}catch{return String(url)}}
 function isXogpuVideoRoute(route={}){const family=String(route?.protocolFamily||route?.family||'').toLowerCase(),profile=String(route?.protocolProfile||route?.profile||'').toLowerCase();return family==='xogpu-minimax-h3'||profile==='xogpu:minimax-h3'}
-function shouldFallbackVideoPollError(error,route={}){const status=Number(error?.status);return[404,405].includes(status)||(isXogpuVideoRoute(route)&&status===501)}
-async function pollVideoJson(provider,candidates,route){let last=null;for(const url of candidates){const requestUrl=freshVideoPollUrl(url,route);try{return{parsed:await providerJson(provider,requestUrl,{method:route.pollMethod||'GET',headers:{'content-type':'application/json'}}),url,requestUrl}}catch(error){last=error;if(shouldFallbackVideoPollError(error,route))continue;throw error}}throw last||new Error('没有可用的视频任务轮询接口')}
+function isXogpuNotImplementedError(error,route={}){const detail=[runtimeErrorText(error),runtimeErrorText(error?.detail)].filter(Boolean).join(' ');return isXogpuVideoRoute(route)&&(Number(error?.status)===501||/not_implemented:\d+/i.test(detail))}
+function shouldFallbackVideoPollError(error,route={}){const status=Number(error?.status);return[404,405].includes(status)||isXogpuNotImplementedError(error,route)}
+async function pollVideoJson(provider,candidates,route){let last=null,xogpuNotImplemented=null;for(const url of candidates){const requestUrl=freshVideoPollUrl(url,route);try{return{parsed:await providerJson(provider,requestUrl,{method:route.pollMethod||'GET',headers:{'content-type':'application/json'}}),url,requestUrl}}catch(error){error.requestUrl=requestUrl;last=error;if(isXogpuNotImplementedError(error,route)){xogpuNotImplemented=error;continue}if([404,405].includes(Number(error?.status)))continue;throw error}}if(xogpuNotImplemented){xogpuNotImplemented.xogpuNotImplemented=true;throw xogpuNotImplemented}throw last||new Error('没有可用的视频任务轮询接口')}
+async function probeXogpuVideoContent(provider,createdRaw,taskId,route){
+  if(!isXogpuVideoRoute(route))return{ready:false,status:0,url:''};
+  const candidates=[],add=value=>{const url=videoResourceCandidate(provider,value);if(url&&!candidates.includes(url))candidates.push(url)};
+  const explicit=Core?.firstPath?Core.firstPath(createdRaw||{},['content_url','contentUrl','metadata.content_url','metadata.contentUrl','download_url','downloadUrl','links.content','links.download']):'';add(explicit);
+  for(const template of (Array.isArray(route.contentPathCandidates)?route.contentPathCandidates:[]))add(joinUrl(provider.baseUrl,fillTemplate(template,{taskId})));
+  if(route.contentPath)add(joinUrl(provider.baseUrl,fillTemplate(route.contentPath,{taskId})));
+  if(!candidates.length)add(joinUrl(provider.baseUrl,`/v1/videos/${taskId}/content`));
+  let lastStatus=0,lastUrl='';
+  for(const url of candidates){
+    const res=await fetchProviderResource(provider,url,{method:'GET',headers:{accept:'video/*,application/octet-stream;q=0.9,*/*;q=0.1'}});lastStatus=res.status;lastUrl=url;
+    if(res.ok){const parsed=await readResponse(res);return{ready:true,status:res.status,url,value:parsed.value}}
+    if([400,404,409,425,429,500,501,502,503,504].includes(res.status))continue;
+    const error=new Error(`XOGPU 视频内容读取失败 ${res.status}`);error.status=res.status;error.requestUrl=url;throw error;
+  }
+  return{ready:false,status:lastStatus,url:lastUrl};
+}
 async function fetchVideoContent(provider,createdRaw,taskId,route,activePollUrl=''){
   const candidates=[],add=value=>{const url=videoResourceCandidate(provider,value);if(url&&!candidates.includes(url))candidates.push(url)};
   const explicit=Core?.firstPath?Core.firstPath(createdRaw,['content_url','contentUrl','download_url','downloadUrl','links.content','links.download']):'';add(explicit);
@@ -618,6 +635,18 @@ async function executeTask(task){
       retryAttempt=0;
     }catch(error){
       const latest=findTask(task.id);
+      if(modality==='video'&&isXogpuVideoRoute(route)&&(error?.xogpuNotImplemented===true||isXogpuNotImplementedError(error,route))){
+        let probe=null;
+        try{probe=await probeXogpuVideoContent(provider,latest?.providerCreateResponse||task.providerCreateResponse||{},taskId,route)}catch(probeError){
+          updateTask(task.id,{lastPollAt:now(),lastError:runtimeErrorText(probeError)||'XOGPU 视频内容探测失败，将继续等待',error:null,videoProtocolDiagnostics:{...(latest?.videoProtocolDiagnostics||{}),createPath:usedCreatePath,lastPollErrorUrl:error.requestUrl||'',lastPollErrorStatus:Number(error?.status)||501,pollFallback:'content-probe'}});retryAttempt++;continue;
+        }
+        if(probe?.ready){
+          let output=await normalizeGeneratedOutput(probe.value,'video',provider);
+          try{output=await materializeGeneratedVideoOutput(output,provider)}catch(saveError){updateTask(task.id,{status:'result_pending',providerStatus:'succeeded',resultStatus:'pending',lastPollAt:now(),lastError:runtimeErrorText(saveError)||'XOGPU 视频已生成，但保存到浏览器本地失败，将继续重试',error:null,progress:99,videoProtocolDiagnostics:{...(latest?.videoProtocolDiagnostics||{}),createPath:usedCreatePath,lastPollErrorUrl:error.requestUrl||'',lastPollErrorStatus:Number(error?.status)||501,pollFallback:'content-probe',contentProbeUrl:probe.url||''}});retryAttempt++;continue}
+          if(validMediaOutput(output))return updateTask(task.id,{status:'succeeded',providerStatus:'succeeded',resultStatus:'saved',providerSucceededAt:latest?.providerSucceededAt||now(),resultSavedAt:now(),providerResultUrl:String(output||''),progress:100,output:outputObject(output,'video'),lastPollAt:now(),lastError:null,error:null,videoProtocolDiagnostics:{...(latest?.videoProtocolDiagnostics||{}),createPath:usedCreatePath,lastPollErrorUrl:error.requestUrl||'',lastPollErrorStatus:Number(error?.status)||501,pollFallback:'content-probe',contentProbeUrl:probe.url||'',contentProbeReady:true}})
+        }
+        updateTask(task.id,{status:'polling',providerStatus:latest?.providerStatus==='succeeded'?'succeeded':'processing',resultStatus:'pending',lastPollAt:now(),lastError:`XOGPU 状态查询未实现（${runtimeErrorText(error)||'HTTP 501'}），正在直接等待视频内容${probe?.status?`；内容接口 HTTP ${probe.status}`:''}`,error:null,progress:Math.max(10,Number(latest?.progress||0)),videoProtocolDiagnostics:{...(latest?.videoProtocolDiagnostics||{}),createPath:usedCreatePath,lastPollErrorUrl:error.requestUrl||'',lastPollErrorStatus:Number(error?.status)||501,pollFallback:'content-probe',contentProbeUrl:probe?.url||'',contentProbeStatus:Number(probe?.status||0),pollCandidates}});retryAttempt++;continue;
+      }
       if(latest?.providerStatus==='succeeded'){
         updateTask(task.id,{status:'result_pending',lastPollAt:now(),lastError:runtimeErrorText(error)||'上游已成功，结果同步暂时失败',error:null});retryAttempt++;continue;
       }
