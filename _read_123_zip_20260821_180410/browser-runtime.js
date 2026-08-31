@@ -95,7 +95,7 @@ function mediaUrl(id){return `/__browser_media/${encodeURIComponent(id)}`}
 async function ensureMediaServiceWorker(){
   if(!('serviceWorker'in navigator))return false;
   try{
-    const registration=await navigator.serviceWorker.register('./browser-media-sw.js?v=20260831-xogpu-strict-request-1',{scope:'./',updateViaCache:'none'});try{await registration.update()}catch{}
+    const registration=await navigator.serviceWorker.register('./browser-media-sw.js?v=20260831-xogpu-poll-fallback-1',{scope:'./',updateViaCache:'none'});try{await registration.update()}catch{}
     await navigator.serviceWorker.ready;
     if(navigator.serviceWorker.controller)return true;
     return await new Promise(resolve=>{let done=false;const finish=value=>{if(done)return;done=true;clearTimeout(timer);resolve(value)};const timer=setTimeout(()=>finish(Boolean(navigator.serviceWorker.controller)),5000);navigator.serviceWorker.addEventListener('controllerchange',()=>finish(true),{once:true})});
@@ -446,7 +446,9 @@ function videoPollUrlCandidates(provider,createdRaw,createPath,taskId,route){
   return out;
 }
 function freshVideoPollUrl(url,route){const profile=String(route?.protocolProfile||route?.profile||''),family=String(route?.protocolFamily||route?.family||'');if(family!=='agnes-video'&&!profile.startsWith('agnes:'))return String(url);try{const u=new URL(String(url));u.searchParams.set('_canvas_poll',String(Date.now()));return u.toString()}catch{return String(url)}}
-async function pollVideoJson(provider,candidates,route){let last=null;for(const url of candidates){const requestUrl=freshVideoPollUrl(url,route);try{return{parsed:await providerJson(provider,requestUrl,{method:route.pollMethod||'GET',headers:{'content-type':'application/json'}}),url,requestUrl}}catch(error){last=error;if(![404,405].includes(Number(error?.status)))throw error}}throw last||new Error('没有可用的视频任务轮询接口')}
+function isXogpuVideoRoute(route={}){const family=String(route?.protocolFamily||route?.family||'').toLowerCase(),profile=String(route?.protocolProfile||route?.profile||'').toLowerCase();return family==='xogpu-minimax-h3'||profile==='xogpu:minimax-h3'}
+function shouldFallbackVideoPollError(error,route={}){const status=Number(error?.status);return[404,405].includes(status)||(isXogpuVideoRoute(route)&&status===501)}
+async function pollVideoJson(provider,candidates,route){let last=null;for(const url of candidates){const requestUrl=freshVideoPollUrl(url,route);try{return{parsed:await providerJson(provider,requestUrl,{method:route.pollMethod||'GET',headers:{'content-type':'application/json'}}),url,requestUrl}}catch(error){last=error;if(shouldFallbackVideoPollError(error,route))continue;throw error}}throw last||new Error('没有可用的视频任务轮询接口')}
 async function fetchVideoContent(provider,createdRaw,taskId,route,activePollUrl=''){
   const candidates=[],add=value=>{const url=videoResourceCandidate(provider,value);if(url&&!candidates.includes(url))candidates.push(url)};
   const explicit=Core?.firstPath?Core.firstPath(createdRaw,['content_url','contentUrl','download_url','downloadUrl','links.content','links.download']):'';add(explicit);
@@ -733,11 +735,21 @@ async function handleApi(info,input,init){
 }
 
 // IndexedDB is the source of truth. Existing localStorage stores are migrated once.
+function recoverableXogpuNotImplementedTask(task){
+  if(!task||task.status!=='failed'||!String(task.upstreamTaskId||'').trim())return false;
+  const message=[task.error,task.lastError,task.errorDetail].map(x=>String(x||'')).join(' ');
+  if(Number(task.errorStatus)!==501&&!/not_implemented:\d+/i.test(message))return false;
+  const provider=findProvider(task.providerId)||task.providerSnapshot||{};
+  let host='';try{host=new URL(String(provider.baseUrl||'')).hostname.toLowerCase()}catch{}
+  const modelId=String(task.modelId||task.modelSnapshot?.id||'').toLowerCase();
+  return(host==='xogpu.com'||host.endsWith('.xogpu.com'))&&/minimax[-_. ]?h3|\bh3\b/.test(modelId);
+}
 runtime.ready=initializePersistence();
 runtime.ready.then(()=>{
   const list=tasks();let changed=false;
   for(const t of list){
     if(t.status==='cancelling'){t.status='canceled';t.error='已取消';t.updatedAt=now();changed=true;continue}
+    if(recoverableXogpuNotImplementedTask(t)){t.status='queued';t.providerStatus=t.providerStatus==='succeeded'?'succeeded':'processing';t.resultStatus=t.providerStatus==='succeeded'?'pending':(t.resultStatus||'pending');t.error=null;t.lastError=null;t.errorStatus=null;t.errorDetail=null;t.updatedAt=now();changed=true;continue}
     if(t.status==='retrying'&&t.retryReason==='rate_limit'&&!t.upstreamTaskId){const due=Date.parse(t.nextRetryAt||t.rateLimitRetryAt||''),delay=Number.isFinite(due)?Math.max(1000,due-Date.now()):65000;scheduleRateLimitRetry(t.id,delay);continue}
     if(['provider_succeeded','result_pending','running','polling','fallback','retrying'].includes(t.status)&&t.upstreamTaskId){t.status='queued';t.error=null;t.lastError=null;t.updatedAt=now();changed=true;continue}
     if(['running','polling','fallback'].includes(t.status)&&!t.upstreamTaskId){t.status='failed';t.error='页面刷新发生在上游任务 ID 持久化之前；为避免重复生成和重复扣费不会自动重新提交，请重新创建任务。';t.lastError=t.error;t.updatedAt=now();changed=true;continue}

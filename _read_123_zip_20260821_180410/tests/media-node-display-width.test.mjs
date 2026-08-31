@@ -16,5 +16,5 @@ test('legacy small video nodes migrate to the shared media width',()=>{
 });
 
 test('browser cache key is bumped for unified media sizing',()=>{
-  assert.match(boot,/20260831-xogpu-strict-request-1/);
+  assert.match(boot,/20260831-xogpu-poll-fallback-1/);
 });
