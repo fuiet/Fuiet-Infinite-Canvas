@@ -181,6 +181,7 @@
   });
 
   const MEDIA_NODE_DISPLAY_WIDTH=620;
+  const CONTEXT_TOOLBAR_SAFE_TOP=58;
 
   const WORKSPACE_NAME_KEY='canvas-studio-workspace-name-v1';
   let workspaceName='未命名工作区';
@@ -576,7 +577,7 @@
   function scheduleViewportTransform(){if(viewportFrame)return;viewportFrame=requestAnimationFrame(()=>{viewportFrame=0;applyViewportTransform()})}
   function refreshVirtualizedContent(){const visible=renderedNodeIds();nodeLayer.innerHTML='';renderGroups(visible);state.nodes.forEach(n=>{if(visible.has(n.id))nodeLayer.appendChild(renderNode(n))});renderEdges();renderToolbar();renderGenerator();lastVirtualizedViewport={...state.viewport}}
   function scheduleVirtualizationRefresh(force=false){const dx=Math.abs(state.viewport.x-lastVirtualizedViewport.x),dy=Math.abs(state.viewport.y-lastVirtualizedViewport.y),dz=Math.abs(state.viewport.zoom-lastVirtualizedViewport.zoom),threshold=Math.max(140,Math.min(viewport.clientWidth,viewport.clientHeight)*.28);if(!force&&dx<threshold&&dy<threshold&&dz<.07)return;clearTimeout(virtualizationTimer);virtualizationTimer=setTimeout(()=>{virtualizationTimer=null;refreshVirtualizedContent()},72)}
-  function repositionExpandedSurfaces(){if(!expandedNodeId)return;const n=state.nodes.find(x=>x.id===expandedNodeId),el=n&&document.querySelector(`.node[data-id="${CSS.escape(String(n.id))}"]`);if(!el)return;const r=el.getBoundingClientRect();if(!toolbar.classList.contains('hidden')){toolbar.style.left=Math.max(68,Math.min(window.innerWidth-760,r.left))+'px';toolbar.style.top=Math.max(45,r.top-40)+'px'}if(!generator.classList.contains('hidden'))positionGeneratorBelowNode(n,el,n.type==='script'?Math.min(360,window.innerWidth-96):Math.max(420,Math.min(560,r.width+60)))}
+  function repositionExpandedSurfaces(){if(!expandedNodeId)return;const n=state.nodes.find(x=>x.id===expandedNodeId),el=n&&document.querySelector(`.node[data-id="${CSS.escape(String(n.id))}"]`);if(!el)return;const r=el.getBoundingClientRect();if(!toolbar.classList.contains('hidden')){toolbar.style.left=Math.max(68,Math.min(window.innerWidth-760,r.left))+'px';toolbar.style.top=Math.max(CONTEXT_TOOLBAR_SAFE_TOP,r.top-40)+'px'}if(!generator.classList.contains('hidden'))positionGeneratorBelowNode(n,el,n.type==='script'?Math.min(360,window.innerWidth-96):Math.max(420,Math.min(560,r.width+60)))}
   function render(){
     $('#projectName').textContent=state.projectName;if(workspaceNameEl)workspaceNameEl.textContent=workspaceName;applyViewportTransform({minimap:false,overlays:false});
     const visible=renderedNodeIds();nodeLayer.innerHTML='';renderGroups(visible);state.nodes.forEach(n=>{if(visible.has(n.id))nodeLayer.appendChild(renderNode(n))});
@@ -1033,7 +1034,7 @@
     toolbar.classList.remove('node-toolbar-media','node-toolbar-image','node-toolbar-video','node-toolbar-audio','node-toolbar-script','node-toolbar-director');
     toolbar.classList.add('node-toolbar-text','node-toolbar-text-editor');toolbar.dataset.mediaType='text';
     toolbar.style.left=Math.max(16,Math.min(window.innerWidth-width-16,r.left+r.width/2-width/2))+'px';
-    toolbar.style.top=Math.max(16,r.top-60)+'px';
+    toolbar.style.top=Math.max(CONTEXT_TOOLBAR_SAFE_TOP,r.top-60)+'px';
     toolbar.innerHTML=`<button class="text-format-btn text-format-clear" data-text-format="clear" title="清除格式"><span>∅</span></button><span class="text-format-separator"></span><button class="text-format-btn" data-text-format="h1" title="一级标题">H1</button><button class="text-format-btn" data-text-format="h2" title="二级标题">H2</button><button class="text-format-btn" data-text-format="h3" title="三级标题">H3</button><button class="text-format-btn text-format-paragraph" data-text-format="p" title="正文">¶</button><span class="text-format-separator"></span><button class="text-format-btn text-format-bold" data-text-format="bold" title="加粗">B</button><button class="text-format-btn text-format-italic" data-text-format="italic" title="斜体">I</button><span class="text-format-separator"></span><button class="text-format-btn text-format-list" data-text-format="bullet" title="无序列表"><span>•</span><i>≡</i></button><button class="text-format-btn text-format-list" data-text-format="number" title="有序列表"><span>1</span><i>≡</i></button><span class="text-format-separator"></span><button class="text-format-btn text-format-rule" data-text-format="rule" title="分割线">—</button><span class="text-format-separator"></span><button class="text-format-btn" data-text-format="copy" title="复制">▣</button><button class="text-format-btn text-format-expand" data-text-format="expand" title="展开 / 收起">↗</button>`;
     toolbar.classList.remove('hidden');
     $$('[data-text-format]',toolbar).forEach(btn=>{btn.onpointerdown=e=>e.preventDefault();btn.onclick=e=>{e.preventDefault();e.stopPropagation();runManualTextFormat(n,btn.dataset.textFormat)}});
@@ -1646,7 +1647,7 @@
     const ids=currentSelectionIds();
     if(ids.length>1){
       const r=viewport.getBoundingClientRect();
-      toolbar.style.left=Math.max(76,Math.min(window.innerWidth-620,r.left+r.width/2-280))+'px';toolbar.style.top='54px';
+      toolbar.style.left=Math.max(76,Math.min(window.innerWidth-620,r.left+r.width/2-280))+'px';toolbar.style.top=CONTEXT_TOOLBAR_SAFE_TOP+'px';
       toolbar.removeAttribute('data-media-type');toolbar.classList.remove('node-toolbar-media','node-toolbar-text','node-toolbar-image','node-toolbar-video','node-toolbar-audio','node-toolbar-script','node-toolbar-director');
       toolbar.innerHTML=`<span class="selection-toolbar-label">已选 ${ids.length}</span><button class="tool-btn primary" data-multi-top="batch-connect">批量连接</button><button class="tool-btn" data-multi-top="group">打组</button><button class="tool-btn" data-multi-top="workflow">保存工作流</button><button class="tool-btn" data-multi-top="run">整组执行</button><button class="tool-btn" data-multi-top="layout">整理</button><button class="tool-btn danger" data-multi-top="delete">删除</button>`;
       toolbar.classList.remove('hidden');
@@ -1666,12 +1667,12 @@
     if(n.type==='image'||n.type==='video'||n.type==='audio'){
       const estimatedWidth=Math.min(window.innerWidth-32,Math.max(n.type==='image'?760:n.type==='video'?620:360,actions.length*68));
       toolbar.style.left=Math.max(16,Math.min(window.innerWidth-estimatedWidth-16,r.left+r.width/2-estimatedWidth/2))+'px';
-      toolbar.style.top=Math.max(16,r.top-58)+'px';
+      toolbar.style.top=Math.max(CONTEXT_TOOLBAR_SAFE_TOP,r.top-58)+'px';
       toolbar.innerHTML=actions.map((a,i)=>`<button class="tool-btn ${a.primary?'primary':''} ${a.iconOnly?'icon-only':''}" data-top-action="${i}" title="${escapeAttr(a.label)}"><span class="tool-glyph">${n.type==='image'?imageToolbarGlyph(a.action||''):n.type==='video'?videoToolbarGlyph(a.action||''):audioToolbarGlyph(a.action||'')}</span>${a.iconOnly?'':`<span>${escapeHtml(a.label)}</span>`}${a.action==='image-portrait'?'<span class="tool-arrow">⌄</span>':''}</button>`).join('');
       toolbar.classList.remove('hidden');
       $$('[data-top-action]',toolbar).forEach(b=>b.onclick=()=>runTopBarAction(n,actions[Number(b.dataset.topAction)],b));return;
     }
-    toolbar.style.left=Math.max(68,Math.min(window.innerWidth-620,r.left))+'px';toolbar.style.top=Math.max(45,r.top-40)+'px';
+    toolbar.style.left=Math.max(68,Math.min(window.innerWidth-620,r.left))+'px';toolbar.style.top=Math.max(CONTEXT_TOOLBAR_SAFE_TOP,r.top-40)+'px';
     toolbar.innerHTML=`<span class="selection-toolbar-label">${escapeHtml(labelForType(n.type))}结果</span>`+actions.map((a,i)=>`<button class="tool-btn ${a.primary?'primary':''}" data-top-action="${i}">${escapeHtml(a.label)}</button>`).join('');toolbar.classList.remove('hidden');
     $$('[data-top-action]',toolbar).forEach(b=>b.onclick=()=>runTopBarAction(n,actions[Number(b.dataset.topAction)],b));
   }

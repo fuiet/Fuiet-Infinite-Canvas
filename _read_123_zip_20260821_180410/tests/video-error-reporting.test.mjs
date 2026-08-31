@@ -26,8 +26,8 @@ test('task failure persistence keeps status and detail',()=>{
 
 test('adaptive video protocol assets pin changed registry components to fresh versions',()=>{
   for(const file of ['video-protocol-registry.js','provider-adapter-contract.js','provider-runtime-core.js','browser-runtime.js']){
-    assert.ok(index.includes(`${file}?v=20260831-media-width-unified-1`),file);
+    assert.ok(index.includes(`${file}?v=20260831-context-toolbar-clear-1`),file);
   }
-  assert.ok(index.includes('browser-bootstrap.js?v=20260831-media-width-unified-1'),'browser-bootstrap.js');
+  assert.ok(index.includes('browser-bootstrap.js?v=20260831-context-toolbar-clear-1'),'browser-bootstrap.js');
   assert.ok(index.includes('video-request-parameters.js?v=20260828-video-error-reporting-1'));
 });
