@@ -1,0 +1,21 @@
+name: Diagnose XOGPU video migration
+on:
+  push:
+    paths:
+      - '.github/workflows/diag-xogpu-video.yml'
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Locate current video-specific UI and Agnes code
+        run: |
+          ROOT=_read_123_zip_20260821_180410
+          echo '=== app video params ==='
+          grep -nEi 'agnes|duration|seconds|aspect.?ratio|720P|720p|video.*model|model.*video|4,8,12|4.*8.*12' "$ROOT/app.js" | head -n 320 || true
+          echo '=== runtime Agnes ==='
+          grep -nEi 'agnes|providerCreateThrottleKey|freshVideoPollUrl|videoPollUrlCandidates' "$ROOT/browser-runtime.js" | head -n 240 || true
+          echo '=== server Agnes ==='
+          grep -nEi 'agnes|standardVideoProviderIdentity|DesktopPoll' "$ROOT/server.js" | head -n 200 || true
+          echo '=== all Agnes files ==='
+          grep -RniE 'agnes-video|agnes-ai|agnesapi|Agnes' "$ROOT" --include='*.js' --include='*.mjs' --include='*.html' | head -n 400 || true
