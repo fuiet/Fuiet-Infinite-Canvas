@@ -28,6 +28,6 @@ test('adaptive video protocol assets pin changed registry components to fresh ve
   for(const file of ['video-protocol-registry.js','provider-adapter-contract.js','provider-runtime-core.js','browser-runtime.js']){
     assert.ok(index.includes(`${file}?v=20260829-agnes-live-poll-4`),file);
   }
-  assert.ok(index.includes('browser-bootstrap.js?v=20260829-agnes-live-poll-4'),'browser-bootstrap.js');
+  assert.ok(index.includes('browser-bootstrap.js?v=20260831-video-task-diagnostics-1'),'browser-bootstrap.js');
   assert.ok(index.includes('video-request-parameters.js?v=20260828-video-error-reporting-1'));
 });

@@ -343,3 +343,24 @@
 .node-toolbar.node-toolbar-video .tool-btn.primary{background:#343434;color:#fff}
 .node-toolbar.node-toolbar-video .tool-btn.icon-only{width:32px;padding:0;justify-content:center}
 .node-toolbar.node-toolbar-video .tool-glyph{color:#cfcfcf;font-size:12px;line-height:1}
+
+
+/* Live upstream diagnostics for async video tasks. */
+.video-task-diagnostics-slot:empty{display:none}
+.video-task-diagnostics-slot{margin:8px 0 10px}
+.video-task-diagnostics{
+  padding:8px 9px;
+  border:1px solid #383838;
+  border-radius:7px;
+  background:#1f1f1f;
+  color:#aaa;
+  font:400 10px/14px var(--ui-font-sans);
+}
+.video-task-diagnostics-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}
+.video-task-diagnostics-head span{color:#8c8c8c}
+.video-task-diagnostics-head b{color:#e0b35b;font-weight:600;text-align:right}
+.video-task-diagnostics-meta{display:grid;gap:3px}
+.video-task-diagnostics-meta span{min-width:0;display:grid;grid-template-columns:64px minmax(0,1fr);gap:6px}
+.video-task-diagnostics-meta i{color:#747474;font-style:normal}
+.video-task-diagnostics-meta code{color:#bdbdbd;font:500 9px/13px var(--ui-font-mono,monospace);overflow-wrap:anywhere;user-select:text}
+.video-task-diagnostics-error{margin-top:6px;padding-top:6px;border-top:1px solid #323232;color:#d68b8b;overflow-wrap:anywhere;user-select:text}
