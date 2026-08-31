@@ -1,0 +1,18 @@
+name: Diagnose XOGPU migration
+
+on:
+  push:
+    paths:
+      - '.github/workflows/diagnose-xogpu-migration.yml'
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Locate Agnes and video defaults
+        run: |
+          echo '=== Agnes references ==='
+          grep -RniE 'agnes|agnes-video|agnesapi|video-2\.5|providerCreateThrottle|rate_limit' _read_123_zip_20260821_180410 --include='*.js' --include='*.mjs' --include='*.html' --include='*.json' --include='*.css' | head -n 700 || true
+          echo '=== MiniMax H3 and video model defaults ==='
+          grep -RniE 'MiniMax-H3|minimax.*h3|default.*video|video.*default|discount_video_generation' _read_123_zip_20260821_180410 --include='*.js' --include='*.mjs' --include='*.html' --include='*.json' | head -n 500 || true
