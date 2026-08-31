@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - '_patch_xogpu_content_probe.py'
+      - '_patch_xogpu_content_probe_v2.py'
       - '.github/workflows/patch-xogpu-content-probe.yml'
 
 permissions:
@@ -20,7 +21,7 @@ jobs:
         with:
           node-version: '22'
       - name: Apply patch
-        run: python3 _patch_xogpu_content_probe.py
+        run: python3 _patch_xogpu_content_probe_v2.py
       - name: Check
         working-directory: _read_123_zip_20260821_180410
         run: npm run check
