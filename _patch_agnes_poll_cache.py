@@ -85,3 +85,4 @@ test('fresh browser runtime build is deployed',()=>{
 """,encoding='utf-8')
 
 print('patched Agnes poll cache',BUILD)
+# retrigger: stale direct-fetch regression assertion has been updated on main
