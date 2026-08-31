@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - '_patch_xogpu_strict_request.py'
+      - '_patch_xogpu_cache_versions.py'
       - '.github/workflows/patch-xogpu-strict-request.yml'
 
 permissions:
@@ -20,7 +21,9 @@ jobs:
         with:
           node-version: '22'
       - name: Apply patch
-        run: python3 _patch_xogpu_strict_request.py
+        run: |
+          python3 _patch_xogpu_strict_request.py
+          python3 _patch_xogpu_cache_versions.py
       - name: Check
         working-directory: _read_123_zip_20260821_180410
         run: npm run check
