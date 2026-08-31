@@ -21,6 +21,32 @@ jobs:
           node-version: '22'
       - name: Apply patch
         run: python3 _patch_xogpu_minimax_h3.py
+      - name: Fix migration regressions
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path('_read_123_zip_20260821_180410')
+          registry=root/'video-protocol-registry.js'
+          s=registry.read_text(encoding='utf-8')
+          old="function mapXogpuVideoRequest(model={},task={},refs=[]){"
+          new="function mapXogpuVideoRequest(model={},task={},refs=[],operation='generate'){"
+          if old not in s:
+              raise SystemExit('XOGPU mapper signature not found')
+          s=s.replace(old,new,1)
+          old_call="if(family==='xogpu-minimax-h3')return{family,operation,body:mapXogpuVideoRequest(model,task,refs)};"
+          new_call="if(family==='xogpu-minimax-h3')return{family,operation,body:mapXogpuVideoRequest(model,task,refs,operation)};"
+          if old_call not in s:
+              raise SystemExit('XOGPU mapper call not found')
+          registry.write_text(s.replace(old_call,new_call,1),encoding='utf-8')
+
+          stale=root/'tests'/'video-error-reporting.test.mjs'
+          t=stale.read_text(encoding='utf-8')
+          old_version='video-request-parameters.js?v=20260828-video-error-reporting-1'
+          new_version='video-request-parameters.js?v=20260831-xogpu-minimax-h3-1'
+          if old_version not in t:
+              raise SystemExit('stale video request cache assertion not found')
+          stale.write_text(t.replace(old_version,new_version),encoding='utf-8')
+          PY
       - name: Check
         working-directory: _read_123_zip_20260821_180410
         run: npm run check
@@ -30,6 +56,6 @@ jobs:
       - name: Commit patch
         run: |
           git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git config user.email 41898282+fuiet@users.noreply.github.com
           git add _read_123_zip_20260821_180410
           git diff --cached --quiet || (git commit -m "Switch video generation to XOGPU MiniMax-H3" && git push)
