@@ -31,7 +31,7 @@ new_poll="""    const pollIdentity=modality==='video'&&isAgnesVideoRoute(route)?
     const pollVideoId=pollIdentity?pollIdentity.videoId:(modality==='video'&&Core?.firstPath?Core.firstPath(polled.value,['video_id','videoId','data.video_id','data.videoId']):'');
     const pollTaskId=pollIdentity?pollIdentity.taskId:(modality==='video'&&Core?.firstPath?Core.firstPath(polled.value,['task_id','taskId','data.task_id','data.taskId','id','data.id']):'');
     if(modality==='video'&&isAgnesVideoRoute(route)&&pollVideoId){const upgraded=videoPollUrlCandidates(provider,{video_id:String(pollVideoId),task_id:pollTaskId||findTask(task.id)?.providerTaskId||''},usedCreatePath,String(pollVideoId),route);if(upgraded.length){pollCandidates=[...new Set([...upgraded,...pollCandidates])];activePollUrl=upgraded[0]}}
-    updateTask(task.id,{lastPollAt:now(),providerRawStatus:assessment.status||'',providerProgress:assessment.progress==null?null:Number(assessment.progress),...(pollIdentity?.ambiguousTaskAlias?{providerVideoId:'',providerTaskId:String(pollTaskId||'')}:(pollVideoId?{providerVideoId:String(pollVideoId)}:{})),...(!pollIdentity?.ambiguousTaskAlias&&pollTaskId?{providerTaskId:String(pollTaskId)}:{}),progress:assessment.progress==null?Math.min(95,8+pollCount*3):Number(assessment.progress),videoProtocolDiagnostics:{...(findTask(task.id)?.videoProtocolDiagnostics||{}),createPath:usedCreatePath,pollUrl:activePollUrl,pollCandidates,...(pollIdentity?.ambiguousTaskAlias?{healedAmbiguousTaskAlias:true}:{} )}});
+    updateTask(task.id,{lastPollAt:now(),providerRawStatus:assessment.status||'',providerProgress:assessment.progress==null?null:Number(assessment.progress),...(pollIdentity?.ambiguousTaskAlias?{providerVideoId:'',providerTaskId:String(pollTaskId||'')}:(pollVideoId?{providerVideoId:String(pollVideoId)}:{})),...(!pollIdentity?.ambiguousTaskAlias&&pollTaskId?{providerTaskId:String(pollTaskId)}:{}),progress:assessment.progress==null?Math.min(95,8+pollCount*3):Number(assessment.progress),videoProtocolDiagnostics:{...(findTask(task.id)?.videoProtocolDiagnostics||{}),createPath:usedCreatePath,pollUrl:activePollUrl,pollCandidates,...(pollIdentity?.ambiguousTaskAlias?{healedAmbiguousTaskAlias:true}:{})}});
 """
 text=rep(text,old_poll,new_poll,'browser poll identity healing')
 
@@ -47,10 +47,18 @@ new_startup="""runtime.ready.then(()=>{
   for(const t of list){
     if(t.status==='cancelling'){t.status='canceled';t.error='已取消';t.updatedAt=now();changed=true;continue}
     if(t.status==='retrying'&&t.retryReason==='rate_limit'&&!t.upstreamTaskId){const due=Date.parse(t.nextRetryAt||t.rateLimitRetryAt||''),delay=Number.isFinite(due)?Math.max(1000,due-Date.now()):65000;scheduleRateLimitRetry(t.id,delay);continue}
-    if(['provider_succeeded','result_pending','running','polling','fallback','retrying'].includes(t.status)&&t.upstreamTaskId){t.status='queued';t.error=null;t.lastError=t.status==='retrying'?t.lastError:null;t.updatedAt=now();changed=true;continue}
-    if(['running','polling','fallback'].includes(t.status)&&!t.upstreamTaskId){t.status='failed';t.error='页面刷新发生在上游任务 ID 持久化之前；为避免重复扣费不会自动重新提交，请重新创建任务。';t.lastError=t.error;t.updatedAt=now();changed=true;continue}
+    if(['provider_succeeded','result_pending','running','polling','fallback','retrying'].includes(t.status)&&t.upstreamTaskId){t.status='queued';t.error=null;t.lastError=null;t.updatedAt=now();changed=true;continue}
+    if(['running','polling','fallback'].includes(t.status)&&!t.upstreamTaskId){t.status='failed';t.error='页面刷新发生在上游任务 ID 持久化之前；为避免重复生成和重复扣费不会自动重新提交，请重新创建任务。';t.lastError=t.error;t.updatedAt=now();changed=true;continue}
 """
 text=rep(text,old_startup,new_startup,'browser startup upstream recovery')
+
+duplicate_recovery="""    if(['running','polling','retrying'].includes(t.status)){
+      if(t.upstreamTaskId){t.status='queued';t.error=null;t.updatedAt=now();changed=true}
+      else{t.status='failed';t.error='页面刷新发生在上游任务 ID 落盘之前；为避免重复生成和重复扣费，系统没有自动重新提交，请先在供应商后台确认任务状态';t.updatedAt=now();changed=true}
+    }
+"""
+if duplicate_recovery in text:
+    text=text.replace(duplicate_recovery,'',1)
 
 text=text.replace(OLD,BUILD)
 p.write_text(text,encoding='utf-8')
@@ -73,6 +81,13 @@ for fp in (ROOT/'tests').glob('*.test.mjs'):
     if OLD in s:
         fp.write_text(s.replace(OLD,BUILD),encoding='utf-8')
 
+# Update old reconciliation assertion to the expanded safe recovery contract.
+fp=ROOT/'tests'/'video-result-reconciliation.test.mjs'
+s=fp.read_text(encoding='utf-8')
+s=s.replace("assert.match(init,/\\['provider_succeeded','result_pending'\\]/);\n  assert.match(init,/if\\(t\\.upstreamTaskId\\)\\{t\\.status='queued'/);\n  assert.match(init,/为避免重复生成和重复扣费/);",
+            "assert.match(init,/\\['provider_succeeded','result_pending','running','polling','fallback','retrying'\\]\\.includes\\(t\\.status\\)&&t\\.upstreamTaskId/);\n  assert.match(init,/t\\.status='queued'/);\n  assert.match(init,/为避免重复生成和重复扣费不会自动重新提交/);")
+fp.write_text(s,encoding='utf-8')
+
 # Add regression coverage.
 (ROOT/'tests'/'browser-task-reload-recovery.test.mjs').write_text("""import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -83,23 +98,24 @@ const index=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const BUILD='20260831-agnes-resume-heal-1';
 
 test('browser reload resumes only already-persisted upstream active tasks',()=>{
-  assert.match(runtime,/\['provider_succeeded','result_pending','running','polling','fallback','retrying'\]\.includes\(t\.status\)&&t\.upstreamTaskId/);
-  assert.match(runtime,/t\.status='queued'/);
-  assert.match(runtime,/\['running','polling','fallback'\]\.includes\(t\.status\)&&!t\.upstreamTaskId/);
-  assert.match(runtime,/为避免重复扣费不会自动重新提交/);
+  assert.match(runtime,/\\['provider_succeeded','result_pending','running','polling','fallback','retrying'\\]\\.includes\\(t\\.status\\)&&t\\.upstreamTaskId/);
+  assert.match(runtime,/t\\.status='queued'/);
+  assert.match(runtime,/\\['running','polling','fallback'\\]\\.includes\\(t\\.status\\)&&!t\\.upstreamTaskId/);
+  assert.match(runtime,/为避免重复生成和重复扣费不会自动重新提交/);
 });
 
 test('polling tasks are not left visually alive while executor is stopped after reload',()=>{
   const ready=runtime.slice(runtime.indexOf('runtime.ready.then(()=>'),runtime.indexOf('window.fetch=async function'));
   assert.match(ready,/running','polling'/);
-  assert.match(ready,/saveTasks\(list\);pump\(\)/);
+  assert.match(ready,/saveTasks\\(list\\);pump\\(\\)/);
+  assert.doesNotMatch(ready,/if\\(\\['running','polling','retrying'\\]\\.includes\\(t\\.status\\)\\)\\{/);
 });
 
 test('Agnes task alias pollution is healed instead of reused as a video id',()=>{
-  assert.match(runtime,/const ambiguousTaskAlias=Boolean\(videoId&&taskId&&videoId===taskId&&\/\^task\[_-\]\/i\.test\(videoId\)\)/);
-  assert.match(runtime,/if\(ambiguousTaskAlias\)videoId=''/);
+  assert.match(runtime,/const ambiguousTaskAlias=Boolean\\(videoId&&taskId&&videoId===taskId&&\\/\\^task\\[_-\\]\\/i\\.test\\(videoId\\)\\)/);
+  assert.match(runtime,/if\\(ambiguousTaskAlias\\)videoId=''/);
   assert.match(runtime,/healedAmbiguousTaskAlias:true/);
-  assert.match(server,/const ambiguousTaskAlias=Boolean\(videoId&&taskId&&videoId===taskId&&\/\^task\[_-\]\/i\.test\(videoId\)\)/);
+  assert.match(server,/const ambiguousTaskAlias=Boolean\\(videoId&&taskId&&videoId===taskId&&\\/\\^task\\[_-\\]\\/i\\.test\\(videoId\\)\\)/);
 });
 
 test('fresh browser build is deployed for task recovery healing',()=>{
