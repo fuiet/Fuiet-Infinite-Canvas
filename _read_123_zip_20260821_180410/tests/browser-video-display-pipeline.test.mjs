@@ -9,8 +9,8 @@ const app=fs.readFileSync(path.join(ROOT,'app.js'),'utf8');
 const index=fs.readFileSync(path.join(ROOT,'index.html'),'utf8');
 const models=fs.readFileSync(path.join(ROOT,'models.html'),'utf8');
 const bootstrap=fs.readFileSync(path.join(ROOT,'browser-bootstrap.js'),'utf8');
-const RUNTIME_BUILD='20260829-agnes-live-poll-4';
-const APP_BUILD='20260831-video-task-diagnostics-1';
+const RUNTIME_BUILD='20260831-provider-rate-limit-1';
+const APP_BUILD='20260831-provider-rate-limit-1';
 
 test('canvas deployment keeps runtime build while cache busting the application diagnostics code',()=>{
   for(const src of [index,models])assert.ok(src.includes(RUNTIME_BUILD),'missing current video runtime build id');

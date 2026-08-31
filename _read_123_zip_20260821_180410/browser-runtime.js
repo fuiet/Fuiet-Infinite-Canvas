@@ -23,7 +23,7 @@ const DB_NAME='fuiet-infinite-canvas-browser';
 const DB_VERSION=1;
 const STORES={providers:'providers',projects:'projects',tasks:'tasks',media:'media',settings:'settings',meta:'meta'};
 const cache={providers:[],projects:[],tasks:[],queue:{paused:false,concurrency:2}};
-const runtime={running:0,pumping:false,controllers:new Map(),objectUrls:new Set(),resultRetryTimers:new Map(),persistChain:Promise.resolve(),db:null,ready:null,swReady:null};
+const runtime={running:0,pumping:false,controllers:new Map(),objectUrls:new Set(),resultRetryTimers:new Map(),rateLimitRetryTimers:new Map(),persistChain:Promise.resolve(),db:null,ready:null,swReady:null};
 const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
 function runtimeErrorText(value,depth=0){
   if(value==null||depth>8)return'';
@@ -95,7 +95,7 @@ function mediaUrl(id){return `/__browser_media/${encodeURIComponent(id)}`}
 async function ensureMediaServiceWorker(){
   if(!('serviceWorker'in navigator))return false;
   try{
-    const registration=await navigator.serviceWorker.register('./browser-media-sw.js?v=20260829-agnes-live-poll-4',{scope:'./',updateViaCache:'none'});try{await registration.update()}catch{}
+    const registration=await navigator.serviceWorker.register('./browser-media-sw.js?v=20260831-provider-rate-limit-1',{scope:'./',updateViaCache:'none'});try{await registration.update()}catch{}
     await navigator.serviceWorker.ready;
     if(navigator.serviceWorker.controller)return true;
     return await new Promise(resolve=>{let done=false;const finish=value=>{if(done)return;done=true;clearTimeout(timer);resolve(value)};const timer=setTimeout(()=>finish(Boolean(navigator.serviceWorker.controller)),5000);navigator.serviceWorker.addEventListener('controllerchange',()=>finish(true),{once:true})});
@@ -151,13 +151,19 @@ function updateTask(id,patch){
     next.providerStatus='succeeded';next.resultStatus='saved';next.providerSucceededAt=current.providerSucceededAt||next.providerSucceededAt||now();next.resultSavedAt=current.resultSavedAt||next.resultSavedAt||now();next.error=null;next.lastError=null;
   }
   list[i]={...current,...next,updatedAt:now()};saveTasks(list);
-  if(['succeeded','failed','canceled'].includes(list[i].status)){const timer=runtime.resultRetryTimers.get(id);if(timer){clearTimeout(timer);runtime.resultRetryTimers.delete(id)}}
+  if(['succeeded','failed','canceled'].includes(list[i].status)){const timer=runtime.resultRetryTimers.get(id);if(timer){clearTimeout(timer);runtime.resultRetryTimers.delete(id)}const rateTimer=runtime.rateLimitRetryTimers.get(id);if(rateTimer){clearTimeout(rateTimer);runtime.rateLimitRetryTimers.delete(id)}}
   return list[i]
 }
 function scheduleTaskResume(id,delay=3000){
   if(runtime.resultRetryTimers.has(id))return;
   const timer=setTimeout(()=>{runtime.resultRetryTimers.delete(id);const current=findTask(id);if(!current||current.cancelRequested)return;if(['provider_succeeded','result_pending'].includes(current.status)){updateTask(id,{status:'queued',error:null});pump()}},Math.max(1000,Number(delay)||3000));
   runtime.resultRetryTimers.set(id,timer);
+}
+function scheduleRateLimitRetry(id,delay=65000){
+  const wait=Math.max(1000,Math.min(15*60*1000,Number(delay)||65000));
+  const previous=runtime.rateLimitRetryTimers.get(id);if(previous)clearTimeout(previous);
+  const timer=setTimeout(()=>{runtime.rateLimitRetryTimers.delete(id);const current=findTask(id);if(!current||current.cancelRequested||current.status!=='retrying'||current.retryReason!=='rate_limit')return;updateTask(id,{status:'queued',error:null,lastError:null,nextRetryAt:null,rateLimitRetryAt:null,retryReason:null});pump()},wait);
+  runtime.rateLimitRetryTimers.set(id,timer);
 }
 function upsertTask(task){const list=tasks(),i=list.findIndex(t=>t.id===task.id);if(i>=0)list[i]=task;else list.unshift(task);saveTasks(list);return task}
 function normalizeMod(v,model={}){return Adapters?.normalizeModelModality?Adapters.normalizeModelModality(v,model):(String(v||'text').toLowerCase()==='script'?'text':String(v||'text').toLowerCase())}
@@ -404,7 +410,15 @@ async function fetchVideoContent(provider,createdRaw,taskId,route,activePollUrl=
   let last=null;for(const url of candidates){const res=await fetchProviderResource(provider,url,{method:'GET'});if(!res.ok){last=new Error(`结果下载失败 ${res.status}`);if([404,405].includes(res.status))continue;throw last}const parsed=await readResponse(res);return parsed.value}throw last||new Error('任务成功但没有找到视频结果下载接口');
 }
 function videoRequestDiagnostics(model,task,refs,createPath,transport,route={}){const p=VideoParams?.normalize?.(task.parameters||{})||task.parameters||{};return{createPath,transport,modelId:String(model?.id||''),protocolFamily:route.protocolFamily||'',protocolProfile:route.protocolProfile||'',videoOperation:route.videoOperation||'',duration:Number(p.duration||p.seconds||0),resolution:String(p.resolution||''),aspectRatio:String(p.aspectRatio||p.aspect_ratio||''),size:String(p.size||''),referenceCount:refs.length,hasFirstFrame:refs.some(r=>['first_frame','image','image_reference'].includes(r.role)||r.type==='image')}}
-async function providerJson(provider,url,init){const res=await fetchWithAuth(provider,url,init);const parsed=await readResponse(res);if(!res.ok){const detail=runtimeErrorText(parsed.value);const err=new Error(`供应商 HTTP ${res.status}${detail?`：${detail.slice(0,500)}`:''}`);err.status=res.status;err.detail=detail;throw err}return parsed}
+function providerRetryAfterMs(res,detail=''){
+  const clamp=ms=>Math.max(1000,Math.min(15*60*1000,Math.round(Number(ms)||0)));
+  const header=String(res?.headers?.get?.('retry-after')||'').trim();
+  if(header){const seconds=Number(header);if(Number.isFinite(seconds)&&seconds>=0)return clamp(seconds*1000+1000);const at=Date.parse(header);if(Number.isFinite(at))return clamp(Math.max(1000,at-Date.now()+1000))}
+  const reset=Number(res?.headers?.get?.('x-ratelimit-reset')||res?.headers?.get?.('ratelimit-reset')||0);if(Number.isFinite(reset)&&reset>0){const ms=reset>1e12?reset-Date.now():reset*1000-Date.now();if(ms>0)return clamp(ms+1000)}
+  const m=String(detail||'').match(/per\s+(\d+(?:\.\d+)?)\s*(second|minute|hour)/i);if(m){const n=Number(m[1])||1,unit=m[2].toLowerCase(),factor=unit.startsWith('hour')?3600000:unit.startsWith('minute')?60000:1000;return clamp(n*factor+1000)}
+  return 65000;
+}
+async function providerJson(provider,url,init){const res=await fetchWithAuth(provider,url,init);const parsed=await readResponse(res);if(!res.ok){const detail=runtimeErrorText(parsed.value);const err=new Error(`供应商 HTTP ${res.status}${detail?`：${detail.slice(0,500)}`:''}`);err.status=res.status;err.detail=detail;if(res.status===429)err.retryAfterMs=providerRetryAfterMs(res,detail);throw err}return parsed}
 
 async function discover(provider){
   const endpoints=['/v1/models','/models','/api/v1/models','/api/models'];let last='';
@@ -613,6 +627,7 @@ async function runTask(task){
     if(current.providerStatus==='succeeded'||['provider_succeeded','result_pending'].includes(current.status)){
       const pending=updateTask(task.id,{status:'result_pending',providerStatus:'succeeded',resultStatus:'pending',lastError:message,error:null,progress:Math.max(99,Number(current.progress||0))});scheduleTaskResume(task.id,3000);return pending;
     }
+    if(Number(error?.status)===429&&!error?.noRetry&&!current.cancelRequested&&attempt<max){const delay=Math.max(1000,Number(error?.retryAfterMs)||65000),retryAt=new Date(Date.now()+delay).toISOString(),waiting=updateTask(task.id,{status:'retrying',attempt:attempt+1,...failurePatch,error:null,lastError:message,retryReason:'rate_limit',nextRetryAt:retryAt,rateLimitRetryAt:retryAt,rateLimitDelayMs:delay});scheduleRateLimitRetry(task.id,delay);return waiting}
     if(!error?.noRetry&&!current.cancelRequested&&attempt<max){updateTask(task.id,{status:'queued',attempt:attempt+1,...failurePatch});pump();return}
     return updateTask(task.id,{status:current.cancelRequested?'canceled':'failed',...failurePatch,progress:current.progress||0});
   }
@@ -669,6 +684,7 @@ runtime.ready.then(()=>{
   for(const t of list){
     if(t.status==='cancelling'){t.status='canceled';t.error='已取消';t.updatedAt=now();changed=true;continue}
     if(['provider_succeeded','result_pending'].includes(t.status)&&t.upstreamTaskId){t.status='queued';t.error=null;t.updatedAt=now();changed=true;continue}
+    if(t.status==='retrying'&&t.retryReason==='rate_limit'&&!t.upstreamTaskId){const due=Date.parse(t.nextRetryAt||t.rateLimitRetryAt||''),delay=Number.isFinite(due)?Math.max(1000,due-Date.now()):65000;scheduleRateLimitRetry(t.id,delay);continue}
     if(['running','polling','retrying'].includes(t.status)){
       if(t.upstreamTaskId){t.status='queued';t.error=null;t.updatedAt=now();changed=true}
       else{t.status='failed';t.error='页面刷新发生在上游任务 ID 落盘之前；为避免重复生成和重复扣费，系统没有自动重新提交，请先在供应商后台确认任务状态';t.updatedAt=now();changed=true}
