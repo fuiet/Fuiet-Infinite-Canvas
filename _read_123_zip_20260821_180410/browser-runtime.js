@@ -574,6 +574,14 @@ async function executeTask(task){
         usedCreatePath=createPath;break;
       }catch(error){
         lastCreateError=error;
+        if(modality==='video'&&isXogpuVideoRoute(route)&&isXogpuNotImplementedError(error,route)){
+          const original=runtimeErrorText(error)||'HTTP 501 not_implemented';
+          error.noRetry=true;
+          error.code='XOGPU_CREATE_NOT_IMPLEMENTED';
+          error.message=`XOGPU MiniMax-H3 创建接口返回 ${original}。该错误来自供应商 MiniMax 渠道实现；请求可能已被上游受理或计费。为避免重复扣费，网站不会自动重新提交。`;
+          updateTask(task.id,{submissionState:'uncertain',lastError:error.message,errorStatus:Number(error?.status)||501,videoProtocolDiagnostics:{...(findTask(task.id)?.videoProtocolDiagnostics||{}),createPath,createErrorStatus:Number(error?.status)||501,createErrorCode:'XOGPU_CREATE_NOT_IMPLEMENTED'}});
+          throw error;
+        }
         if(Number(error?.status)===429&&modality==='video')recordProviderCreateRateLimit(provider,route,error?.retryAfterMs);
         if(!autoVideoRoute(model,route)||!VIDEO_AUTO_RETRY_STATUSES.has(Number(error?.status)))throw error;
       }
