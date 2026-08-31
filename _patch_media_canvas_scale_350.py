@@ -30,6 +30,13 @@ for fp in (ROOT/'tests').glob('*.test.mjs'):
     changed=text.replace(OLD_BUILD,NEW_BUILD)
     fp.write_text(changed,encoding='utf-8')
 
+# Keep the pre-existing media display regression aligned with the new 100% canvas scale.
+legacy_test=ROOT/'tests'/'media-display-scale.test.mjs'
+legacy=legacy_test.read_text(encoding='utf-8')
+legacy=legacy.replace('const MEDIA_NODE_DISPLAY_WIDTH=620','const MEDIA_NODE_DISPLAY_WIDTH=350')
+legacy=legacy.replace('x\\.mediaDisplayScaleVersion=1','x\\.mediaDisplayScaleVersion=2')
+legacy_test.write_text(legacy,encoding='utf-8')
+
 (ROOT/'tests'/'media-canvas-scale-350.test.mjs').write_text(r'''import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
