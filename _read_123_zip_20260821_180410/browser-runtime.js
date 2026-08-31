@@ -95,7 +95,7 @@ function mediaUrl(id){return `/__browser_media/${encodeURIComponent(id)}`}
 async function ensureMediaServiceWorker(){
   if(!('serviceWorker'in navigator))return false;
   try{
-    const registration=await navigator.serviceWorker.register('./browser-media-sw.js?v=20260831-agnes-id-route-1',{scope:'./',updateViaCache:'none'});try{await registration.update()}catch{}
+    const registration=await navigator.serviceWorker.register('./browser-media-sw.js?v=20260831-agnes-resume-heal-1',{scope:'./',updateViaCache:'none'});try{await registration.update()}catch{}
     await navigator.serviceWorker.ready;
     if(navigator.serviceWorker.controller)return true;
     return await new Promise(resolve=>{let done=false;const finish=value=>{if(done)return;done=true;clearTimeout(timer);resolve(value)};const timer=setTimeout(()=>finish(Boolean(navigator.serviceWorker.controller)),5000);navigator.serviceWorker.addEventListener('controllerchange',()=>finish(true),{once:true})});
@@ -387,7 +387,7 @@ function matchingPollPath(createPath,taskId,route){if(createPath==='/v1/video/ge
 function videoRouteCandidate(provider,value){return providerRouteUrl(provider,value)}
 function videoResourceCandidate(provider,value){return providerResourceUrl(provider,value)}
 function isAgnesVideoRoute(route={}){const family=String(route?.protocolFamily||route?.family||''),profile=String(route?.protocolProfile||route?.profile||'');return family==='agnes-video'||profile.startsWith('agnes:')}
-function providerVideoIdentity(raw={}){if(!raw||typeof raw!=='object')return{videoId:'',taskId:''};const videoId=Core?.firstPath?Core.firstPath(raw,['video_id','videoId','data.video_id','data.videoId']):'';const taskId=Core?.firstPath?Core.firstPath(raw,['task_id','taskId','data.task_id','data.taskId','id','data.id']):'';return{videoId:videoId==null?'':String(videoId).trim(),taskId:taskId==null?'':String(taskId).trim()}}
+function providerVideoIdentity(raw={}){if(!raw||typeof raw!=='object')return{videoId:'',taskId:'',ambiguousTaskAlias:false};let videoId=Core?.firstPath?Core.firstPath(raw,['video_id','videoId','data.video_id','data.videoId']):'',taskId=Core?.firstPath?Core.firstPath(raw,['task_id','taskId','data.task_id','data.taskId','id','data.id']):'';videoId=videoId==null?'':String(videoId).trim();taskId=taskId==null?'':String(taskId).trim();const ambiguousTaskAlias=Boolean(videoId&&taskId&&videoId===taskId&&/^task[_-]/i.test(videoId));if(ambiguousTaskAlias)videoId='';return{videoId,taskId,ambiguousTaskAlias}}
 function agnesLegacyTaskPollUrl(provider,taskId){const id=String(taskId||'').trim();return id?joinUrl(provider.baseUrl,`/v1/videos/${encodeURIComponent(id)}`):''}
 function videoPollUrlCandidates(provider,createdRaw,createPath,taskId,route){
   const out=[],add=value=>{const url=videoRouteCandidate(provider,value);if(url&&!out.includes(url))out.push(url)};
@@ -562,7 +562,7 @@ async function executeTask(task){
     const providerTaskId=modality==='video'&&Core?.firstPath?Core.firstPath(created.value,['task_id','taskId','data.task_id','data.taskId','id','data.id']):'';
     updateTask(task.id,{status:'polling',providerStatus:'processing',resultStatus:'pending',upstreamTaskId:String(taskId),providerVideoId:providerVideoId==null?'':String(providerVideoId),providerTaskId:providerTaskId==null?'':String(providerTaskId),upstreamCreatePath:usedCreatePath,providerCreateResponse:created.kind==='json'?clone(created.value):null,progress:5,videoProtocolDiagnostics:modality==='video'?{createPath:usedCreatePath,pollCandidates}:undefined});
   }else{
-    if(route?.strictPollPath===true){const resumeIdentity=isAgnesVideoRoute(route)?{video_id:task.providerVideoId||'',task_id:task.providerTaskId||task.upstreamTaskId||taskId}:null;pollCandidates=videoPollUrlCandidates(provider,resumeIdentity,usedCreatePath,taskId,route);activePollUrl=''}
+    if(route?.strictPollPath===true){let resumeIdentity=isAgnesVideoRoute(route)?providerVideoIdentity({video_id:task.providerVideoId||'',task_id:task.providerTaskId||task.upstreamTaskId||taskId}):null;if(resumeIdentity?.ambiguousTaskAlias){updateTask(task.id,{providerVideoId:'',providerTaskId:resumeIdentity.taskId,videoProtocolDiagnostics:{...(task.videoProtocolDiagnostics||{}),healedAmbiguousTaskAlias:true,healedAmbiguousTaskAliasAt:now()}})}pollCandidates=videoPollUrlCandidates(provider,resumeIdentity,usedCreatePath,taskId,route);activePollUrl=''}
     else if(!pollCandidates.length)pollCandidates=videoPollUrlCandidates(provider,null,usedCreatePath,taskId,route);
     updateTask(task.id,{status:task.providerStatus==='succeeded'?'result_pending':'polling',providerStatus:task.providerStatus||'processing',resultStatus:task.providerStatus==='succeeded'?'pending':(task.resultStatus||'pending'),upstreamTaskId:String(taskId),upstreamCreatePath:usedCreatePath,videoProtocolDiagnostics:{...(task.videoProtocolDiagnostics||{}),createPath:usedCreatePath,pollCandidates}});
   }
@@ -594,10 +594,11 @@ async function executeTask(task){
     if(polled.kind!=='json')throw new Error('轮询接口没有返回 JSON');
     pollCount++;
     const assessment=Core?.classifyAsyncPoll?Core.classifyAsyncPoll(polled.value,route,modality):{state:'pending',output:null};
-    const pollVideoId=modality==='video'&&Core?.firstPath?Core.firstPath(polled.value,['video_id','videoId','data.video_id','data.videoId']):'';
-    const pollTaskId=modality==='video'&&Core?.firstPath?Core.firstPath(polled.value,['task_id','taskId','data.task_id','data.taskId','id','data.id']):'';
+    const pollIdentity=modality==='video'&&isAgnesVideoRoute(route)?providerVideoIdentity(polled.value):null;
+    const pollVideoId=pollIdentity?pollIdentity.videoId:(modality==='video'&&Core?.firstPath?Core.firstPath(polled.value,['video_id','videoId','data.video_id','data.videoId']):'');
+    const pollTaskId=pollIdentity?pollIdentity.taskId:(modality==='video'&&Core?.firstPath?Core.firstPath(polled.value,['task_id','taskId','data.task_id','data.taskId','id','data.id']):'');
     if(modality==='video'&&isAgnesVideoRoute(route)&&pollVideoId){const upgraded=videoPollUrlCandidates(provider,{video_id:String(pollVideoId),task_id:pollTaskId||findTask(task.id)?.providerTaskId||''},usedCreatePath,String(pollVideoId),route);if(upgraded.length){pollCandidates=[...new Set([...upgraded,...pollCandidates])];activePollUrl=upgraded[0]}}
-    updateTask(task.id,{lastPollAt:now(),providerRawStatus:assessment.status||'',providerProgress:assessment.progress==null?null:Number(assessment.progress),...(pollVideoId?{providerVideoId:String(pollVideoId)}:{}),...(pollTaskId?{providerTaskId:String(pollTaskId)}:{}),progress:assessment.progress==null?Math.min(95,8+pollCount*3):Number(assessment.progress),videoProtocolDiagnostics:{...(findTask(task.id)?.videoProtocolDiagnostics||{}),createPath:usedCreatePath,pollUrl:activePollUrl,pollCandidates}});
+    updateTask(task.id,{lastPollAt:now(),providerRawStatus:assessment.status||'',providerProgress:assessment.progress==null?null:Number(assessment.progress),...(pollIdentity?.ambiguousTaskAlias?{providerVideoId:'',providerTaskId:String(pollTaskId||'')}:(pollVideoId?{providerVideoId:String(pollVideoId)}:{})),...(!pollIdentity?.ambiguousTaskAlias&&pollTaskId?{providerTaskId:String(pollTaskId)}:{}),progress:assessment.progress==null?Math.min(95,8+pollCount*3):Number(assessment.progress),videoProtocolDiagnostics:{...(findTask(task.id)?.videoProtocolDiagnostics||{}),createPath:usedCreatePath,pollUrl:activePollUrl,pollCandidates,...(pollIdentity?.ambiguousTaskAlias?{healedAmbiguousTaskAlias:true}:{})}});
     if(assessment.state==='retryable'){
       updateTask(task.id,{status:'retrying',providerStatus:'processing',resultStatus:'pending',lastError:Core?.formatFailure?Core.formatFailure(assessment,'上游轮询暂时不可用'):'上游轮询暂时不可用，将继续重试',error:null});retryAttempt++;continue;
     }
@@ -704,12 +705,9 @@ runtime.ready.then(()=>{
   const list=tasks();let changed=false;
   for(const t of list){
     if(t.status==='cancelling'){t.status='canceled';t.error='已取消';t.updatedAt=now();changed=true;continue}
-    if(['provider_succeeded','result_pending'].includes(t.status)&&t.upstreamTaskId){t.status='queued';t.error=null;t.updatedAt=now();changed=true;continue}
     if(t.status==='retrying'&&t.retryReason==='rate_limit'&&!t.upstreamTaskId){const due=Date.parse(t.nextRetryAt||t.rateLimitRetryAt||''),delay=Number.isFinite(due)?Math.max(1000,due-Date.now()):65000;scheduleRateLimitRetry(t.id,delay);continue}
-    if(['running','polling','retrying'].includes(t.status)){
-      if(t.upstreamTaskId){t.status='queued';t.error=null;t.updatedAt=now();changed=true}
-      else{t.status='failed';t.error='页面刷新发生在上游任务 ID 落盘之前；为避免重复生成和重复扣费，系统没有自动重新提交，请先在供应商后台确认任务状态';t.updatedAt=now();changed=true}
-    }
+    if(['provider_succeeded','result_pending','running','polling','fallback','retrying'].includes(t.status)&&t.upstreamTaskId){t.status='queued';t.error=null;t.lastError=null;t.updatedAt=now();changed=true;continue}
+    if(['running','polling','fallback'].includes(t.status)&&!t.upstreamTaskId){t.status='failed';t.error='页面刷新发生在上游任务 ID 持久化之前；为避免重复生成和重复扣费不会自动重新提交，请重新创建任务。';t.lastError=t.error;t.updatedAt=now();changed=true;continue}
   }
   if(changed)saveTasks(list);pump();
 }).catch(error=>console.error('[browser-runtime] initialization failed',error));

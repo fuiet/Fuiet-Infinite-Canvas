@@ -53,9 +53,9 @@ test('result_pending auto-retries the same upstream task without regenerating',(
 
 test('browser reload resumes tasks with upstream ids instead of marking them failed',()=>{
   const init=section('runtime.ready=initializePersistence();','window.fetch=async function canvasBrowserRuntimeFetch');
-  assert.match(init,/\['provider_succeeded','result_pending'\]/);
-  assert.match(init,/if\(t\.upstreamTaskId\)\{t\.status='queued'/);
-  assert.match(init,/为避免重复生成和重复扣费/);
+  assert.match(init,/\['provider_succeeded','result_pending','running','polling','fallback','retrying'\]\.includes\(t\.status\)&&t\.upstreamTaskId/);
+  assert.match(init,/t\.status='queued'/);
+  assert.match(init,/为避免重复生成和重复扣费不会自动重新提交/);
   assert.doesNotMatch(init,/页面刷新中断了浏览器本地任务，请重新生成/);
 });
 

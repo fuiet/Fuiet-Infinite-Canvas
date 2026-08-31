@@ -4,7 +4,7 @@ import fs from 'node:fs';
 const browser=fs.readFileSync(new URL('../browser-runtime.js',import.meta.url),'utf8');
 const server=fs.readFileSync(new URL('../server.js',import.meta.url),'utf8');
 const index=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
-const BUILD='20260831-agnes-id-route-1';
+const BUILD='20260831-agnes-resume-heal-1';
 
 test('Agnes browser uses legacy task endpoint when create response has only task id',()=>{
   assert.match(browser,/const identity=providerVideoIdentity\(createdRaw\),videoId=identity\.videoId,providerTaskId=identity\.taskId/);
