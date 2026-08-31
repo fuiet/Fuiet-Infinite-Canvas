@@ -1,5 +1,5 @@
 .app-shell{position:relative;width:100vw;height:100vh;overflow:hidden;background:var(--ui-bg-canvas)}
-.topbar{position:absolute;inset:12px 12px auto 12px;height:var(--ui-workspace-height);display:flex;align-items:center;justify-content:space-between;padding:0;background:transparent;border:0;box-shadow:none;z-index:100;pointer-events:none}
+.topbar{position:absolute;inset:12px 12px auto 12px;height:var(--ui-workspace-height);display:flex;align-items:center;justify-content:space-between;padding:0;background:transparent;border:0;box-shadow:none;z-index:100;pointer-events:none;backdrop-filter:none;-webkit-backdrop-filter:none}
 .brand-wrap,.topbar-right{pointer-events:auto}
 .workspace-canvas-bar{height:var(--ui-workspace-height);display:flex;align-items:center;gap:4px;padding:3px 4px;border:1px solid var(--ui-line);border-radius:10px;background:rgba(27,29,28,.96);box-shadow:0 8px 28px rgba(0,0,0,.2)}
 .fuiet-wordmark{height:28px;display:flex;align-items:center;padding:0 9px;font:650 14px/20px var(--ui-font-brand);letter-spacing:-.01em;color:var(--ui-text-1);white-space:nowrap}
