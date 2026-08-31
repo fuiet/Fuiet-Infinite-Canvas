@@ -5,10 +5,11 @@
 'use strict';
 const manager=globalThis.CanvasBrowserStorageManager;
 if(!manager?.ready)throw new Error('Browser Storage Manager 未加载');
-const v='20260831-agnes-provider-throttle-1';
+const v='20260831-video-hover-player-1';
 const canvasScripts=[
   `./provider-auto-config-v1.js?v=${v}`,
   `./app.js?v=${v}`,
+  `./video-hover-player-v1.js?v=${v}`,
   `./security-client.js?v=${v}`,
   `./ui-zh.js?v=${v}`,
   `./ui-v2.js?v=${v}`,

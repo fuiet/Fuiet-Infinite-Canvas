@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url';
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const runtime=fs.readFileSync(path.join(ROOT,'browser-runtime.js'),'utf8');
 const index=fs.readFileSync(path.join(ROOT,'index.html'),'utf8');
-const BUILD='20260831-agnes-provider-throttle-1';
+const BUILD='20260831-video-hover-player-1';
 
 test('browser resumes Agnes from provider create response video_id before stale upstream id',()=>{
   const start=runtime.indexOf('async function executeTask(task){');
