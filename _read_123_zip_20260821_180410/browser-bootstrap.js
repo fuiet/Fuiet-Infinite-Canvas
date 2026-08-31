@@ -5,7 +5,7 @@
 'use strict';
 const manager=globalThis.CanvasBrowserStorageManager;
 if(!manager?.ready)throw new Error('Browser Storage Manager 未加载');
-const v='20260831-video-result-autofit-1';
+const v='20260831-media-width-unified-1';
 const canvasScripts=[
   `./provider-auto-config-v1.js?v=${v}`,
   `./app.js?v=${v}`,

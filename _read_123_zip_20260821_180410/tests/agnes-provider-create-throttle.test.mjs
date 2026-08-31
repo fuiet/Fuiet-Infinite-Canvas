@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 const runtime=fs.readFileSync(new URL('../browser-runtime.js',import.meta.url),'utf8');
 const index=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
-const BUILD='20260831-video-result-autofit-1';
+const BUILD='20260831-media-width-unified-1';
 
 test('Agnes video create requests share a persisted provider-level throttle',()=>{
   assert.match(runtime,/function providerCreateThrottleKey\(provider,route=\{\}\)/);
