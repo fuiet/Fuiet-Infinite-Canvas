@@ -6,13 +6,15 @@ APP=ROOT/'app.js'
 
 
 def replace_function(text,name,new_code):
-    marker=f'  function {name}('
-    start=text.find(marker)
-    if start<0:
+    markers=[f'  function {name}(',f'  async function {name}(']
+    found=[(text.find(m),m) for m in markers if text.find(m)>=0]
+    if not found:
         raise SystemExit(f'missing function: {name}')
-    nxt=text.find('\n  function ',start+len(marker))
-    if nxt<0:
+    start,marker=min(found,key=lambda x:x[0])
+    candidates=[x for x in (text.find('\n  function ',start+len(marker)),text.find('\n  async function ',start+len(marker))) if x>=0]
+    if not candidates:
         raise SystemExit(f'missing next function after: {name}')
+    nxt=min(candidates)
     return text[:start]+new_code.rstrip()+text[nxt:]
 
 

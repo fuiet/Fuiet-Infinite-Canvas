@@ -8,6 +8,7 @@ if(!manager?.ready)throw new Error('Browser Storage Manager 未加载');
 const v='20260901-video-wait-progress-1';
 const canvasScripts=[
   `./provider-auto-config-v1.js?v=${v}`,
+  `./script-workflow-core.js?v=${v}`,
   `./app.js?v=${v}`,
   `./video-hover-player-v1.js?v=${v}`,
   `./security-client.js?v=${v}`,
