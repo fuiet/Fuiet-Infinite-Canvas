@@ -7,7 +7,7 @@ test('episode composition consumes selected Shot videos in script order',()=>{
   assert.match(app,/selectedShotProductionNode\(scriptNode,shot,'video'\)/);
   assert.match(app,/sequence\.rows\.forEach\(\(\{shot,video\}\)=>\{/);
   assert.match(app,/timelineClipFromNode\(video,cursor,'V1'\)/);
-  assert.match(app,/clip\.scriptShotNo=shot\.no/);
+  assert.match(app,/fresh\.scriptShotNo=shot\.no/);
 });
 test('episode composition blocks missing stale or unfinished selected videos',()=>{
   assert.match(app,/if\(!video\)blocker='未创建视频'/);
@@ -21,7 +21,9 @@ test('episode composition creates timeline without auto rendering',()=>{
   assert.match(app,/不会自动渲染/);
   assert.match(app,/setTimeout\(\(\)=>openTimelineEditor\(node,\{trimOnly:false\}\),0\)/);
 });
-test('existing rendered composition becomes stale when source sequence changes',()=>{
-  assert.match(app,/if\(existed&&nodeHasReusableResult\(node\)\)\{node\.inputStale=true/);
-  assert.match(app,/脚本当前采用视频序列已更新，请重新渲染成片/);
+test('rendered episode results become stale when selected Shot sources change',()=>{
+  assert.match(app,/function markEpisodeComposeResultsStale\(composeNode,reason=/);
+  assert.match(app,/if\(changed\)markEpisodeComposeResultsStale\(node,'当前采用 Shot 视频已变化，需要重新渲染成片'\)/);
+  assert.match(app,/node\.inputStale=true/);
+  assert.match(app,/旧成片已标记待重渲染/);
 });
