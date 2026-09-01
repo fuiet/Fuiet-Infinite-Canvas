@@ -14,3 +14,10 @@ test('expanded text editing uses one visual surface and fills the node',()=>{
 test('single-surface text editor stylesheet is cache busted',()=>{
   assert.match(index,/text-node\.css\?v=20260901-text-result-card-scroll-1&ui=text-result-editor-1&edit=single-surface-1/);
 });
+
+
+test('normal text result fills the resized node without a nested surface',()=>{
+  assert.match(css,/data-content-state="result"\]>.node-body\{[\s\S]*?height:100%;[\s\S]*?min-height:0;[\s\S]*?background:transparent;/);
+  assert.match(css,/\.text-node-shell\.has-text\{[\s\S]*?height:100%;[\s\S]*?min-height:0;[\s\S]*?background:transparent;/);
+  assert.match(index,/text-node\.css\?v=20260901-text-result-card-scroll-1&ui=text-result-editor-1&edit=single-surface-1&result=fill-node-1/);
+});
