@@ -1156,6 +1156,33 @@
     render();
   }
 
+  function incomingEdgeReferences(target){
+    if(!target)return[];
+    return state.edges.filter(e=>e.target===target.id).map(edge=>{
+      const source=state.nodes.find(n=>n.id===edge.source);
+      if(!source)return null;
+      return{edge,source,role:edge.role||inferEdgeRole(source,target)};
+    }).filter(Boolean);
+  }
+  function nodeReferenceCurrentText(source){
+    return String(source?.generatedText||source?.text||source?.prompt||'').trim();
+  }
+  function nodeReferenceMediaHtml(source,detail=false){
+    const url=String(source?.outputUrl||'').trim(),type=source?.type||'';
+    if(url&&type==='image')return`<img src="${escapeAttr(url)}" alt="${escapeAttr(source.title||'参考图片')}" loading="lazy">`;
+    if(url&&type==='video')return`<video src="${escapeAttr(url)}" muted playsinline preload="metadata" ${detail?'controls':''}></video>`;
+    if(url&&type==='audio')return detail?`<audio src="${escapeAttr(url)}" controls preload="none"></audio>`:`<span class="node-reference-fallback">音</span>`;
+    const glyph=type==='text'?'文':type==='image'?'图':type==='video'?'视':type==='audio'?'音':'参';
+    return`<span class="node-reference-fallback">${glyph}</span>`;
+  }
+  function nodeIncomingReferenceHtml(target){
+    const refs=incomingEdgeReferences(target);
+    if(!refs.length)return'';
+    return`<div class="node-reference-stack" data-node-reference-stack aria-label="已连接参考">${refs.map(({source,role})=>{
+      const title=source.title||labelForType(source.type),text=nodeReferenceCurrentText(source),detailText=text?`<p>${escapeHtml(text.slice(0,600))}</p>`:'';
+      return`<div class="node-reference-chip" data-reference-source="${escapeAttr(source.id)}" tabindex="0" aria-label="参考：${escapeAttr(title)}"><div class="node-reference-thumb">${nodeReferenceMediaHtml(source,false)}</div><div class="node-reference-popover" role="tooltip"><div class="node-reference-preview">${nodeReferenceMediaHtml(source,true)}</div><div class="node-reference-detail"><b>${escapeHtml(title)}</b><small>${escapeHtml(labelForType(source.type))} · ${escapeHtml(edgeRoleLabel(role||'reference'))}</small>${detailText}</div></div></div>`;
+    }).join('')}</div>`;
+  }
   function renderNode(n){
     const el = document.createElement('article');
     const multiSelected=(state.selectedIds||[]).includes(n.id);
@@ -1233,8 +1260,10 @@
     const footerHtml=contentState==='empty'&&(footerLabel||footerStatus)?`<div class="node-footer"><span>${footerLabel}</span><span style="margin-left:auto">${footerStatus}</span></div>`:'';
     const resizeHtml=contentState==='result'&&n.type!=='video'?`<div class="node-resize-handle ui-v23-resize-handle" data-node-resize="${n.id}" title="调整大小" aria-label="调整节点大小"></div>`:'';
     const resultMetaHtml=mediaResult?'<span class="ui-v23-result-meta" data-node-result-meta hidden></span>':'';
+    const incomingReferenceHtml=nodeIncomingReferenceHtml(n);if(incomingReferenceHtml)el.dataset.hasReferences='1';
     el.innerHTML = `
       <div class="node-header"><div class="node-header-left"><span class="node-type-icon">${uiIcon(nodeTypeIconName(n.type))}</span><span class="node-title-stack"><b>${escapeHtml(nodeTitleBase(n))}</b><small>${nodeSequenceNumber(n.id)}</small></span></div><div class="node-header-right">${n.toolParams?.shotId?`<button class="node-shot-chip" data-shot-back="${n.id}">Shot ${scriptShotForProductionNode(n)?.no||''}</button>`:''}<div class="node-guard-badges">${n.locked?`<i title="位置已锁定">${uiIcon('lock')}</i>`:''}${n.frozen?`<i title="结果已冻结">${uiIcon('freeze')}</i>`:''}${Number(n.fallbackAttempt||0)>0?`<i title="本次使用备用模型">${uiIcon('fallback')}</i>`:''}</div>${showHeaderStatus?`<span class="node-run-status ${taskState}">${headerStatusLabel}${taskState==='running'&&hasRealProgress?` ${Math.round(rawProgress)}%`:''}</span>`:''}${resultMetaHtml}<button class="node-menu-btn" aria-label="更多">${uiIcon('dotMenu')}</button></div></div>
+      ${incomingReferenceHtml}
       <div class="node-body">${body}</div>
       ${nodeInlineCandidateHtml(n)}
       ${versionNav}
@@ -2159,8 +2188,8 @@
   function collectReferences(nodeId){
     const node=state.nodes.find(n=>n.id===nodeId);const refs=[];
     const addRef=r=>{if(r&&!refs.some(x=>x.id===r.id&&x.role===r.role))refs.push(r)};
-    const addNode=(id,role='reference')=>{const x=state.nodes.find(n=>n.id===id);if(x)addRef({id:x.id,sourceNodeId:x.id,type:x.type,title:x.title||labelForType(x.type),url:x.outputUrl||'',text:x.text||x.prompt||'',kind:x.type,role,usage:role,slot:role})};
-    state.edges.filter(e=>e.target===nodeId).forEach(e=>{const x=state.nodes.find(n=>n.id===e.source);if(!x)return;const role=e.role||inferEdgeRole(x,node);e.role=role;e.semanticRole=role;e.targetSlot=role;addRef({id:x.id,sourceNodeId:x.id,type:x.type,title:x.title||labelForType(x.type),url:x.outputUrl||'',text:x.text||x.prompt||'',kind:x.type,role,usage:role,slot:role})});
+    const addNode=(id,role='reference')=>{const x=state.nodes.find(n=>n.id===id);if(x)addRef({id:x.id,sourceNodeId:x.id,type:x.type,title:x.title||labelForType(x.type),url:x.outputUrl||'',text:x.generatedText||x.text||x.prompt||'',kind:x.type,role,usage:role,slot:role})};
+    state.edges.filter(e=>e.target===nodeId).forEach(e=>{const x=state.nodes.find(n=>n.id===e.source);if(!x)return;const role=e.role||inferEdgeRole(x,node);e.role=role;e.semanticRole=role;e.targetSlot=role;addRef({id:x.id,sourceNodeId:x.id,type:x.type,title:x.title||labelForType(x.type),url:x.outputUrl||'',text:x.generatedText||x.text||x.prompt||'',kind:x.type,role,usage:role,slot:role})});
     if(node?.toolParams?.firstFrame)addNode(node.toolParams.firstFrame,'first_frame');if(node?.toolParams?.lastFrame)addNode(node.toolParams.lastFrame,'last_frame');
     if(node?.toolParams?.maskUrl)addRef({id:'mask:'+node.id,type:'image',title:'编辑蒙版',url:node.toolParams.maskUrl,text:'',kind:'mask',role:'mask',usage:'mask'});
     if(node?.toolParams?.focusSourceId)addNode(node.toolParams.focusSourceId,'image_reference');

@@ -9,7 +9,7 @@ const v='20260901-video-wait-progress-1';
 const canvasScripts=[
   `./provider-auto-config-v1.js?v=${v}`,
   `./script-workflow-core.js?v=${v}`,
-  `./app.js?v=${v}&fix=generator-input-focus-1&ui=text-result-editor-1&wheel=text-editor-1`,
+  `./app.js?v=${v}&fix=generator-input-focus-1&ui=text-result-editor-1&wheel=text-editor-1&refs=edge-reference-card-1`,
   `./video-hover-player-v1.js?v=${v}`,
   `./security-client.js?v=${v}`,
   `./ui-zh.js?v=${v}`,
@@ -28,6 +28,6 @@ const canvasScripts=[
 const modelScripts=[`./provider-auto-config-v1.js?v=${v}`,`./models.js?v=${v}`,`./ui-zh.js?v=${v}`];
 function loadScript(spec){return new Promise((resolve,reject)=>{const cfg=typeof spec==='string'?{src:spec}:spec,s=document.createElement('script');s.src=cfg.src;s.async=false;for(const [k,v] of Object.entries(cfg.attrs||{}))s.setAttribute(k,v);s.onload=()=>resolve();s.onerror=()=>reject(new Error(`脚本加载失败：${cfg.src}`));document.body.appendChild(s)})}
 function loadStyle(href){return new Promise((resolve,reject)=>{const l=document.createElement('link');l.rel='stylesheet';l.href=href;l.onload=()=>resolve();l.onerror=()=>reject(new Error(`样式加载失败：${href}`));document.head.appendChild(l)})}
-async function start(){await Promise.all([manager.ready,globalThis.CanvasBrowserRuntime?.ready||Promise.resolve()]);const isCanvas=Boolean(document.querySelector('#canvasViewport'));if(isCanvas)await Promise.all([loadStyle(`./styles/image-result-autofit-v1.css?v=${v}`),loadStyle(`./styles/video-result-autofit-v1.css?v=${v}`),loadStyle(`./styles/script-workflow-v2.css?v=${v}`)]);const list=isCanvas?canvasScripts:document.querySelector('#modelList')?modelScripts:[];for(const script of list)await loadScript(script);document.documentElement.dataset.browserStorageReady='1'}
+async function start(){await Promise.all([manager.ready,globalThis.CanvasBrowserRuntime?.ready||Promise.resolve()]);const isCanvas=Boolean(document.querySelector('#canvasViewport'));if(isCanvas)await Promise.all([loadStyle(`./styles/image-result-autofit-v1.css?v=${v}`),loadStyle(`./styles/video-result-autofit-v1.css?v=${v}`),loadStyle(`./styles/script-workflow-v2.css?v=${v}`),loadStyle(`./styles/edge-reference-cards-v1.css?v=${v}&ui=edge-reference-card-1`)]);const list=isCanvas?canvasScripts:document.querySelector('#modelList')?modelScripts:[];for(const script of list)await loadScript(script);document.documentElement.dataset.browserStorageReady='1'}
 start().catch(error=>{console.error('[browser-bootstrap]',error);const toast=document.querySelector('#toast');if(toast){toast.textContent='浏览器本地存储初始化失败：'+String(error.message||error);toast.classList.remove('hidden')}});
 })();
