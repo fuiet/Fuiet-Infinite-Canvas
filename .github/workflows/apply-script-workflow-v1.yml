@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   apply:
-    if: github.event.head_commit.message == 'Run Script Workflow V1 patch'
+    if: github.event.head_commit.message == 'Retry Script Workflow V1 patch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,7 +19,7 @@ jobs:
         with:
           node-version: '22'
       - name: Apply Script Workflow V1 patch
-        run: python scripts/apply-script-workflow-v1.py
+        run: python scripts/apply-script-workflow-v1-v2.py
       - name: Syntax check
         working-directory: _read_123_zip_20260821_180410
         run: npm run check
