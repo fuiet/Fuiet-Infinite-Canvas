@@ -1,0 +1,35 @@
+name: Patch text editor wheel
+on:
+  push:
+    branches: [main]
+    paths:
+      - scripts/patch-text-editor-wheel.py
+      - .github/workflows/patch-text-editor-wheel.yml
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply repair
+        run: python3 scripts/patch-text-editor-wheel.py
+      - name: Check
+        working-directory: _read_123_zip_20260821_180410
+        run: npm run check
+      - name: Test
+        working-directory: _read_123_zip_20260821_180410
+        run: npm test
+      - name: Commit repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add _read_123_zip_20260821_180410/app.js \
+                  _read_123_zip_20260821_180410/browser-bootstrap.js \
+                  _read_123_zip_20260821_180410/tests/text-result-card-scroll.test.mjs
+          git diff --cached --quiet && exit 0
+          git commit -m "Keep text editor wheel inside text"
+          git push
