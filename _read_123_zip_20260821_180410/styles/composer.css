@@ -1,5 +1,19 @@
 .generator-panel{position:absolute;z-index:92;width:min(620px,calc(100vw - 64px));padding:0;border:0;border-radius:var(--ui-radius-float);background:transparent;box-shadow:none;color:var(--ui-text-1)}
 .generator-panel.hidden{display:none}
+
+/* Generator chrome is UI, not selectable document text. Keep editing surfaces selectable. */
+.generator-panel,
+.generator-panel *{
+  -webkit-user-select:none;
+  user-select:none;
+}
+.generator-panel textarea,
+.generator-panel input,
+.generator-panel [contenteditable="true"],
+.generator-panel [contenteditable="plaintext-only"]{
+  -webkit-user-select:text;
+  user-select:text;
+}
 .generator-panel>*{font-family:var(--ui-font-sans)}
 .generator-panel .lib-gen-main,.generator-panel .generator-shell,.generator-panel>.prompt-box,.generator-panel>form{border:1px solid var(--ui-line);border-radius:var(--ui-radius-float);background:rgba(27,29,28,.98);box-shadow:var(--ui-shadow-float)}
 .gen-head,.detail-ui-head{min-height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;margin:0;border-bottom:1px solid rgba(48,51,48,.8)}
