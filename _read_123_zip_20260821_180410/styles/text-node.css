@@ -559,3 +559,31 @@
 .text-fullscreen-editor ul,.text-fullscreen-editor ol{margin:8px 0 10px;padding-left:24px}
 .text-fullscreen-editor blockquote{margin:10px 0;padding-left:14px;border-left:2px solid #4d514f;color:var(--ui-text-2)}
 .text-fullscreen-editor hr{margin:14px 0;border:0;border-top:1px solid #464946}
+
+/* Text edit single-surface v2.8: editor fills the node without a nested card. */
+.node.node-text.text-node-editing[data-content-state="result"]>.node-body{
+  height:100%!important;
+  min-height:0!important;
+  max-height:none!important;
+  border-radius:inherit!important;
+  background:transparent!important;
+}
+.node.node-text.text-node-editing[data-content-state="result"] .text-node-shell.is-manual-editing{
+  height:100%!important;
+  min-height:0!important;
+  border:0!important;
+  border-radius:0!important;
+  outline:0!important;
+  box-shadow:none!important;
+  background:transparent!important;
+}
+.node.node-text.text-node-editing[data-content-state="result"] .text-node-editor{
+  height:100%!important;
+  min-height:0!important;
+  border:0!important;
+  border-radius:0!important;
+  outline:0!important;
+  box-shadow:none!important;
+  background:transparent!important;
+}
+
