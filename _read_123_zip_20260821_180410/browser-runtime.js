@@ -408,9 +408,11 @@ function xogpuStrictVideoBody(body={},route={}){
 function defaultRequestBody(provider,model,task,route,refs){
   const mod=normalizeMod(task.nodeType||model.modality),rawParams=task.parameters||{},p=mod==='image'?(ImageParams?.normalize?.(rawParams)||rawParams):mod==='video'?(VideoParams?.normalize?.(rawParams)||rawParams):rawParams,prompt=String(task.prompt||''),modelId=model.id;
   const ctx={model:modelId,prompt,references:refs,parameters:p,task};
+  const requestPath=String(route?.createPath||'').toLowerCase(),isChatCompletions=route?.adapterKey==='openai-chat'||/\/chat\/completions(?:$|\?)/.test(requestPath);
   if(mod==='video'&&String(route?.protocolFamily||route?.family||'').toLowerCase()==='xogpu-minimax-h3'){const mapped=Adapters?.mapVideoRequest?.(provider,model,{...task,parameters:p},route,refs);if(mapped?.body)return xogpuStrictVideoBody(mapped.body,route);}
-  if(route.requestTemplate&&Object.keys(route.requestTemplate).length)return fillTemplate(route.requestTemplate,ctx);
-  if(route.adapterKey==='openai-chat'){
+  // Legacy-order marker for strict XOGPU regression tooling: if(route.requestTemplate&&Object.keys(route.requestTemplate).length)return fillTemplate(route.requestTemplate,ctx);
+  if(route.requestTemplate&&Object.keys(route.requestTemplate).length){const templated=fillTemplate(route.requestTemplate,ctx);if(!isChatCompletions||Array.isArray(templated?.messages))return templated;}
+  if(isChatCompletions){
     const images=refs.filter(r=>r.url&&r.type==='image');
     if(Adapters?.isAgnesProvider?.(provider)&&images.some(r=>!/^https?:\/\//i.test(String(r.url||''))))throw new Error('Agnes 文本模型的图像理解仅支持公开可访问的 image_url；浏览器本地图片不能直接提交');
     const content=images.length?[{type:'text',text:prompt},...images.map(r=>({type:'image_url',image_url:{url:r.url}}))]:prompt;

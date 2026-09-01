@@ -73,7 +73,11 @@ function normalizeModelModality(value,model={}){
 }
 function inferAdapterKey(provider={},model={}){
   const explicit=String(model.adapterKey||'auto').trim();
-  if(explicit&&explicit!=='auto')return explicit;
+  const explicitRoute=String(model.createPath||model.operationRoutes?.generate?.createPath||'').toLowerCase();
+  if(explicit&&explicit!=='auto'){
+    if(/^generic-(?:sync|async)$/.test(explicit)&&/\/chat\/completions(?:$|\?)/.test(explicitRoute))return 'openai-chat';
+    return explicit;
+  }
   if(provider.protocol==='comfyui')return 'comfyui-workflow';
   const mod=normalizeModelModality(model.modality,model);
   if(provider.protocol==='openai-compatible'){
