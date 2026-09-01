@@ -21,3 +21,28 @@
 .gen-progress{height:3px;margin:0 10px 8px;border-radius:999px;background:rgba(236,233,226,.11);overflow:hidden}
 .gen-progress>i{display:block;height:100%;background:var(--ui-running);transition:width 220ms var(--ui-ease)}
 .generation-cost{font-family:var(--ui-font-mono);font-size:11px;color:var(--ui-text-3)}
+
+/* Generator prompt areas are intentionally frameless across every node type. */
+.generator-panel .prompt-box,
+.generator-panel .prompt-box:focus,
+.generator-panel .prompt-box:focus-within,
+.generator-panel .audio-prompt-box,
+.generator-panel .audio-prompt-box:focus,
+.generator-panel .audio-prompt-box:focus-within{
+  border:0!important;
+  outline:0!important;
+  box-shadow:none!important;
+  background:transparent!important;
+}
+.generator-panel .prompt-box textarea,
+.generator-panel .prompt-box textarea:focus,
+.generator-panel .prompt-box textarea:focus-visible,
+.generator-panel .audio-prompt-box textarea,
+.generator-panel .audio-prompt-box textarea:focus,
+.generator-panel .audio-prompt-box textarea:focus-visible{
+  border:0!important;
+  outline:0!important;
+  box-shadow:none!important;
+  background:transparent!important;
+  appearance:none;
+}
