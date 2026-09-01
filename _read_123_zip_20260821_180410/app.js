@@ -1203,7 +1203,8 @@
     const showHeaderStatus=contentState==='empty'&&Boolean(headerStatusLabel);
     const versionNav=versions.length?`<div class="node-result-nav ui-v23-version-nav ${versions.length<2?'single-version':''}" data-version-index="${activeVersionIndex+1}" data-version-count="${versions.length}" aria-label="生成版本" title="生成结果版本"><button data-result-prev="${n.id}" ${versions.length<2?'disabled':''}>‹</button><span>${activeVersionIndex+1}/${versions.length}</span><button data-result-next="${n.id}" ${versions.length<2?'disabled':''}>›</button>${versions.length>1?`<button class="compare" data-result-compare="${n.id}" title="对比版本">对比</button>`:''}</div>`:'';
     const failureHtml=taskState==='failed'?`<div class="node-failed-actions ui-v23-failure"><span>生成失败</span><button data-node-retry="${n.id}">重新生成</button></div>`:'';
-    const footerHtml=contentState==='empty'?`<div class="node-footer"><span>${n.modelName?escapeHtml(n.modelName):(n.type==='director'?'导演台':'')}</span><span style="margin-left:auto">${taskState==='queued'?'排队中':taskState==='running'?'生成中':''}</span></div>`:'';
+    const footerModelHtml=n.type==='text'?`<button type="button" class="node-model-selector ${n.modelId?'':'needs-model'}" data-node-model-selector title="选择文本模型" aria-label="选择文本模型"><span>${escapeHtml(n.modelName||'选择模型')}</span>${uiIcon('chevronDown')}</button>`:`<span>${n.modelName?escapeHtml(n.modelName):(n.type==='director'?'导演台':'')}</span>`;
+    const footerHtml=contentState==='empty'?`<div class="node-footer">${footerModelHtml}<span style="margin-left:auto">${taskState==='queued'?'排队中':taskState==='running'?'生成中':''}</span></div>`:'';
     const resizeHtml=contentState==='result'&&n.type!=='video'?`<div class="node-resize-handle ui-v23-resize-handle" data-node-resize="${n.id}" title="调整大小" aria-label="调整节点大小"></div>`:'';
     const resultMetaHtml=mediaResult?'<span class="ui-v23-result-meta" data-node-result-meta hidden></span>':'';
     el.innerHTML = `
@@ -1217,6 +1218,11 @@
       <div class="node-port in" title="输入"></div><div class="node-port out" title="输出"></div>
       ${resizeHtml}`;
     uiV23BindMediaMetadata(n,el);
+    el.querySelector('[data-node-model-selector]')?.addEventListener('click',e=>{
+      e.preventDefault();e.stopPropagation();
+      if(n.type!=='text')return;
+      openModelPickerForNode(n,e.currentTarget,'text');
+    });
     el.addEventListener('pointerdown',e=>{
       if(n.type==='text'&&n.textInputMode==='manual'&&!e.target.closest('[data-text-manual]')){
         const active=document.activeElement;if(active?.matches?.('[data-text-manual]'))active.blur();
