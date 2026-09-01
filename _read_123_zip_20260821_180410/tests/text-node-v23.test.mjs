@@ -38,15 +38,11 @@ test('manual writing switches to a rich text editor with the reference toolbar',
   assert.match(css, /text-node-editing/);
 });
 
-test('selected text results expose text-specific creator transforms', () => {
+test('selected text results keep the normal creator toolbar hidden', () => {
   const app = read('app.js');
-  assert.match(app, /if\(n\.type==='text'\)return\[\{label:'改写'.*text-rewrite/);
-  assert.match(app, /label:'扩写'.*text-expand/);
-  assert.match(app, /label:'精简'.*text-simplify/);
-  assert.match(app, /label:'翻译'.*text-translate/);
-  assert.match(app, /label:'文生图'.*text-image/);
-  assert.match(app, /label:'文生视频'.*text-video/);
-  assert.doesNotMatch(app, /if\(n\.type==='text'\)return\[\{label:'复制'/);
+  assert.match(app, /if\(n\.type==='text'\)return\[\];/);
+  assert.match(app, /if\(n\?\.type==='text'\)\{toolbar\.classList\.add\('hidden'\);return\}/);
+  assert.doesNotMatch(app, /if\(n\.type==='text'\)return\[\{label:'改写'/);
 });
 
 test('text result transforms branch to new nodes instead of mutating the result in place', () => {
@@ -120,8 +116,8 @@ test('text nodes remain stable across creation, selection, manual mode and doubl
   assert.match(app, /textEditing/);
   assert.match(app, /function selectManualTextNode/);
   assert.match(app, /function startManualTextEditing/);
-  assert.match(app, /n\.w\s*=\s*560/);
-  assert.match(app, /n\.h\s*=\s*320/);
+  assert.match(app, /n\.w=fromResult\?700:560/);
+  assert.match(app, /n\.h=fromResult\?400:320/);
   assert.match(css, /\.node\.node-text\.text-node-editing\{\s*min-height:320px/);
   assert.match(html, /browser-bootstrap\.js/);
   assert.match(bootstrap, /text-node-doubleclick-v1\.js/);

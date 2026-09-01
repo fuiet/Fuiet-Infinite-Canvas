@@ -1045,16 +1045,8 @@
     generator.classList.add('hidden');
     renderToolbar();
   }
-  function runManualTextFormat(n,action){
-    const editor=$(`.node[data-id="${CSS.escape(String(n.id))}"] [data-text-manual]`);if(!editor)return;
-    if(action==='expand'){
-      if(!n.textEditorExpanded){
-        n.textEditorExpanded=true;n.textEditorExpandedBackup={w:n.w||560,h:n.h||320};n.w=Math.max(Number(n.w||560),840);n.h=Math.max(Number(n.h||320),520);
-      }else{
-        const backup=n.textEditorExpandedBackup||{};n.w=Number(backup.w||560);n.h=Number(backup.h||320);n.textEditorExpanded=false;delete n.textEditorExpandedBackup;
-      }
-      saveState();render();setTimeout(()=>$(`.node[data-id="${CSS.escape(String(n.id))}"] [data-text-manual]`)?.focus(),0);return;
-    }
+  function applyManualTextFormat(n,editor,action){
+    if(!editor)return;
     if(action==='copy'){
       const selected=String(window.getSelection?.()?.toString?.()||'').trim(),value=selected||manualTextPlainValue(editor);
       if(navigator.clipboard?.writeText)navigator.clipboard.writeText(value).then(()=>showToast('已复制文本')).catch(()=>showToast('复制失败'));
@@ -1074,27 +1066,55 @@
     if(action==='rule')document.execCommand('insertHorizontalRule',false,null);
     syncManualTextEditor(n,editor);
   }
+  function runManualTextFormat(n,action){
+    const editor=$(`.node[data-id="${CSS.escape(String(n.id))}"] [data-text-manual]`);if(!editor)return;
+    if(action==='expand'){openTextFullscreenEditor(n);return;}
+    applyManualTextFormat(n,editor,action);
+  }
   function renderManualTextToolbar(n,nodeEl){
     const r=nodeEl.getBoundingClientRect(),width=536;
     toolbar.classList.remove('node-toolbar-media','node-toolbar-image','node-toolbar-video','node-toolbar-audio','node-toolbar-script','node-toolbar-director');
     toolbar.classList.add('node-toolbar-text','node-toolbar-text-editor');toolbar.dataset.mediaType='text';
     toolbar.style.left=Math.max(16,Math.min(window.innerWidth-width-16,r.left+r.width/2-width/2))+'px';
     toolbar.style.top=Math.max(CONTEXT_TOOLBAR_SAFE_TOP,r.top-60)+'px';
-    toolbar.innerHTML=`<button class="text-format-btn text-format-clear" data-text-format="clear" title="清除格式"><span>∅</span></button><span class="text-format-separator"></span><button class="text-format-btn" data-text-format="h1" title="一级标题">H1</button><button class="text-format-btn" data-text-format="h2" title="二级标题">H2</button><button class="text-format-btn" data-text-format="h3" title="三级标题">H3</button><button class="text-format-btn text-format-paragraph" data-text-format="p" title="正文">¶</button><span class="text-format-separator"></span><button class="text-format-btn text-format-bold" data-text-format="bold" title="加粗">B</button><button class="text-format-btn text-format-italic" data-text-format="italic" title="斜体">I</button><span class="text-format-separator"></span><button class="text-format-btn text-format-list" data-text-format="bullet" title="无序列表"><span>•</span><i>≡</i></button><button class="text-format-btn text-format-list" data-text-format="number" title="有序列表"><span>1</span><i>≡</i></button><span class="text-format-separator"></span><button class="text-format-btn text-format-rule" data-text-format="rule" title="分割线">—</button><span class="text-format-separator"></span><button class="text-format-btn" data-text-format="copy" title="复制">▣</button><button class="text-format-btn text-format-expand" data-text-format="expand" title="展开 / 收起">↗</button>`;
+    toolbar.innerHTML=`<button class="text-format-btn text-format-clear" data-text-format="clear" title="清除格式"><span>∅</span></button><span class="text-format-separator"></span><button class="text-format-btn" data-text-format="h1" title="一级标题">H1</button><button class="text-format-btn" data-text-format="h2" title="二级标题">H2</button><button class="text-format-btn" data-text-format="h3" title="三级标题">H3</button><button class="text-format-btn text-format-paragraph" data-text-format="p" title="正文">¶</button><span class="text-format-separator"></span><button class="text-format-btn text-format-bold" data-text-format="bold" title="加粗">B</button><button class="text-format-btn text-format-italic" data-text-format="italic" title="斜体">I</button><span class="text-format-separator"></span><button class="text-format-btn text-format-list" data-text-format="bullet" title="无序列表"><span>•</span><i>≡</i></button><button class="text-format-btn text-format-list" data-text-format="number" title="有序列表"><span>1</span><i>≡</i></button><span class="text-format-separator"></span><button class="text-format-btn text-format-rule" data-text-format="rule" title="分割线">—</button><span class="text-format-separator"></span><button class="text-format-btn" data-text-format="copy" title="复制">▣</button><button class="text-format-btn text-format-expand" data-text-format="expand" title="全屏编辑">↗</button>`;
     toolbar.classList.remove('hidden');
     $$('[data-text-format]',toolbar).forEach(btn=>{btn.onpointerdown=e=>e.preventDefault();btn.onclick=e=>{e.preventDefault();e.stopPropagation();runManualTextFormat(n,btn.dataset.textFormat)}});
   }
 
-  function beginManualTextEdit(n){
+  function openTextFullscreenEditor(n){
+    if(!n||n.type!=='text'||!n.textEditing)return;
+    const inlineEditor=$(`.node[data-id="${CSS.escape(String(n.id))}"] [data-text-manual]`);
+    if(inlineEditor)syncManualTextEditor(n,inlineEditor);
+    const editorHtml=sanitizeManualTextHtml(String(n.textHtml||plainTextToManualHtml(n.text||n.generatedText||'')));
+    featureModal.classList.add('text-fullscreen-modal');
+    featureModal.innerHTML=`<div class="text-fullscreen-shell"><header class="text-fullscreen-head"><b>${escapeHtml(n.title||'文本节点')}</b><button type="button" data-text-fullscreen-close aria-label="退出全屏">×</button></header><div class="text-fullscreen-toolbar"><button class="text-format-btn text-format-clear" data-text-fullscreen-format="clear" title="清除格式"><span>∅</span></button><span class="text-format-separator"></span><button class="text-format-btn" data-text-fullscreen-format="h1" title="一级标题">H1</button><button class="text-format-btn" data-text-fullscreen-format="h2" title="二级标题">H2</button><button class="text-format-btn" data-text-fullscreen-format="h3" title="三级标题">H3</button><button class="text-format-btn text-format-paragraph" data-text-fullscreen-format="p" title="正文">¶</button><span class="text-format-separator"></span><button class="text-format-btn text-format-bold" data-text-fullscreen-format="bold" title="加粗">B</button><button class="text-format-btn text-format-italic" data-text-fullscreen-format="italic" title="斜体">I</button><span class="text-format-separator"></span><button class="text-format-btn text-format-list" data-text-fullscreen-format="bullet" title="无序列表"><span>•</span><i>≡</i></button><button class="text-format-btn text-format-list" data-text-fullscreen-format="number" title="有序列表"><span>1</span><i>≡</i></button><span class="text-format-separator"></span><button class="text-format-btn text-format-rule" data-text-fullscreen-format="rule" title="分割线">—</button><span class="text-format-separator"></span><button class="text-format-btn" data-text-fullscreen-format="copy" title="复制">▣</button></div><main class="text-fullscreen-content"><div class="text-fullscreen-editor" data-text-fullscreen-editor contenteditable="true" role="textbox" aria-multiline="true" spellcheck="true">${editorHtml}</div></main></div>`;
+    featureModal.classList.remove('hidden');
+    const editor=$('[data-text-fullscreen-editor]',featureModal);
+    const close=()=>{
+      if(editor)syncManualTextEditor(n,editor);
+      featureModal.classList.add('hidden');featureModal.classList.remove('text-fullscreen-modal');featureModal.innerHTML='';featureModal.onpointerdown=null;
+      render();
+      setTimeout(()=>{$(`.node[data-id="${CSS.escape(String(n.id))}"] [data-text-manual]`)?.focus();renderToolbar()},0);
+    };
+    $('[data-text-fullscreen-close]',featureModal).onclick=close;
+    $$('[data-text-fullscreen-format]',featureModal).forEach(btn=>{btn.onpointerdown=e=>e.preventDefault();btn.onclick=e=>{e.preventDefault();e.stopPropagation();applyManualTextFormat(n,editor,btn.dataset.textFullscreenFormat)}});
+    editor?.addEventListener('input',()=>syncManualTextEditor(n,editor));
+    editor?.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();close()}});
+    featureModal.onpointerdown=e=>e.stopPropagation();
+    requestAnimationFrame(()=>{editor?.focus();if(editor){const range=document.createRange();range.selectNodeContents(editor);range.collapse(false);const selection=window.getSelection();selection?.removeAllRanges();selection?.addRange(range)}});
+  }
+
+  function beginManualTextEdit(n,{fromResult=false}={}){
     if(!n||n.type!=='text')return;
     const current=String(n.text||n.generatedText||'');
     n.text=current;
     n.generatedText='';
     n.textHtml=n.textHtml||plainTextToManualHtml(current);
     n.textInputMode='manual';
-    n.textEditing=false;
-    n.w=560;
-    n.h=320;
+    n.textEditing=Boolean(fromResult);
+    n.w=fromResult?700:560;
+    n.h=fromResult?400:320;
     selectedId=n.id;
     state.selectedIds=[n.id];
     state.nodes.forEach(x=>x.selected=x.id===n.id);
@@ -1103,6 +1123,11 @@
     toolbar.classList.add('hidden');
     saveState();
     render();
+    if(fromResult)setTimeout(()=>{
+      const field=$(`.node[data-id="${CSS.escape(String(n.id))}"] [data-text-manual]`);field?.focus();
+      if(field){const range=document.createRange();range.selectNodeContents(field);range.collapse(false);const selection=window.getSelection();selection?.removeAllRanges();selection?.addRange(range)}
+      renderToolbar();
+    },0);
   }
   function startManualTextEditing(n){
     if(!n||n.type!=='text'||n.textInputMode!=='manual')return;
@@ -1299,6 +1324,12 @@
         saveState();render();setTimeout(()=>openReferencePicker(n),0);return;
       }
     }));
+    if(n.type==='text'&&contentState==='result'&&n.textInputMode!=='manual'){
+      el.addEventListener('dblclick',e=>{
+        if(e.target.closest('button,.node-port,.node-resize-handle'))return;
+        e.preventDefault();e.stopPropagation();beginManualTextEdit(n,{fromResult:true});
+      });
+    }
     if(n.type==='text'&&n.textInputMode==='manual'&&!n.textEditing){
       el.addEventListener('dblclick',e=>{
         if(e.target.closest('button,.node-port,.node-resize-handle'))return;
@@ -1664,7 +1695,7 @@
     if(n.type==='image')return[{label:'人像后期调节',action:'image-portrait',primary:true},{label:'全景',tool:'全景',action:'image-panorama'},{label:'多角度',tool:'多角度',action:'image-angle'},{label:'打光',tool:'打光',action:'image-light'},{label:'九宫格',tool:'九宫格',action:'image-grid'},{label:'高清',tool:'高清',action:'image-hd'},{label:'元素编辑',action:'image-element'},{label:'图层分离',action:'image-layers'},{label:'宫格切分',tool:'宫格切分',action:'image-split'},{label:'画笔',action:'image-brush',iconOnly:true},{label:'下载',action:'image-download',iconOnly:true},{label:'全屏',action:'image-fullscreen',iconOnly:true}];
     if(n.type==='video')return[{label:'高清',tool:'高清',action:'video-hd',primary:true},{label:'片段重拍',tool:'片段重拍',action:'video-reshoot'},{label:'提帧',tool:'逐帧拉片',action:'video-frames'},{label:'剪辑',tool:'剪辑',action:'video-trim'},{label:'音频分离',tool:'分离音视频',action:'video-audio'},{label:'续写',tool:'智能续写',action:'video-extend'},{label:'下载',action:'video-download',iconOnly:true},{label:'全屏',action:'video-fullscreen',iconOnly:true}];
     if(n.type==='audio')return[{label:'截取',tool:'截取',action:'audio-trim',primary:true},{label:'变速',tool:'变速',action:'audio-speed'},{label:'切分',tool:'切分',action:'audio-split'},{label:'下载',action:'audio-download',iconOnly:true}];
-    if(n.type==='text')return[{label:'改写',action:'text-rewrite',primary:true},{label:'扩写',action:'text-expand'},{label:'精简',action:'text-simplify'},{label:'翻译',action:'text-translate'},{label:'文生图',action:'text-image'},{label:'文生视频',action:'text-video'}];
+    if(n.type==='text')return[];
     if(n.type==='script')return[{label:'编辑脚本',tool:'打开脚本',primary:true},{label:'看板',tool:'整集看板'},{label:'批量生成',action:'script-batch'},{label:'改生成提示',action:'edit-prompt'},{label:'重新生成',action:'rerun'},{label:'更多',action:'more'}];
     if(n.type==='director')return[{label:'打开导演台',tool:'打开导演台',primary:true},{label:'截图',tool:'截图'},{label:'更多',action:'more'}];
     return[{label:'复制',tool:'复制',primary:true},{label:'改提示词',action:'edit-prompt'},{label:'重新生成',action:'rerun'},{label:'更多',action:'more'}];
@@ -1714,6 +1745,7 @@
       const editNode=$(`.node[data-id="${CSS.escape(String(n.id))}"]`);if(!editNode){toolbar.classList.add('hidden');return}
       renderManualTextToolbar(n,editNode);return;
     }
+    if(n?.type==='text'){toolbar.classList.add('hidden');return}
     const contentState=n?uiV23NodeContentState(n):'empty';
     if(!n||contentState!=='result'||expandedNodeId===n.id){toolbar.classList.add('hidden');return}
     const el=`.node[data-id="${CSS.escape(String(n.id))}"]`;
@@ -2059,7 +2091,7 @@
     $$('[data-gen-tool]',generator).forEach(b=>b.onclick=()=>openFeatureTool(b.dataset.genTool,n));
     if(n.type==='text'&&uiV23NodeContentState(n)==='result'&&n.textInputMode!=='manual'){
       const nodeEl=document.querySelector(`.node[data-id="${CSS.escape(String(n.id))}"]`);
-      $('.node-body',nodeEl)?.addEventListener('dblclick',e=>{if(e.target.closest('button,textarea'))return;e.preventDefault();e.stopPropagation();beginManualTextEdit(n)});
+      $('.node-body',nodeEl)?.addEventListener('dblclick',e=>{if(e.target.closest('button,textarea'))return;e.preventDefault();e.stopPropagation();beginManualTextEdit(n,{fromResult:true})});
     }
   }
 
@@ -2300,7 +2332,7 @@
     openFeatureTool(tool,n);
   }
 
-  function closeFeatureModal(){ featureModal.classList.add('hidden'); featureModal.innerHTML=''; }
+  function closeFeatureModal(){ featureModal.classList.add('hidden'); featureModal.classList.remove('text-fullscreen-modal'); featureModal.innerHTML=''; }
   function modalShell(title,body,{wide=false,full=false}={}){
     featureModal.innerHTML=`<div class="feature-dialog ${wide?'wide':''} ${full?'full':''}"><div class="feature-head"><div><div class="feature-title">${escapeHtml(title)}</div><div class="feature-subtitle">LibTV 画布工具 · 参数可继续发送到第三方 API 模型</div></div><button class="feature-close">×</button></div><div class="feature-body">${body}</div></div>`;
     featureModal.classList.remove('hidden');
