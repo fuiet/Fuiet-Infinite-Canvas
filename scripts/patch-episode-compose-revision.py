@@ -5,13 +5,13 @@ ROOT=Path('_read_123_zip_20260821_180410')
 app=ROOT/'app.js'
 s=app.read_text(encoding='utf-8')
 
-# Replace episode composition helpers with revision-aware, edit-preserving implementation.
-pattern=re.compile(r"  function scriptEpisodeVideoSequence\(scriptNode\)\{.*?\n  function openEpisodeDashboard\(scriptNode\)\{",re.S)
-m=pattern.search(s)
+# Replace the existing episode-composition helper block in one stable span.
+block=re.compile(r"[ \t]*function scriptEpisodeVideoSequence\(scriptNode\)\{.*?\n[ \t]*function openEpisodeDashboard\(scriptNode\)\{",re.S)
+m=block.search(s)
 if not m:
     raise SystemExit('episode composition helper block missing')
 
-replacement=r'''  function scriptEpisodeVideoSequence(scriptNode){
+helpers=r'''  function scriptEpisodeVideoSequence(scriptNode){
     const d=ensureScriptData(scriptNode),rows=(d.shots||[]).map(shot=>{const video=selectedShotProductionNode(scriptNode,shot,'video'),status=productionStatusMeta(video);let blocker='';if(!video)blocker='未创建视频';else if(video.inputStale)blocker='视频输入已变更，待重跑';else if(!nodeHasReusableResult(video)||!video.outputUrl)blocker=status.label||'视频未完成';return{shot,video,status,blocker}});return{rows,ready:rows.length>0&&rows.every(r=>!r.blocker),blockers:rows.filter(r=>r.blocker)};
   }
   function scriptEpisodeComposeRevision(sequence){
@@ -41,43 +41,47 @@ replacement=r'''  function scriptEpisodeVideoSequence(scriptNode){
   function createOrUpdateScriptEpisodeTimeline(scriptNode){
     const sequence=scriptEpisodeVideoSequence(scriptNode);if(!sequence.ready){const first=sequence.blockers[0];return showToast(first?`不能创建成片：Shot ${first.shot.no} · ${first.blocker}`:'还没有可合成的视频镜头')}
     const revision=scriptEpisodeComposeRevision(sequence);snapshot('创建整集成片时间轴');let node=state.nodes.find(x=>x.type==='video'&&x.toolParams?.operation==='script_episode_compose'&&x.toolParams?.scriptNodeId===scriptNode.id);const existed=Boolean(node);if(!node){node={id:uid('n'),type:'video',x:scriptNode.x+980,y:scriptNode.y,w:380,title:`${scriptNode.title||'脚本'} · 成片时间轴`,content:'',prompt:'按脚本 Shot 顺序合成为完整成片',providerId:'',modelId:'',modelName:'',outputUrl:'',duration:0,toolParams:{operation:'script_episode_compose',scriptNodeId:scriptNode.id}};state.nodes.push(node);createEdge(scriptNode.id,node.id,{type:'script',role:'script_context',silent:true})}
-    const previousRevision=node.toolParams?.episodeComposeRevision||'',changed=Boolean(previousRevision&&previousRevision!==revision),needsBuild=!node.timelineData?.clips?.length||changed||!previousRevision;if(changed)markEpisodeComposeResultsStale(node,'当前采用 Shot 视频已变化，需要重新渲染成片');if(needsBuild)node.timelineData=buildScriptEpisodeTimelineData(sequence,node.timelineData);node.duration=node.timelineData?.duration||0;node.runCacheKey='';node.toolParams=node.toolParams||{};node.toolParams.sourceShotVideoNodeIds=sequence.rows.map(r=>r.video.id);node.toolParams.episodeComposeRevision=revision;node.inputStale=false;node.inputStaleReason='';state.edges=state.edges.filter(e=>!(e.target===node.id&&e.type==='script-compose-shot'));sequence.rows.forEach(({shot,video})=>state.edges.push({id:uid('e'),source:video.id,target:node.id,type:'script-compose-shot',role:'video_reference',semanticRole:'video_reference',targetSlot:'video_reference',scriptShotId:shot.id,scriptShotNo:shot.no}));saveState();render();focusNode(node.id);showToast(changed?`成片时间轴已同步 · ${sequence.rows.length} 个 Shot；旧成片已标记待重渲染`:`成片时间轴${existed?'已打开':'已创建'} · ${sequence.rows.length} 个 Shot；不会自动渲染`);setTimeout(()=>openTimelineEditor(node,{trimOnly:false}),0);return node;
+    const previousRevision=node.toolParams?.episodeComposeRevision||'',changed=Boolean(existed&&previousRevision!==revision),needsBuild=!node.timelineData?.clips?.length||changed||!previousRevision;if(changed)markEpisodeComposeResultsStale(node,'当前采用 Shot 视频已变化，需要重新渲染成片');if(needsBuild)node.timelineData=buildScriptEpisodeTimelineData(sequence,node.timelineData);node.duration=node.timelineData?.duration||0;node.runCacheKey='';node.toolParams=node.toolParams||{};node.toolParams.sourceShotVideoNodeIds=sequence.rows.map(r=>r.video.id);node.toolParams.episodeComposeRevision=revision;node.inputStale=false;node.inputStaleReason='';state.edges=state.edges.filter(e=>!(e.target===node.id&&e.type==='script-compose-shot'));sequence.rows.forEach(({shot,video})=>state.edges.push({id:uid('e'),source:video.id,target:node.id,type:'script-compose-shot',role:'video_reference',semanticRole:'video_reference',targetSlot:'video_reference',scriptShotId:shot.id,scriptShotNo:shot.no}));saveState();render();focusNode(node.id);showToast(changed?`成片时间轴已同步 · ${sequence.rows.length} 个 Shot；旧成片已标记待重渲染`:`成片时间轴${existed?'已打开':'已创建'} · ${sequence.rows.length} 个 Shot；不会自动渲染`);setTimeout(()=>openTimelineEditor(node,{trimOnly:false}),0);return node;
   }
   function openEpisodeDashboard(scriptNode){'''
-s=s[:m.start()]+replacement+s[m.end():]
+s=s[:m.start()]+helpers+s[m.end():]
 
-# Expand dashboard state so it detects selected-video revisions even before user clicks sync.
+# Dashboard detects selected-video changes even before the user synchronizes the timeline.
 old="const stats=episodeProductionStats(scriptNode),q=stats.quality,pct=stats.total?Math.round((stats.imageDone+stats.videoDone)/(stats.total*2)*100):0,qualityPct=q.totalSlots?Math.round(q.passedSlots/q.totalSlots*100):0,baseline=ensureScriptData(scriptNode).quality?.baseline,composeState=scriptEpisodeVideoSequence(scriptNode),composeNode=state.nodes.find(x=>x.type==='video'&&x.toolParams?.operation==='script_episode_compose'&&x.toolParams?.scriptNodeId===scriptNode.id);"
 new="const stats=episodeProductionStats(scriptNode),q=stats.quality,pct=stats.total?Math.round((stats.imageDone+stats.videoDone)/(stats.total*2)*100):0,qualityPct=q.totalSlots?Math.round(q.passedSlots/q.totalSlots*100):0,baseline=ensureScriptData(scriptNode).quality?.baseline,composeState=scriptEpisodeVideoSequence(scriptNode),composeNode=state.nodes.find(x=>x.type==='video'&&x.toolParams?.operation==='script_episode_compose'&&x.toolParams?.scriptNodeId===scriptNode.id),composeRevision=composeState.ready?scriptEpisodeComposeRevision(composeState):'',composeOutdated=Boolean(composeNode&&(!composeState.ready||!composeNode.toolParams?.episodeComposeRevision||composeNode.toolParams.episodeComposeRevision!==composeRevision));if(composeNode){if(composeOutdated)markEpisodeComposeResultsStale(composeNode,'当前采用 Shot 视频已变化，需要重新渲染成片');else refreshEpisodeComposeResultStaleness(composeNode)}"
-if old not in s:
-    raise SystemExit('dashboard state line missing')
+if old not in s: raise SystemExit('dashboard state line missing')
 s=s.replace(old,new,1)
-
 old="${composeNode?'更新成片时间轴':'创建成片时间轴'}"
 new="${composeNode?(composeOutdated?'同步成片时间轴':'打开成片时间轴'):'创建成片时间轴'}"
-if old not in s:
-    raise SystemExit('compose button label missing')
+if old not in s: raise SystemExit('compose button label missing')
 s=s.replace(old,new,1)
 
-# On opening a composition timeline, reconcile prior rendered children against current timeline edits.
-old="  function openTimelineEditor(n,{trimOnly=false}={}){\n    const media=trimOnly?[n]:connectedMedia(n);"
-new="  function openTimelineEditor(n,{trimOnly=false}={}){\n    if(!trimOnly&&n?.toolParams?.operation==='script_episode_compose')refreshEpisodeComposeResultStaleness(n);\n    const media=trimOnly?[n]:connectedMedia(n);"
-if old not in s:
-    raise SystemExit('openTimelineEditor prefix missing')
+# Reconcile rendered children whenever a composition timeline is opened.
+open_pat=re.compile(r"(^[ \t]*function openTimelineEditor\(n,\{trimOnly=false\}=\{\}\)\{\s*\n)",re.M)
+s,count=open_pat.subn(r"\1    if(!trimOnly&&n?.toolParams?.operation==='script_episode_compose')refreshEpisodeComposeResultStaleness(n);\n",s,count=1)
+if count!=1: raise SystemExit('openTimelineEditor signature missing')
+
+# Saving/exporting an edited composition timeline also invalidates prior renders immediately.
+old="$('#timelineSave').onclick=()=>{if(!trimOnly)n.timelineData=data;saveState();showToast('时间轴已保存')}"
+new="$('#timelineSave').onclick=()=>{if(!trimOnly){n.timelineData=data;if(n.toolParams?.operation==='script_episode_compose')refreshEpisodeComposeResultStaleness(n)}saveState();showToast('时间轴已保存')}"
+if old not in s: raise SystemExit('timeline save handler missing')
+s=s.replace(old,new,1)
+old="$('#timelineExport').onclick=async()=>{if(!data.clips.length)return showToast('时间轴没有素材');"
+new="$('#timelineExport').onclick=async()=>{if(!data.clips.length)return showToast('时间轴没有素材');if(!trimOnly&&n.toolParams?.operation==='script_episode_compose'){n.timelineData=data;refreshEpisodeComposeResultStaleness(n)}"
+if old not in s: raise SystemExit('timeline export handler missing')
 s=s.replace(old,new,1)
 
-# Stamp both local and third-party render result nodes with the exact source/timeline revision.
-old="if(result.outputs?.[0]){makeLocalResultNode(n,result.outputs[0],trimOnly?'裁取片段':'时间轴合成结果',{operation:trimOnly?'视频剪辑':'视频合成',timeline:clips});close();showToast('时间轴渲染完成');return}"
-new="if(result.outputs?.[0]){const rendered=makeLocalResultNode(n,result.outputs[0],trimOnly?'裁取片段':'时间轴合成结果',{operation:trimOnly?'视频剪辑':'视频合成',timeline:clips});if(!trimOnly)stampEpisodeComposeRenderResult(n,rendered,{...data,clips});saveState();close();showToast('时间轴渲染完成');return}"
-if old not in s:
-    raise SystemExit('local timeline render success block missing')
-s=s.replace(old,new,1)
+# Stamp local renders with the exact Shot-source revision and editorial timeline fingerprint.
+local_pat=re.compile(r"if\(result\.outputs\?\.\[0\]\)\{makeLocalResultNode\(n,result\.outputs\[0\],trimOnly\?'裁取片段':'时间轴合成结果',\{operation:trimOnly\?'视频剪辑':'视频合成',timeline:clips\}\);close\(\);showToast\('时间轴渲染完成'\);return\}")
+local_new="if(result.outputs?.[0]){const rendered=makeLocalResultNode(n,result.outputs[0],trimOnly?'裁取片段':'时间轴合成结果',{operation:trimOnly?'视频剪辑':'视频合成',timeline:clips});if(!trimOnly)stampEpisodeComposeRenderResult(n,rendered,{...data,clips});saveState();close();showToast('时间轴渲染完成');return}"
+s,count=local_pat.subn(local_new,s,count=1)
+if count!=1: raise SystemExit('local timeline render success block missing')
 
-old="const out=createDerivedNode(n,'video',trimOnly?'裁取片段':'视频合成结果','根据专业多轨时间轴渲染并输出',{operation:trimOnly?'视频剪辑':'视频合成',timeline:clips,resolution:$('#tlResolution').value},520);out.timelineData={...data,clips};out.duration=timelineDuration(clips);close();saveState();render();showToast('已创建第三方时间轴处理任务')"
-new="const out=createDerivedNode(n,'video',trimOnly?'裁取片段':'视频合成结果','根据专业多轨时间轴渲染并输出',{operation:trimOnly?'视频剪辑':'视频合成',timeline:clips,resolution:$('#tlResolution').value},520);out.timelineData={...data,clips};out.duration=timelineDuration(clips);if(!trimOnly)stampEpisodeComposeRenderResult(n,out,out.timelineData);close();saveState();render();showToast('已创建第三方时间轴处理任务')"
-if old not in s:
-    raise SystemExit('third-party timeline render block missing')
-s=s.replace(old,new,1)
+# Stamp third-party render jobs too, so source changes during/after rendering cannot look current.
+third_pat=re.compile(r"const out=createDerivedNode\(n,'video',trimOnly\?'裁取片段':'视频合成结果','根据专业多轨时间轴渲染并输出',\{operation:trimOnly\?'视频剪辑':'视频合成',timeline:clips,resolution:\$\('#tlResolution'\)\.value\},520\);out\.timelineData=\{\.\.\.data,clips\};out\.duration=timelineDuration\(clips\);close\(\);saveState\(\);render\(\);showToast\('已创建第三方时间轴处理任务'\)")
+third_new="const out=createDerivedNode(n,'video',trimOnly?'裁取片段':'视频合成结果','根据专业多轨时间轴渲染并输出',{operation:trimOnly?'视频剪辑':'视频合成',timeline:clips,resolution:$('#tlResolution').value},520);out.timelineData={...data,clips};out.duration=timelineDuration(clips);if(!trimOnly)stampEpisodeComposeRenderResult(n,out,out.timelineData);close();saveState();render();showToast('已创建第三方时间轴处理任务')"
+s,count=third_pat.subn(third_new,s,count=1)
+if count!=1: raise SystemExit('third-party timeline render block missing')
 
 app.write_text(s,encoding='utf-8')
 
@@ -118,11 +122,11 @@ test('timeline renders are stamped with source and editorial fingerprints',()=>{
   assert.match(app,/stampEpisodeComposeRenderResult\(n,out,out\.timelineData\)/);
 });
 
-test('opening a composition timeline detects edits after the last render',()=>{
-  assert.match(app,/function refreshEpisodeComposeResultStaleness\(composeNode\)/);
-  assert.match(app,/wrongTimeline=Boolean\(node\.toolParams\?\.episodeComposeTimelineFingerprint/);
-  assert.match(app,/成片时间轴已修改，需要重新渲染/);
+test('opening saving and exporting a composition timeline detects post-render edits',()=>{
   assert.match(app,/if\(!trimOnly&&n\?\.toolParams\?\.operation==='script_episode_compose'\)refreshEpisodeComposeResultStaleness\(n\)/);
+  assert.match(app,/timelineSave[\s\S]*refreshEpisodeComposeResultStaleness\(n\)/);
+  assert.match(app,/timelineExport[\s\S]*refreshEpisodeComposeResultStaleness\(n\)/);
+  assert.match(app,/成片时间轴已修改，需要重新渲染/);
 });
 ''',encoding='utf-8')
 print('patched episode composition revision safety')
