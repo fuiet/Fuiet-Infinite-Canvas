@@ -13,5 +13,5 @@ test('video results ignore stale node height and hug intrinsic media height',()=
 
 test('video result autofit stylesheet is loaded on canvas bootstrap',()=>{
   assert.match(boot,/video-result-autofit-v1\.css\?v=\$\{v\}/);
-  assert.match(boot,/20260901-xogpu-video-display-1/);
+  assert.match(boot,/20260901-video-wait-progress-1/);
 });

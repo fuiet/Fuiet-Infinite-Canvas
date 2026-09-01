@@ -95,7 +95,7 @@ function mediaUrl(id){return `/__browser_media/${encodeURIComponent(id)}`}
 async function ensureMediaServiceWorker(){
   if(!('serviceWorker'in navigator))return false;
   try{
-    const registration=await navigator.serviceWorker.register('./browser-media-sw.js?v=20260901-xogpu-video-display-1',{scope:'./',updateViaCache:'none'});try{await registration.update()}catch{}
+    const registration=await navigator.serviceWorker.register('./browser-media-sw.js?v=20260901-video-wait-progress-1',{scope:'./',updateViaCache:'none'});try{await registration.update()}catch{}
     await navigator.serviceWorker.ready;
     if(navigator.serviceWorker.controller)return true;
     return await new Promise(resolve=>{let done=false;const finish=value=>{if(done)return;done=true;clearTimeout(timer);resolve(value)};const timer=setTimeout(()=>finish(Boolean(navigator.serviceWorker.controller)),5000);navigator.serviceWorker.addEventListener('controllerchange',()=>finish(true),{once:true})});

@@ -17,6 +17,9 @@ test('video node follows the universal four-state rendering contract', () => {
   const app = read('app.js');
   assert.match(app, /const emptyVideo=contentState==='empty'/);
   assert.match(app, /video-node-shell/);
+  assert.match(app, /const videoGenerating=\['queued','running'\]\.includes\(taskState\)/);
+  assert.match(app, /const quick=emptyVideo&&!videoGenerating/);
+  assert.match(app, /const uploadAction=emptyVideo&&!videoGenerating&&interactionState==='selected'/);
   assert.match(app, /data-video-quick="text"/);
   assert.match(app, /data-video-quick="image"/);
   assert.match(app, /data-video-quick="frame"/);

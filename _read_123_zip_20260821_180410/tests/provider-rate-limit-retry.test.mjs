@@ -4,7 +4,7 @@ import fs from 'node:fs';
 const runtime=fs.readFileSync(new URL('../browser-runtime.js',import.meta.url),'utf8');
 const app=fs.readFileSync(new URL('../app.js',import.meta.url),'utf8');
 const index=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
-const BUILD='20260901-xogpu-video-display-1';
+const BUILD='20260901-video-wait-progress-1';
 
 test('HTTP 429 captures provider Retry-After instead of immediate retry',()=>{
   assert.match(runtime,/function providerRetryAfterMs\(res,detail=''\)/);
@@ -26,10 +26,14 @@ test('rate limited create retry waits before queue pump and survives refresh',()
   assert.doesNotMatch(branch,/pump\(\)/);
 });
 
-test('video diagnostics show rate limit wait and next automatic retry',()=>{
+test('rate limit diagnostics stay internal while canvas keeps user progress simple',()=>{
   assert.match(app,/retryReason:String\(info\.retryReason\|\|''\)/);
-  assert.match(app,/供应商限流 · 等待自动重试/);
-  assert.match(app,/自动重试/);
+  assert.match(app,/function taskDiagnosticSummary\(info=\{\}\)/);
+  assert.match(app,/限流重试/);
+  assert.match(app,/function videoTaskDiagnosticsHtml\(\)\{return''\}/);
+  const visibleStart=app.indexOf('function videoTaskDiagnosticsHtml');
+  const visibleEnd=app.indexOf('function defaultNodeName',visibleStart);
+  assert.doesNotMatch(app.slice(visibleStart,visibleEnd),/供应商限流|自动重试|lastError|retryReason/);
   assert.match(app,/供应商触发限流，正在等待自动重试/);
 });
 
