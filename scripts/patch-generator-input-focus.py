@@ -57,3 +57,4 @@ test('browser cache-busts the generator input focus repair', () => {
 """, encoding='utf-8')
 
 print('generator input focus repair applied')
+# Retry after aligning the existing app cache-bust regression assertion.
