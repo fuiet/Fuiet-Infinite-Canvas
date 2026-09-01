@@ -72,6 +72,11 @@ new_test = 'assert.match(css, /height:184px!important/);'
 if old_test not in test:
     raise SystemExit('text composer height test anchor missing')
 test = test.replace(old_test, new_test, 1)
+old_media_test = r'  assert.doesNotMatch(css, /@media\s*\(max-width:/);'
+new_media_test = r'  assert.match(css, /\.generator-panel\.text-generator \.detail-section-label\{display:none!important\}/);'
+if old_media_test not in test:
+    raise SystemExit('text composer stale media assertion anchor missing')
+test = test.replace(old_media_test, new_media_test, 1)
 test_path.write_text(test, encoding='utf-8')
 
 print('patched text composer controls visibility')
