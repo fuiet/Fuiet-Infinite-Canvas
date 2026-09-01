@@ -35,7 +35,8 @@ test('timeline renders are stamped with source and editorial fingerprints',()=>{
 });
 
 test('opening saving and exporting a composition timeline detects post-render edits',()=>{
-  assert.match(app,/if\(!trimOnly&&n\?\.toolParams\?\.operation==='script_episode_compose'\)refreshEpisodeComposeResultStaleness\(n\)/);
+  assert.match(app,/if\(!trimOnly&&n\?\.toolParams\?\.operation==='script_episode_compose'\)\{const guard=scriptEpisodeComposeSourceGuard\(n\)/);
+  assert.match(app,/if\(!guard\.ok\)\{markEpisodeComposeResultsStale\(n,guard\.reason\);showToast\(guard\.reason\)\}else refreshEpisodeComposeResultStaleness\(n\)/);
   assert.match(app,/timelineSave[\s\S]*refreshEpisodeComposeResultStaleness\(n\)/);
   assert.match(app,/timelineExport[\s\S]*refreshEpisodeComposeResultStaleness\(n\)/);
   assert.match(app,/成片时间轴已修改，需要重新渲染/);
