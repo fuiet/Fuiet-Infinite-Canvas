@@ -1849,10 +1849,33 @@
     generator.style.maxHeight=available+'px';
   }
 
+  let generatorPromptComposing=false;
+  const isGeneratorPromptInput=el=>Boolean(el&&generator.contains(el)&&(el.id==='promptInput'||el.id==='scriptDetailPrompt'));
+  generator.addEventListener('compositionstart',e=>{if(isGeneratorPromptInput(e.target))generatorPromptComposing=true},true);
+  generator.addEventListener('compositionend',e=>{if(isGeneratorPromptInput(e.target))generatorPromptComposing=false},true);
+  function captureGeneratorPromptFocus(){
+    const active=document.activeElement;
+    if(!isGeneratorPromptInput(active))return null;
+    return {id:active.id,value:active.value,start:active.selectionStart,end:active.selectionEnd,direction:active.selectionDirection};
+  }
+  function restoreGeneratorPromptFocus(state){
+    if(!state)return;
+    const input=generator.querySelector('#'+state.id);
+    if(!input)return;
+    if(input.value!==state.value)input.value=state.value;
+    try{input.focus({preventScroll:true})}catch{input.focus()}
+    if(typeof input.setSelectionRange==='function'&&Number.isInteger(state.start)&&Number.isInteger(state.end)){
+      try{input.setSelectionRange(state.start,state.end,state.direction||'none')}catch{}
+    }
+  }
+
   function renderGenerator(){
     if(!expandedNodeId){generator.classList.add('hidden');return}
     const n=state.nodes.find(x=>x.id===expandedNodeId);if(!n||!['image','video','audio','text','script'].includes(n.type)){generator.classList.add('hidden');return}
     if(n.type==='text'&&n.textInputMode==='manual'){expandedNodeId=null;generator.classList.add('hidden');return}
+    const promptFocus=captureGeneratorPromptFocus();
+    if(generatorPromptComposing&&promptFocus)return;
+    if(promptFocus)queueMicrotask(()=>restoreGeneratorPromptFocus(promptFocus));
     const el=$(`.node[data-id="${n.id}"]`);if(!el){generator.classList.add('hidden');return}
     const r=el.getBoundingClientRect();
     const desiredWidth=Math.min(660,window.innerWidth-64);
