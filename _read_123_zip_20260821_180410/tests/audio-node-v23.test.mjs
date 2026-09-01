@@ -37,7 +37,7 @@ test('audio composer is fixed in screen space and uses real shared generation co
   const css = read('styles/audio-node.css');
   assert.match(app, /generator\.classList\.toggle\('audio-generator',isAudio\)/);
   assert.match(app, /isAudio\?660:594/);
-  assert.match(app, /isAudio\?210:142/);
+  assert.match(app, /isAudio\?210:226/);
   assert.match(app, /audio-generator-main/);
   assert.match(app, /id="audioReferenceBtn"/);
   assert.match(app, /id="audioContextBtn"/);

@@ -201,16 +201,16 @@
   width:594px!important;
   min-width:594px!important;
   max-width:594px!important;
-  height:142px!important;
-  min-height:142px!important;
+  height:226px!important;
+  min-height:226px!important;
   max-height:none!important;
   overflow:visible!important;
 }
 .generator-panel.text-generator .text-generator-main,
 .generator-panel.text-generator>.lib-gen-main{
   width:594px;
-  height:142px;
-  min-height:142px;
+  height:226px;
+  min-height:226px;
   display:flex;
   flex-direction:column;
   border:1px solid var(--ui-line);
@@ -223,7 +223,7 @@
 .generator-panel.text-generator .prompt-box.libtv-prompt{
   position:relative;
   flex:1 1 auto;
-  min-height:96px;
+  min-height:176px;
   padding:16px 16px 8px;
   border:0;
   background:var(--ui-surface-2);

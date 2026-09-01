@@ -8,7 +8,7 @@ const BUILD='20260901-video-wait-progress-1';
 
 test('Agnes browser uses legacy task endpoint when create response has only task id',()=>{
   assert.match(browser,/const identity=providerVideoIdentity\(createdRaw\),videoId=identity\.videoId,providerTaskId=identity\.taskId/);
-  assert.match(browser,/add\(agnesLegacyTaskPollUrl\(provider,providerTaskId\)\);\n        if\(route\.pollPath\)add/);
+  assert.match(browser,/add\(agnesLegacyTaskPollUrl\(provider,providerTaskId\)\);\r?\n        if\(route\.pollPath\)add/);
 });
 
 test('Agnes browser promotes returned video_id to canonical agnesapi polling',()=>{

@@ -76,11 +76,30 @@ test('text composer stays fixed in screen space and text styling is desktop-only
   const app = read('app.js');
   const css = read('styles/text-node.css');
   assert.match(app, /generator\.classList\.toggle\('text-generator',isText\)/);
+  assert.match(app, /height=isImage\?246:isVideo\?258:isAudio\?210:226/);
   assert.match(css, /generator-panel\.text-generator/);
   assert.match(css, /width:594px!important/);
-  assert.match(css, /height:142px!important/);
+  assert.match(css, /height:226px!important/);
+  assert.match(css, /min-height:176px/);
   assert.match(css, /var\(--ui-selected\)/);
   assert.doesNotMatch(css, /@media\s*\(max-width:/);
+});
+
+test('text generator exposes the real model picker in its bottom-left controls', () => {
+  const app = read('app.js');
+  const css = read('styles/text-node.css');
+  assert.match(app, /const textModelLabel=`\$\{modelLabel\} ▼`/);
+  assert.match(app, /id="modelPickerBtn" class="model-pill \$\{noModel\?'needs-model':''\}"/);
+  assert.match(app, /<b>\$\{escapeHtml\(textModelLabel\)\}<\/b>/);
+  assert.match(app, /openModelPickerForNode\(n,e\.currentTarget,'text'\)/);
+  assert.match(app, /function setNodeModel\(n,item\)\{\s*if\(!n\|\|!item\)return;\s*n\.providerId=item\.providerId;n\.modelId=item\.id;n\.modelName=item\.name\|\|item\.id;/);
+  assert.match(app, /const modality=modalityOverride\|\|n\.type/);
+  assert.match(app, /const allItems=allModelsForType\(modality\)/);
+  assert.match(app, /providerId:attempt\.providerId,modelId:attempt\.modelId/);
+  assert.match(app, /uiV23NodeContentState\(n\)==='result'/);
+  assert.match(app, /document\.querySelector\(`\.node\[data-id="\$\{CSS\.escape\(String\(n\.id\)\)\}"\]`\)/);
+  assert.match(css, /\.generator-panel\.text-generator \.lib-gen-controls/);
+  assert.doesNotMatch(css, /\.generator-panel\.text-generator \.model-pill[^{}]*\{[^}]*display:none/);
 });
 
 test('composer and contextual result toolbar remain mutually exclusive by default', () => {

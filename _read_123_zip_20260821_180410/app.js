@@ -1828,7 +1828,7 @@
     generator.classList.toggle('video-generator',isVideo);
     generator.classList.toggle('audio-generator',isAudio);
     if(isText||isImage||isVideo||isAudio){
-      const width=isImage||isVideo?820:isAudio?660:594,height=isImage?246:isVideo?258:isAudio?210:142,bottomLimit=window.innerHeight-dockReserve-edge;
+      const width=isImage||isVideo?820:isAudio?660:594,height=isImage?246:isVideo?258:isAudio?210:226,bottomLimit=window.innerHeight-dockReserve-edge;
       generator.style.width=width+'px';
       generator.style.minWidth=width+'px';
       generator.style.maxWidth=width+'px';
@@ -1985,6 +1985,7 @@
       $('#generateBtn').onclick=()=>{expandedNodeId=null;generator.classList.add('hidden');renderToolbar();generateForNode(n).catch(()=>{})};
       return;
     }
+    const textModelLabel=`${modelLabel} ▼`;
     generator.innerHTML=`
       <div class="lib-gen-main ${n.type==='text'?'text-generator-main':''}">
         <div class="prompt-box libtv-prompt"><textarea id="promptInput" placeholder="${n.type==='text'?'写下你想讲的故事、场景或角色设定。例如：一个来自未来的机器人，在城市屋顶看星星。':'描述你想生成的内容，输入 @ 引用画布素材…'}" ${frozen?'disabled':''}>${escapeHtml(n.prompt||'')}</textarea><button class="generate-btn" id="generateBtn" ${noModel||frozen?'disabled':''}>${uiIcon('next')}</button></div>${frozen?'<div class="frozen-generator-note">'+uiIcon('freeze')+'<span>当前节点结果已冻结。工作流会复用这个结果，不会再次扣费生成。</span></div>':''}
@@ -1992,7 +1993,7 @@
         ${semanticWarningHtml(n)}
         ${nodeResultVersions(n).length?`<div class="gen-result-strip"><span>生成结果 ${activeNodeResultIndex(n)+1}/${nodeResultVersions(n).length}</span><div><button id="genResultPrev" ${nodeResultVersions(n).length<2?'disabled':''}>‹</button><button id="genResultNext" ${nodeResultVersions(n).length<2?'disabled':''}>›</button>${nodeResultVersions(n).length>1?'<button id="genResultCompare">对比</button>':''}</div></div>`:''}
         <div class="lib-gen-controls">
-          <button id="modelPickerBtn" class="model-pill ${noModel?'needs-model':''}"><span class="model-dot"></span><b>${escapeHtml(modelLabel)}</b><i>${uiIcon('chevronDown')}</i></button><button id="fallbackModelBtn" class="micro-action fallback-model-btn" title="主模型失败时自动切换">备用 ${(n.fallbackModels||[]).length}</button>
+          <button id="modelPickerBtn" class="model-pill ${noModel?'needs-model':''}"><span class="model-dot"></span><b>${escapeHtml(textModelLabel)}</b></button><button id="fallbackModelBtn" class="micro-action fallback-model-btn" title="主模型失败时自动切换">备用 ${(n.fallbackModels||[]).length}</button>
           ${n.type==='video'?`<select id="videoModeSelect" class="micro-select">${videoModes.map(v=>`<option value="${escapeAttr(v.key)}" ${normalizeVideoModeKey(n.videoMode||videoModes[0]?.key)===v.key?'selected':''}>${escapeHtml(v.label)}</option>`).join('')}</select>`:''}
           ${['image','video'].includes(n.type)?`<select id="ratioSelect" class="micro-select">${optionList(ratios,n.aspectRatio||ratios[0])}</select>`:''}
           ${n.type==='image'?`<select id="countSelect" class="micro-select">${[1,2,3,4].map(x=>`<option value="${x}" ${Number(n.count||1)===x?'selected':''}>${x} 张</option>`).join('')}</select>`:''}
@@ -2013,7 +2014,7 @@
     input.addEventListener('input',e=>{n.prompt=e.target.value;saveState();if(creativeContextSettings().autoSuggest!==false){clearTimeout(n.__autolinkTimer);n.__autolinkTimer=setTimeout(()=>refreshAutoLinkHints(n),260)}});
     input.addEventListener('keydown',e=>{if(e.key==='Tab'&&hints.length){e.preventDefault();applyAutoLinks(n,e.shiftKey?hints:[hints[0]]);renderGenerator();setTimeout(()=>$('#promptInput')?.focus(),0)}});
     $$('[data-autolink]',generator).forEach(b=>b.onclick=()=>{applyAutoLinks(n,[hints[Number(b.dataset.autolink)]]);renderGenerator()});
-    $('#modelPickerBtn')?.addEventListener('click',e=>openModelPickerForNode(n,e.currentTarget));$('#fallbackModelBtn')?.addEventListener('click',()=>openFallbackModelPicker(n));
+    $('#modelPickerBtn')?.addEventListener('click',e=>openModelPickerForNode(n,e.currentTarget,'text'));$('#fallbackModelBtn')?.addEventListener('click',()=>openFallbackModelPicker(n));
     $('#inlineSetupModel')?.addEventListener('click',()=>{if(providers.some(p=>(p.models||[]).length))window.location.href='./models.html';else openProviderModal()});
     $('#videoModeSelect')?.addEventListener('change',e=>{n.videoMode=normalizeVideoModeKey(e.target.value);saveState()});
     $('#ratioSelect')?.addEventListener('change',e=>{n.aspectRatio=e.target.value;saveState()});
@@ -2023,8 +2024,9 @@
     $('#generateBtn').onclick=()=>{expandedNodeId=null;generator.classList.add('hidden');renderToolbar();generateForNode(n).catch(()=>{})};$('#generationCostBtn')?.addEventListener('click',()=>openCostDetails([n.id]));
     $('#referenceBtn')?.addEventListener('click',()=>openReferencePicker(n));$('#creativeContextBtn')?.addEventListener('click',()=>openCreativeContextComposer(n));
     $$('[data-gen-tool]',generator).forEach(b=>b.onclick=()=>openFeatureTool(b.dataset.genTool,n));
-    if(n.type==='text'&&contentState==='result'&&n.textInputMode!=='manual'){
-      $('.node-body',el)?.addEventListener('dblclick',e=>{if(e.target.closest('button,textarea'))return;e.preventDefault();e.stopPropagation();beginManualTextEdit(n)});
+    if(n.type==='text'&&uiV23NodeContentState(n)==='result'&&n.textInputMode!=='manual'){
+      const nodeEl=document.querySelector(`.node[data-id="${CSS.escape(String(n.id))}"]`);
+      $('.node-body',nodeEl)?.addEventListener('dblclick',e=>{if(e.target.closest('button,textarea'))return;e.preventDefault();e.stopPropagation();beginManualTextEdit(n)});
     }
   }
 
