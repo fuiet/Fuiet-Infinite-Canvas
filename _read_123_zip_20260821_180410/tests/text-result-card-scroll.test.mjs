@@ -23,6 +23,14 @@ test('clicking a text result does not start node dragging and wheel stays in the
   assert.match(app,/if\(textPreview&&document\.activeElement===textPreview\)return;/);
 });
 
+test('wheel inside expanded text editing scrolls text instead of zooming the canvas',()=>{
+  assert.match(app,/textEditor=e\.target\.closest\?\.\('\[data-text-manual\]'\)/);
+  assert.match(app,/if\(textEditor\)return;/);
+  const guard=app.indexOf("const textEditor=e.target.closest?.('[data-text-manual]')");
+  const canvasPrevent=app.indexOf('e.preventDefault();const rect=viewport.getBoundingClientRect()',guard);
+  assert.ok(guard>=0&&canvasPrevent>guard,'text editor wheel guard must run before canvas zoom prevention');
+});
+
 test('text result stylesheet is cache busted',()=>{
   assert.match(index,/text-node\.css\?v=20260901-text-result-card-scroll-1/);
 });

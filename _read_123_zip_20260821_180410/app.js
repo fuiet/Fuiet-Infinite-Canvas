@@ -3108,6 +3108,8 @@
   viewport.addEventListener('dblclick',e=>{ if(!isCanvasBlankTarget(e.target)) return; const p=screenToWorld(e.clientX,e.clientY); showQuickAdd(e.clientX,e.clientY,p); });
   viewport.addEventListener('contextmenu',e=>{ if(!isCanvasBlankTarget(e.target)) return; e.preventDefault(); const p=screenToWorld(e.clientX,e.clientY); showCanvasContext(e.clientX,e.clientY,p); });
   viewport.addEventListener('wheel',e=>{
+    const textEditor=e.target.closest?.('[data-text-manual]');
+    if(textEditor)return;
     const textPreview=e.target.closest?.('.text-node-preview[data-text-result]');
     if(textPreview&&document.activeElement===textPreview)return;
     e.preventDefault();const rect=viewport.getBoundingClientRect();if(!e.ctrlKey&&!e.metaKey&&Math.abs(e.deltaX)+Math.abs(e.deltaY)<140){state.viewport.x-=e.deltaX;state.viewport.y-=e.deltaY;scheduleViewportTransform();scheduleVirtualizationRefresh();queueViewportSave();return}const old=state.viewport.zoom,next=Math.max(.1,Math.min(8,old*Math.exp(-e.deltaY*.0014))),sx=e.clientX-rect.left,sy=e.clientY-rect.top,wx=(sx-state.viewport.x)/old,wy=(sy-state.viewport.y)/old;state.viewport.zoom=next;state.viewport.x=sx-wx*next;state.viewport.y=sy-wy*next;scheduleViewportTransform();scheduleVirtualizationRefresh(true);queueViewportSave()
