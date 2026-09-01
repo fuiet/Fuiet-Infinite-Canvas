@@ -21,8 +21,8 @@ test('model page uses the same fresh video registry runtime cache version',()=>{
   assert.ok(models.includes(`./browser-bootstrap.js?v=${BOOTSTRAP_VERSION}`),'browser-bootstrap.js');
 });
 
-test('bootstrap may keep unchanged app scripts on the reconciliation version',()=>{
+test('bootstrap may keep app scripts on the reconciliation version with a targeted fix cache bust',()=>{
   const bootstrap=read('browser-bootstrap.js');
   assert.ok(bootstrap.includes(`const v='${APP_VERSION}'`));
-  assert.match(bootstrap,/`\.\/app\.js\?v=\$\{v\}`/);
+  assert.match(bootstrap,/`\.\/app\.js\?v=\$\{v\}(?:&fix=[^`]+)?`/);
 });
