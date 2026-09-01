@@ -95,7 +95,7 @@ function mediaUrl(id){return `/__browser_media/${encodeURIComponent(id)}`}
 async function ensureMediaServiceWorker(){
   if(!('serviceWorker'in navigator))return false;
   try{
-    const registration=await navigator.serviceWorker.register('./browser-media-sw.js?v=20260831-xogpu-content-probe-1',{scope:'./',updateViaCache:'none'});try{await registration.update()}catch{}
+    const registration=await navigator.serviceWorker.register('./browser-media-sw.js?v=20260901-xogpu-video-display-1',{scope:'./',updateViaCache:'none'});try{await registration.update()}catch{}
     await navigator.serviceWorker.ready;
     if(navigator.serviceWorker.controller)return true;
     return await new Promise(resolve=>{let done=false;const finish=value=>{if(done)return;done=true;clearTimeout(timer);resolve(value)};const timer=setTimeout(()=>finish(Boolean(navigator.serviceWorker.controller)),5000);navigator.serviceWorker.addEventListener('controllerchange',()=>finish(true),{once:true})});
@@ -271,6 +271,23 @@ async function typedGeneratedVideoBlob(blob,url,res){
     }catch{}
   }
   return mime?new Blob([blob],{type:mime}):blob;
+}
+async function readVideoResponse(res,url=''){
+  const ct=String(res.headers.get('content-type')||'').toLowerCase();
+  if(ct.includes('application/json')||ct.includes('+json')||ct.startsWith('text/')){
+    const parsed=await readResponse(res);
+    if(parsed.kind==='json'){
+      const candidate=Core?.extractOutput?Core.extractOutput(parsed.value,{},'video'):undefined;
+      if(candidate!==undefined&&candidate!==null&&candidate!=='')return{...parsed,value:candidate};
+    }
+    return parsed;
+  }
+  const blob=await res.blob();
+  if(!blob.size)throw new Error('视频结果下载为空文件');
+  const typed=await typedGeneratedVideoBlob(blob,url,res);
+  const stored=await storeMediaBlob(typed,{name:'generated-video'});
+  if(!stored?.url)throw new Error('视频结果下载后未能保存到浏览器本地媒体库');
+  return{kind:'blob',value:stored.url,blob:typed,type:typed.type||ct,mediaId:stored.id,persistent:true};
 }
 async function materializeGeneratedVideoOutput(value,provider){
   const text=String(value||'').trim();
@@ -460,7 +477,7 @@ async function probeXogpuVideoContent(provider,createdRaw,taskId,route){
   let lastStatus=0,lastUrl='';
   for(const url of candidates){
     const res=await fetchProviderResource(provider,url,{method:'GET',headers:{accept:'video/*,application/octet-stream;q=0.9,*/*;q=0.1'}});lastStatus=res.status;lastUrl=url;
-    if(res.ok){const parsed=await readResponse(res);return{ready:true,status:res.status,url,value:parsed.value}}
+    if(res.ok){const parsed=await readVideoResponse(res,url);return{ready:true,status:res.status,url,value:parsed.value}}
     if([400,404,409,425,429,500,501,502,503,504].includes(res.status))continue;
     const error=new Error(`XOGPU 视频内容读取失败 ${res.status}`);error.status=res.status;error.requestUrl=url;throw error;
   }
@@ -475,7 +492,7 @@ async function fetchVideoContent(provider,createdRaw,taskId,route,activePollUrl=
   if(genericContent&&activePollUrl)add(activePollUrl.replace(/\/$/,'')+'/content');
   if(genericContent)for(const path of [`/v1/videos/${taskId}/content`,`/v1/video/generations/${taskId}/content`,`/v1/videos/generations/${taskId}/content`])add(joinUrl(provider.baseUrl,path));
   if(!candidates.length)throw new Error('上游已成功，但该模型协议没有独立内容下载接口；继续从任务状态响应等待结果 URL');
-  let last=null;for(const url of candidates){const res=await fetchProviderResource(provider,url,{method:'GET'});if(!res.ok){last=new Error(`结果下载失败 ${res.status}`);if([404,405].includes(res.status))continue;throw last}const parsed=await readResponse(res);return parsed.value}throw last||new Error('任务成功但没有找到视频结果下载接口');
+  let last=null;for(const url of candidates){const res=await fetchProviderResource(provider,url,{method:'GET'});if(!res.ok){last=new Error(`结果下载失败 ${res.status}`);if([404,405].includes(res.status))continue;throw last}const parsed=await readVideoResponse(res,url);return parsed.value}throw last||new Error('任务成功但没有找到视频结果下载接口');
 }
 function videoRequestDiagnostics(model,task,refs,createPath,transport,route={}){const p=VideoParams?.normalize?.(task.parameters||{})||task.parameters||{};return{createPath,transport,modelId:String(model?.id||''),protocolFamily:route.protocolFamily||'',protocolProfile:route.protocolProfile||'',videoOperation:route.videoOperation||'',duration:Number(p.duration||p.seconds||0),resolution:String(p.resolution||''),aspectRatio:String(p.aspectRatio||p.aspect_ratio||''),size:String(p.size||''),referenceCount:refs.length,hasFirstFrame:refs.some(r=>['first_frame','image','image_reference'].includes(r.role)||r.type==='image')}}
 function providerRetryAfterMs(res,detail=''){

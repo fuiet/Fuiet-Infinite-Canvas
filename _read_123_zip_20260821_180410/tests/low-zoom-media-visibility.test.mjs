@@ -17,5 +17,5 @@ test('virtualization remains enabled while low-zoom media stays visible',()=>{
 });
 
 test('browser cache key advances for low zoom media visibility fix',()=>{
-  assert.match(boot,/20260831-xogpu-content-probe-1/);
+  assert.match(boot,/20260901-xogpu-video-display-1/);
 });

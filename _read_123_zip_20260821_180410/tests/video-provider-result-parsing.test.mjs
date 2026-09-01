@@ -33,6 +33,20 @@ test('provider success without a result is explicitly visible to the state machi
   assert.equal(result.output,undefined);
 });
 
+test('XOGPU completed metadata content endpoint is treated as the video result',()=>{
+  const response={
+    id:'task_xogpu_1',
+    status:'completed',
+    progress:100,
+    metadata:{content_url:'/v1/videos/task_xogpu_1/content'}
+  };
+  const result=core.classifyAsyncPoll(response,{},'video');
+  assert.equal(result.state,'success');
+  assert.equal(result.providerSucceeded,true);
+  assert.equal(result.resultPending,false);
+  assert.equal(result.output,'/v1/videos/task_xogpu_1/content');
+});
+
 test('DataEyes H3 profile centralizes its terminal result shape',()=>{
   const provider={baseUrl:'https://platform.dataeyes.ai',protocol:'openai-compatible'};
   const model={id:'MiniMax-H3',name:'MiniMax H3',modality:'video',adapterKey:'standard-video-async-v1',createPath:'/hailuo/v2/video_generation',pollPath:'/hailuo/v2/query/video_generation/{{taskId}}'};

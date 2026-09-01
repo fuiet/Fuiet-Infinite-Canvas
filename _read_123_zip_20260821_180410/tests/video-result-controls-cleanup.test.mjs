@@ -22,5 +22,5 @@ test('video result CSS hard-hides stale expand and resize controls',()=>{
 });
 
 test('production browser build is cache-busted for video control cleanup',()=>{
-  assert.match(boot,/20260831-xogpu-content-probe-1/);
+  assert.match(boot,/20260901-xogpu-video-display-1/);
 });

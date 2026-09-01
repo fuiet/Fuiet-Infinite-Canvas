@@ -71,6 +71,9 @@ function outputPaths(modality='video'){
   if(modality==='audio')return ['audio.0.url','output.url','result.url','data.audio_url','audio_url','data.url','url'];
   if(modality==='text'||modality==='script')return ['choices.0.message.content','output_text','output.0.content.0.text','result.text','data.text','text','content'];
   return [
+    // XOGPU's documented completed response exposes the authenticated content
+    // endpoint under metadata.content_url instead of a direct CDN URL.
+    'metadata.content_url','metadata.contentUrl','data.metadata.content_url','data.metadata.contentUrl',
     // Provider task objects. DataEyes/Hailuo and several gateways expose the final
     // file below task.content rather than output/result.
     'task.content.url','task.content.video_url','task.content.videoUrl','task.content.download_url','task.content.content_url','task.content.0.url','task.content.0.video_url',

@@ -25,6 +25,15 @@ test('browser video URLs are materialized before a task is marked saved',()=>{
   assert.ok(completion.indexOf('materializeGeneratedVideoOutput(output,provider)')<completion.indexOf("status:'succeeded'"));
 });
 
+test('video content endpoint binaries get a playable MIME type before IndexedDB persistence',()=>{
+  const helper=sliceBetween(runtime,'async function readVideoResponse(res,url=','async function materializeGeneratedVideoOutput(value,provider)');
+  assert.match(helper,/typedGeneratedVideoBlob\(blob,url,res\)/);
+  assert.match(helper,/storeMediaBlob\(typed,\{name:'generated-video'\}\)/);
+  assert.ok(helper.indexOf('typedGeneratedVideoBlob(blob,url,res)')<helper.indexOf("storeMediaBlob(typed,{name:'generated-video'})"));
+  const calls=runtime.match(/readVideoResponse\(res,url\)/g)||[];
+  assert.ok(calls.length>=2,'both XOGPU content probing and normal content downloads must preserve a playable video MIME type');
+});
+
 test('immediate and synchronous browser video outputs are also persisted',()=>{
   assert.match(runtime,/if\(modality==='video'\)value=await materializeGeneratedVideoOutput\(value,provider\)/);
   const immediate=sliceBetween(runtime,"if(modality==='video'&&immediateOutput&&!taskId)","if(!taskId)");
