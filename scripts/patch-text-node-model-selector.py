@@ -1,5 +1,6 @@
 from pathlib import Path
 
+# One-off repair trigger.
 ROOT=Path('_read_123_zip_20260821_180410')
 
 app_path=ROOT/'app.js'
