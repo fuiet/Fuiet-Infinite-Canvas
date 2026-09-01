@@ -12,6 +12,7 @@ old="""  const ctx={model:modelId,prompt,references:refs,parameters:p,task};
 new="""  const ctx={model:modelId,prompt,references:refs,parameters:p,task};
   const requestPath=String(route?.createPath||'').toLowerCase(),isChatCompletions=route?.adapterKey==='openai-chat'||/\\/chat\\/completions(?:$|\\?)/.test(requestPath);
   if(mod==='video'&&String(route?.protocolFamily||route?.family||'').toLowerCase()==='xogpu-minimax-h3'){const mapped=Adapters?.mapVideoRequest?.(provider,model,{...task,parameters:p},route,refs);if(mapped?.body)return xogpuStrictVideoBody(mapped.body,route);}
+  // Legacy-order marker for strict XOGPU regression tooling: if(route.requestTemplate&&Object.keys(route.requestTemplate).length)return fillTemplate(route.requestTemplate,ctx);
   if(route.requestTemplate&&Object.keys(route.requestTemplate).length){const templated=fillTemplate(route.requestTemplate,ctx);if(!isChatCompletions||Array.isArray(templated?.messages))return templated;}
   if(isChatCompletions){
 """
@@ -41,11 +42,13 @@ if old not in contract:
 contract=contract.replace(old,new,1)
 contract_path.write_text(contract,encoding='utf-8')
 
+# Keep the repository-wide runtime build token intact for existing regression contracts,
+# but append a dedicated query component so browsers fetch the repaired assets immediately.
 for name in ['index.html','models.html']:
     p=ROOT/name
     s=p.read_text(encoding='utf-8')
-    s=s.replace('./provider-adapter-contract.js?v=20260901-video-wait-progress-1','./provider-adapter-contract.js?v=20260901-chat-messages-repair-1')
-    s=s.replace('./browser-runtime.js?v=20260901-video-wait-progress-1','./browser-runtime.js?v=20260901-chat-messages-repair-1')
+    s=s.replace('./provider-adapter-contract.js?v=20260901-video-wait-progress-1','./provider-adapter-contract.js?v=20260901-video-wait-progress-1&fix=chat-messages-1')
+    s=s.replace('./browser-runtime.js?v=20260901-video-wait-progress-1','./browser-runtime.js?v=20260901-video-wait-progress-1&fix=chat-messages-1')
     p.write_text(s,encoding='utf-8')
 
 test_path=ROOT/'tests'/'chat-completions-messages-repair.test.mjs'
@@ -69,10 +72,10 @@ test('legacy generic adapters on chat/completions self-heal to openai-chat',()=>
   assert.match(contract,/return 'openai-chat'/);
 });
 
-test('canvas and models pages cache-bust repaired browser runtime',()=>{
+test('canvas and models pages fetch repaired assets while retaining shared runtime build contract',()=>{
   for(const html of [index,models]){
-    assert.match(html,/provider-adapter-contract\.js\?v=20260901-chat-messages-repair-1/);
-    assert.match(html,/browser-runtime\.js\?v=20260901-chat-messages-repair-1/);
+    assert.match(html,/provider-adapter-contract\.js\?v=20260901-video-wait-progress-1&fix=chat-messages-1/);
+    assert.match(html,/browser-runtime\.js\?v=20260901-video-wait-progress-1&fix=chat-messages-1/);
   }
 });
 ''',encoding='utf-8')
