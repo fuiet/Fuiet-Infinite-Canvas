@@ -1,0 +1,41 @@
+name: Patch chat completions messages repair
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/patch-chat-completions-messages.py'
+      - '.github/workflows/patch-chat-completions-messages.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply repair
+        run: python scripts/patch-chat-completions-messages.py
+      - name: Check
+        working-directory: _read_123_zip_20260821_180410
+        run: npm run check
+      - name: Test
+        working-directory: _read_123_zip_20260821_180410
+        run: npm test
+      - name: Commit repair
+        run: |
+          git config user.name 'Codex'
+          git config user.email 'codex@openai.local'
+          git add _read_123_zip_20260821_180410/browser-runtime.js _read_123_zip_20260821_180410/provider-adapter-contract.js _read_123_zip_20260821_180410/index.html _read_123_zip_20260821_180410/models.html _read_123_zip_20260821_180410/tests/chat-completions-messages-repair.test.mjs
+          if git diff --cached --quiet; then
+            echo 'No changes to commit'
+          else
+            git commit -m 'Repair chat completions messages payloads'
+            git push origin main
+          fi
