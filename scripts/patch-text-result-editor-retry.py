@@ -25,5 +25,15 @@ new="""test('selected text results keep the normal creator toolbar hidden', () =
 """
 if old not in text:
     raise SystemExit('outdated text toolbar test anchor missing')
-path.write_text(text.replace(old,new,1),encoding='utf-8')
-print('patched outdated text toolbar regression')
+text=text.replace(old,new,1)
+old_size="""  assert.match(app, /n\\.w\\s*=\\s*560/);
+  assert.match(app, /n\\.h\\s*=\\s*320/);
+"""
+new_size="""  assert.match(app, /n\\.w=fromResult\\?700:560/);
+  assert.match(app, /n\\.h=fromResult\\?400:320/);
+"""
+if old_size not in text:
+    raise SystemExit('outdated manual text size test anchor missing')
+text=text.replace(old_size,new_size,1)
+path.write_text(text,encoding='utf-8')
+print('patched outdated text editor regressions')
