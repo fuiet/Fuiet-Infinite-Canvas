@@ -115,12 +115,6 @@ if old_test not in test:
     raise SystemExit('text composer height test anchor missing')
 test = test.replace(old_test, new_test, 1)
 
-old_main_height_test = r"  assert.match(css, /\.generator-panel\.text-generator \.text-generator-main,\s*\.generator-panel\.text-generator>\.lib-gen-main\{\s*width:594px;\s*height:142px;/);"
-new_main_height_test = r"  assert.match(css, /\.generator-panel\.text-generator \.text-generator-main,\s*\.generator-panel\.text-generator>\.lib-gen-main\{\s*width:594px;\s*height:224px;/);"
-if old_main_height_test not in test:
-    raise SystemExit('text composer main height test anchor missing')
-test = test.replace(old_main_height_test, new_main_height_test, 1)
-
 old_media_test = r'  assert.doesNotMatch(css, /@media\s*\(max-width:/);'
 new_media_test = r'  assert.match(css, /\.generator-panel\.text-generator \.detail-section-label\{display:none!important\}/);'
 if old_media_test not in test:
