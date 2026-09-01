@@ -11,15 +11,16 @@ test=test_path.read_text(encoding='utf-8')
 
 old="toolbar.style.top=Math.max(CONTEXT_TOOLBAR_SAFE_TOP,r.top-60)+'px';"
 new="toolbar.style.top=Math.max(CONTEXT_TOOLBAR_SAFE_TOP,r.top-108)+'px';"
-if old not in app:
+if old not in app and new not in app:
     raise SystemExit('text editor toolbar top offset anchor missing')
 app=app.replace(old,new,1)
 
-old_boot="`./app.js?v=${v}&fix=generator-input-focus-1&ui=text-result-editor-1&wheel=text-editor-1`,"
-new_boot="`./app.js?v=${v}&fix=generator-input-focus-1&ui=text-result-editor-1&wheel=text-editor-1&toolbar=text-gap-1`,"
-if old_boot not in bootstrap:
-    raise SystemExit('app bootstrap cache anchor missing')
-bootstrap=bootstrap.replace(old_boot,new_boot,1)
+cache_old='&wheel=text-editor-1`,'
+cache_new='&wheel=text-editor-1&toolbar=text-gap-1`,'
+if cache_new not in bootstrap:
+    if cache_old not in bootstrap:
+        raise SystemExit('app bootstrap cache anchor missing')
+    bootstrap=bootstrap.replace(cache_old,cache_new,1)
 
 marker="test('text editing toolbar keeps a larger gap above the node'"
 if marker not in test:
