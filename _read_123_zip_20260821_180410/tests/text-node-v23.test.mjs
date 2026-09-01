@@ -126,15 +126,17 @@ test('manual text mode shows an empty prompt and enters editing only on double c
   assert.match(css, /\.text-node-shell\.is-manual-empty/);
 });
 
-test('empty text node exposes a real model selector wired to text-only models', () => {
+test('text model selection lives in the composer instead of the text node frame', () => {
   const app = read('app.js');
   const css = read('styles/text-node.css');
-  assert.match(app, /data-node-model-selector/);
-  assert.match(app, /title=\"选择文本模型\"/);
-  assert.match(app, /openModelPickerForNode\(n,e\.currentTarget,'text'\)/);
+  assert.doesNotMatch(app, /data-node-model-selector/);
+  assert.doesNotMatch(css, /node-model-selector/);
+  assert.match(app, /id=\"modelPickerBtn\" class=\"model-pill/);
+  assert.match(app, /\$\('#modelPickerBtn'\)\?\.addEventListener\('click',e=>openModelPickerForNode\(n,e\.currentTarget\)\)/);
   assert.match(app, /const modality=modalityOverride\|\|n\.type/);
   assert.match(app, /allModelsForType\(modality\)/);
   assert.match(app, /else setNodeModel\(n,item\)/);
-  assert.match(css, /\.node\.node-text \.node-footer \.node-model-selector/);
+  assert.match(css, /\.generator-panel\.text-generator \.model-pill/);
+  assert.match(app, /const footerLabel=n\.type==='text'\?'':/);
 });
 
