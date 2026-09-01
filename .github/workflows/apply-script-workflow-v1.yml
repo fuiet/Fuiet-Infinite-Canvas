@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   apply:
-    if: github.event.head_commit.message == 'Retry Script Workflow V1 patch v2'
+    if: github.event.head_commit.message == 'Retry Script Workflow V1 patch v3'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -52,6 +52,15 @@ jobs:
           PY
       - name: Apply Script Workflow V1 patch
         run: python scripts/apply-script-workflow-v1-v2.py
+      - name: Preserve current deployed application cache key
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('_read_123_zip_20260821_180410/browser-bootstrap.js')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace("const v='20260901-script-workflow-v1';","const v='20260901-video-wait-progress-1';")
+          p.write_text(s,encoding='utf-8')
+          PY
       - name: Syntax check
         working-directory: _read_123_zip_20260821_180410
         run: npm run check
