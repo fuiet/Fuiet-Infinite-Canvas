@@ -57,6 +57,11 @@
     const main=panel.querySelector('.lib-gen-main');if(!main)return;
     const kind=selectedNodeKind();
     main.classList.add('detail-kind-'+kind);
+    if(kind==='文本'){
+      main.querySelector('.detail-ui-head')?.remove();
+      main.querySelectorAll('.detail-section-label').forEach(el=>el.remove());
+      return;
+    }
     if(!main.querySelector('.detail-ui-head')){
       const h=document.createElement('div');h.className='detail-ui-head';
       h.innerHTML=`<b>节点详情</b><span class="detail-kind">${icon(kindIcon(kind))}${kind}</span><small>参数与生成设置</small>`;

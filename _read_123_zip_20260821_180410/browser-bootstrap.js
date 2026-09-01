@@ -13,7 +13,7 @@ const canvasScripts=[
   `./video-hover-player-v1.js?v=${v}`,
   `./security-client.js?v=${v}`,
   `./ui-zh.js?v=${v}`,
-  `./ui-v2.js?v=${v}`,
+  `./ui-v2.js?v=${v}&fix=text-controls-stable-1`,
   `./ui-v23.js?v=${v}`,
   `./ui-connect-v23.js?v=${v}`,
   `./bottom-dock-v3.js?v=${v}`,
