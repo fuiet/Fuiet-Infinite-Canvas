@@ -162,6 +162,7 @@
 
 /* Completed text: the content itself is the node. */
 .node.node-text[data-content-state="result"]{
+  height:260px;
   min-height:260px;
   background:var(--ui-surface-1);
   border-color:var(--ui-line-strong);
@@ -171,18 +172,24 @@
   box-shadow:0 0 0 2px rgba(129,152,217,.12);
 }
 .node.node-text[data-content-state="result"]>.node-body{
+  height:258px;
   min-height:258px;
+  overflow:hidden;
   background:var(--ui-surface-1);
 }
 .text-node-shell.has-text{
+  height:258px;
   min-height:258px;
+  overflow:hidden;
   padding:18px 20px 22px;
   background:var(--ui-surface-1);
 }
 .text-node-preview{
   width:100%;
-  min-height:216px;
-  max-height:520px;
+  height:100%;
+  min-height:0;
+  max-height:none;
+  flex:1 1 auto;
   overflow:auto;
   color:var(--ui-text-1);
   font:400 15px/1.65 var(--ui-font-sans);
@@ -193,6 +200,7 @@
   scrollbar-width:thin;
   scrollbar-color:var(--ui-line-strong) transparent;
 }
+.text-node-preview:focus{outline:none}
 .text-node-preview::-webkit-scrollbar{width:6px}
 .text-node-preview::-webkit-scrollbar-thumb{border-radius:999px;background:var(--ui-line-strong)}
 
