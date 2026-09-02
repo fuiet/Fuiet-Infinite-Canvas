@@ -1,0 +1,35 @@
+name: Restore XOGPU working envelope
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/restore-xogpu-working-envelope.py'
+      - '.github/workflows/restore-xogpu-working-envelope.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply restore
+        run: python scripts/restore-xogpu-working-envelope.py
+      - name: Syntax check
+        working-directory: _read_123_zip_20260821_180410
+        run: npm run check
+      - name: Focused XOGPU tests
+        working-directory: _read_123_zip_20260821_180410
+        run: node --test tests/xogpu-minimax-h3.test.mjs tests/xogpu-create-path-fallback.test.mjs 2>/dev/null || node --test tests/xogpu-minimax-h3.test.mjs
+      - name: Commit restore
+        run: |
+          rm -f scripts/restore-xogpu-working-envelope.py .github/workflows/restore-xogpu-working-envelope.yml
+          git config user.name 'Codex'
+          git config user.email 'codex@openai.local'
+          git add -A
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Restore known-working XOGPU request envelope'
+          git push
