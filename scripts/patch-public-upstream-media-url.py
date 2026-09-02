@@ -130,21 +130,23 @@ const router=fs.readFileSync(new URL('../browser-runtime.js',import.meta.url),'u
 const bootstrap=fs.readFileSync(new URL('../browser-bootstrap.js',import.meta.url),'utf8');
 
 test('connected generated media prefers its original public HTTPS source URL',()=>{
-  assert.match(app,/function generationReferenceUrl\(node\)\{[\s\S]*?outputSourceUrl[\s\S]*?\^https:\\\/\\\/[\s\S]*?outputUrl/);
-  assert.equal((app.match(/url:generationReferenceUrl\(x\)/g)||[]).length,2);
-  assert.equal((app.match(/sourceUrl:String\(x\.outputSourceUrl\|\|''\)/g)||[]).length,2);
+  assert.ok(app.includes('function generationReferenceUrl(node){'));
+  assert.ok(app.includes("const source=String(node?.outputSourceUrl||'').trim();"));
+  assert.ok(app.includes('if(/^https:\\/\\//i.test(source))return source;'));
+  assert.equal((app.match(/url:generationReferenceUrl\\(x\\)/g)||[]).length,2);
+  assert.equal((app.match(/sourceUrl:String\\(x\\.outputSourceUrl\\|\\|''\\)/g)||[]).length,2);
 });
 
 test('browser image persistence keeps provider HTTPS source separate from local display URL',()=>{
-  assert.match(preview,/function outputObject\(value,modality='text',sourceUrl=''\)/);
-  assert.match(preview,/sourceUrl:String\(sourceUrl\|\|value\)/);
-  assert.match(preview,/const sourceUrl=modality==='image'&&typeof value==='string'&&\/\^https:/);
-  assert.match(preview,/output:outputObject\(value,modality,sourceUrl\)/);
+  assert.ok(preview.includes("function outputObject(value,modality='text',sourceUrl='')"));
+  assert.ok(preview.includes('sourceUrl:String(sourceUrl||value)'));
+  assert.ok(preview.includes("const sourceUrl=modality==='image'&&typeof value==='string'&&/^https:\\/\\//i.test(value.trim())?value.trim():'';"));
+  assert.ok(preview.includes('output:outputObject(value,modality,sourceUrl)'));
 });
 
 test('public upstream media repair is cache busted in both runtime layers',()=>{
-  assert.match(router,/20260902-public-upstream-media-1/);
-  assert.match(bootstrap,/20260902-public-upstream-media-1/);
+  assert.ok(router.includes('20260902-public-upstream-media-1'));
+  assert.ok(bootstrap.includes('20260902-public-upstream-media-1'));
 });
 """, encoding='utf-8')
 
