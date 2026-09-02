@@ -11,7 +11,7 @@ test('video task restores all connected upstream refs and uses upstream text as 
     nodeType:'video',
     prompt:'',
     references:[],
-    parameters:{creativeContext:{linkedReferences:[
+    parameters:{videoMode:'text2video',generationMode:'text2video',creativeContext:{linkedReferences:[
       {id:'text-1',type:'text',role:'prompt_context',text:'赛博朋克雨夜里，黑衣人物缓慢向镜头走来。'},
       {id:'image-1',type:'image',role:'reference',url:'https://cdn.example.com/street.png'}
     ]}}
@@ -19,7 +19,23 @@ test('video task restores all connected upstream refs and uses upstream text as 
   assert.equal(task.prompt,'赛博朋克雨夜里，黑衣人物缓慢向镜头走来。');
   assert.equal(task.references.length,2);
   assert.equal(task.references[1].url,'https://cdn.example.com/street.png');
+  assert.equal(task.parameters.videoMode,'omni_reference');
+  assert.equal(task.parameters.generationMode,'omni_reference');
+  assert.equal(task.parameters.operation,'reference2video');
   assert.deepEqual(task.parameters.upstreamInputContract,{version:1,connected:true,textCount:1,mediaCount:1,localPromptOptional:true});
+});
+
+test('explicit first and last frames preserve frame generation semantics',()=>{
+  const task=Upstream.normalizeTask({
+    nodeType:'video',prompt:'镜头自然过渡',references:[],
+    parameters:{videoMode:'text2video',creativeContext:{linkedReferences:[
+      {id:'first',type:'image',role:'first_frame',url:'https://cdn.example.com/first.png'},
+      {id:'last',type:'image',role:'last_frame',url:'https://cdn.example.com/last.png'}
+    ]}}
+  });
+  assert.equal(task.parameters.videoMode,'frame2video');
+  assert.equal(task.parameters.generationMode,'frame2video');
+  assert.equal(task.parameters.operation,'first-last-frame');
 });
 
 test('local generator prompt is optional supplemental text, not a replacement for upstream text',()=>{
@@ -39,6 +55,7 @@ test('reference-only generation gets a safe provider prompt without requiring ge
   });
   assert.match(task.prompt,/严格依据已连接的上游参考素材生成视频/);
   assert.equal(task.references.length,1);
+  assert.equal(task.parameters.videoMode,'omni_reference');
 });
 
 test('seedream image request actually includes the connected image and upstream text',()=>{
