@@ -204,8 +204,7 @@ function mapVideoRequest(provider={},model={},task={},route={},references=[]){
   return VideoProtocols?.mapRequest?VideoProtocols.mapRequest(provider,model,task,route,references):null;
 }
 function finalizeModel(provider={},model={},nodeType=''){
-  const next=clone(model||{}),autoRoute=next.routeOrigin==='auto'||next.adapterResolved?.auto===true;
-  if(autoRoute&&!isXogpuProvider(provider)&&String(next.videoProtocolFamily||'').trim().toLowerCase()==='xogpu-minimax-h3'){delete next.videoProtocolFamily;delete next.videoProtocolProfile}
+  const next=clone(model||{});
   next.modality=normalizeModelModality(next.modality,next); const type=normalizeModelModality(nodeType||next.modality,next);
   const before=routeIsExplicit(next), route=resolveRoute(provider,next,type,'generate');
   const ready=Boolean(next.id&&route.adapterKey&&route.adapterKey!=='auto'&&route.createPath);
@@ -235,6 +234,15 @@ function finalizeModel(provider={},model={},nodeType=''){
 function finalizeProvider(provider={}){
   const next=clone(provider||{});
   let models=Array.isArray(next.models)?next.models:[];
+  const xogpuProvider=isXogpuProvider(next);
+  if(!xogpuProvider){
+    models=models.filter(model=>{
+      const family=String(model?.videoProtocolFamily||model?.protocolFamily||'').trim().toLowerCase();
+      const auto=model?.routeOrigin==='auto'||model?.adapterResolved?.auto===true;
+      const userOwned=String(model?.modalitySource||'').trim().toLowerCase()==='user';
+      return !(auto&&!userOwned&&family==='xogpu-minimax-h3');
+    });
+  }
   if(isAgnesProvider(next)){
     if(!next.protocol||next.protocol==='auto')next.protocol='openai-compatible';
     models=models.filter(model=>!/^agnes[-_. ]?video/i.test(String(model?.id||model?.name||'')));
@@ -242,7 +250,7 @@ function finalizeProvider(provider={}){
     for(const known of agnesKnownModels()){const current=byId.get(known.id);byId.set(known.id,current?{...known,...current,id:known.id}:known)}
     models=[...byId.values()];
   }
-  if(isXogpuProvider(next)){
+  if(xogpuProvider){
     if(!String(next.authHeader||'').trim())next.authHeader='Authorization';
     if(!String(next.authScheme||'').trim())next.authScheme='Bearer';
     for(const known of xogpuKnownModels()){
