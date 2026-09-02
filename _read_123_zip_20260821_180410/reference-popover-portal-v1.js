@@ -46,8 +46,6 @@ function positionPortal(){
 
   portal.style.maxWidth=`${Math.min(340,maxWidth)}px`;
   portal.style.maxHeight=`${Math.min(420,maxHeight)}px`;
-  portal.style.left='0px';
-  portal.style.top='0px';
 
   const box=portal.getBoundingClientRect();
   const width=Math.min(box.width,maxWidth);
@@ -67,10 +65,12 @@ function positionPortal(){
   left=clamp(left,VIEWPORT_MARGIN,viewportWidth-width-VIEWPORT_MARGIN);
   top=clamp(top,VIEWPORT_MARGIN,viewportHeight-height-VIEWPORT_MARGIN);
 
-  const signature=`${Math.round(left)}:${Math.round(top)}:${placement}`;
+  const roundedLeft=Math.round(left);
+  const roundedTop=Math.round(top);
+  const signature=`${roundedLeft}:${roundedTop}:${placement}`;
   if(signature!==lastPlacement){
-    portal.style.left=`${Math.round(left)}px`;
-    portal.style.top=`${Math.round(top)}px`;
+    portal.style.left=`${roundedLeft}px`;
+    portal.style.top=`${roundedTop}px`;
     portal.dataset.placement=placement;
     lastPlacement=signature;
   }
@@ -95,6 +95,8 @@ function showPortal(chip){
   portal.setAttribute('role','tooltip');
   portal.setAttribute('aria-hidden','false');
   portal.style.position='fixed';
+  portal.style.left='0px';
+  portal.style.top='0px';
   portal.style.zIndex='2147483000';
   portal.style.pointerEvents='none';
   document.body.appendChild(portal);
