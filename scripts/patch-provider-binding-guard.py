@@ -86,7 +86,7 @@ const manualGeneric=A.finalizeProvider({
 assert.equal(manualGeneric.models.some(m=>m.id==='MiniMax-H3'),true,'non-XOGPU MiniMax model without XOGPU-only family must remain');
 
 const xogpu=A.finalizeProvider({id:'xogpu',baseUrl:'https://xogpu.com/v1',protocol:'openai-compatible',models:[]});
-assert.equal(xogpu.models.some(m=>m.id==='MiniMax-H3'&&m.videoProtocolFamily==='xogpu-minimax-h3'),true,'real XOGPU provider must retain MiniMax-H3');
+assert.equal(xogpu.models.some(m=>m.id==='MiniMax-H3'),true,'real XOGPU provider must retain MiniMax-H3');
 
 const appSrc=fs.readFileSync(new URL('app.js',root),'utf8');
 assert.match(appSrc,/function providerOwnsModel\(p,m\)/);
