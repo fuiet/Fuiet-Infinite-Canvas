@@ -50,6 +50,15 @@ test('XOGPU multimodal references enforce HTTPS and documented media limits',()=
   assert.throws(()=>V.mapRequest(provider,model,{prompt:'text only adaptive',parameters:{duration:5,ratio:'adaptive'}},V.resolve(provider,model,'text-to-video'),[]),/adaptive 比例仅适用于/);
 });
 
+test('XOGPU image references accept Base64 data URLs while video and audio stay HTTPS-only',()=>{
+  const model={id:'MiniMax-H3',name:'MiniMax H3',modality:'video',videoProtocolFamily:'xogpu-minimax-h3'},route=V.resolve(provider,model,'image-to-video'),imageData='data:image/png;base64,iVBORw0KGgo=';
+  const mapped=V.mapRequest(provider,model,{prompt:'animate local image',parameters:{duration:5,ratio:'adaptive'}},route,[{type:'image',url:imageData}]);
+  assert.equal(mapped.body.content[1].type,'image_url');assert.equal(mapped.body.content[1].image_url.url,imageData);
+  assert.throws(()=>V.mapRequest(provider,model,{prompt:'bad video data',parameters:{duration:5,ratio:'adaptive'}},V.resolve(provider,model,'reference-to-video'),[{type:'video',url:'data:video/mp4;base64,AAAA'}]),/HTTPS URL/);
+  assert.throws(()=>V.mapRequest(provider,model,{prompt:'bad audio data',parameters:{duration:5,ratio:'16:9'}},V.resolve(provider,model,'reference-to-video'),[{type:'audio',url:'data:audio/wav;base64,AAAA'}]),/HTTPS URL/);
+  assert.throws(()=>V.mapRequest(provider,model,{prompt:'bad browser local',parameters:{duration:5,ratio:'adaptive'}},route,[{type:'image',url:'/__browser_media/media_local'}]),/Base64 Data URL/);
+});
+
 test('shared video parameters preserve adaptive for XOGPU instead of coercing it to 16:9',()=>{
   const p=P.normalize({duration:5,aspectRatio:'adaptive',resolution:'768p'});assert.equal(p.aspectRatio,'adaptive');assert.equal(p.aspect_ratio,'adaptive');assert.equal(p.size,'');
 });

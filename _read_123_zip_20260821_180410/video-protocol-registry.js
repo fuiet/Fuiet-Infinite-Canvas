@@ -69,7 +69,7 @@ function xogpuVideoProfile(provider,model,operation){
   const base=genericProfile('xogpu-minimax-h3');
   return{...base,profile:'xogpu:minimax-h3',createPath:'/v1/videos',createCandidates:['/v1/videos'],pollPath:'/v1/videos/{{taskId}}',pollPathCandidates:['/v1/videos/{{taskId}}','/v1/tasks/{{taskId}}'],strictPollPath:true,taskIdPath:'id',taskIdPaths:['id','task_id','taskId',...COMMON_TASK_IDS],statusPath:'status',statusPaths:['status',...COMMON_STATUS],progressPath:'progress',progressPaths:['progress',...COMMON_PROGRESS],outputPath:'',outputPaths:[],contentPath:'/v1/videos/{{taskId}}/content',contentPathCandidates:['/v1/videos/{{taskId}}/content'],requestTransport:'json',referenceTransport:'url',allowOutputWithoutTerminalStatus:false,pollIntervalMs:15000,timeoutMs:3600000,videoOperation:operation};
 }
-function xogpuPublicMediaUrl(value,label){const text=String(value||'').trim();if(!/^https:\/\//i.test(text))throw new Error('XOGPU MiniMax-H3 的'+label+'必须是公网可访问的 HTTPS URL；不支持浏览器本地地址、HTTP、blob URL、Base64 或 data URI');return text}
+function xogpuMediaReference(value,type){const text=String(value||'').trim(),label=type==='image'?'图片':type==='video'?'参考视频':'参考音频';if(/^https:\/\//i.test(text))return text;if(type==='image'&&/^data:image\/(?:png|jpeg|jpg|webp|heic|heif);base64,/i.test(text))return text;throw new Error('XOGPU MiniMax-H3 的'+label+'必须使用公网 HTTPS URL'+(type==='image'?' 或 Base64 Data URL':'')+'；不支持浏览器本地地址、HTTP 或 blob URL')}
 function mapXogpuVideoRequest(model={},task={},refs=[],operation='generate'){
   const p={...(task.parameters||{})},prompt=String(task.prompt||'').trim();if(!prompt)throw new Error('XOGPU MiniMax-H3 必须填写 prompt');if(prompt.length>7000)throw new Error('XOGPU MiniMax-H3 prompt 最长 7000 字符');
   const duration=Math.max(1,Math.min(15,Math.round(Number(p.duration??p.seconds??5)||5))),list=Array.isArray(refs)?refs:[];
@@ -81,7 +81,7 @@ function mapXogpuVideoRequest(model={},task={},refs=[],operation='generate'){
   if(entries.length){
     const explicitFirst=images.find(x=>/first/.test(x.role)),explicitLast=images.find(x=>/last/.test(x.role));
     const firstFallback=operation==='first-last-frame'&&!explicitFirst?images[0]:null,lastFallback=operation==='first-last-frame'&&!explicitLast&&images.length>1?images[1]:null;
-    body.content=[{type:'text',text:prompt},...entries.map(x=>{const url=xogpuPublicMediaUrl(x.url,x.type==='image'?'图片':x.type==='video'?'参考视频':'参考音频');if(x.type==='video')return{type:'video_url',video_url:{url},role:'reference_video'};if(x.type==='audio')return{type:'audio_url',audio_url:{url},role:'reference_audio'};let role='reference_image';if(x===explicitFirst||x===firstFallback||(operation==='image-to-video'&&images.length===1&&!videos.length&&!audios.length))role='first_frame';else if(x===explicitLast||x===lastFallback)role='last_frame';return{type:'image_url',image_url:{url},role}})];
+    body.content=[{type:'text',text:prompt},...entries.map(x=>{const url=xogpuMediaReference(x.url,x.type);if(x.type==='video')return{type:'video_url',video_url:{url},role:'reference_video'};if(x.type==='audio')return{type:'audio_url',audio_url:{url},role:'reference_audio'};let role='reference_image';if(x===explicitFirst||x===firstFallback||(operation==='image-to-video'&&images.length===1&&!videos.length&&!audios.length))role='first_frame';else if(x===explicitLast||x===lastFallback)role='last_frame';return{type:'image_url',image_url:{url},role}})];
   }
   return body;
 }
