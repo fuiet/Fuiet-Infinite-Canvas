@@ -1,0 +1,43 @@
+name: Patch public upstream media URL
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/patch-public-upstream-media-url.py'
+      - '.github/workflows/patch-public-upstream-media-url.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply public upstream media URL repair
+        run: python scripts/patch-public-upstream-media-url.py
+      - name: Syntax check
+        working-directory: _read_123_zip_20260821_180410
+        run: npm run check
+      - name: Focused regression test
+        working-directory: _read_123_zip_20260821_180410
+        run: node --test tests/public-upstream-media-url.test.mjs
+      - name: Commit repair
+        run: |
+          git config user.name 'Codex'
+          git config user.email 'codex@openai.local'
+          git add \
+            _read_123_zip_20260821_180410/app.js \
+            _read_123_zip_20260821_180410/browser-runtime-preview.js \
+            _read_123_zip_20260821_180410/browser-runtime.js \
+            _read_123_zip_20260821_180410/browser-bootstrap.js \
+            _read_123_zip_20260821_180410/tests/public-upstream-media-url.test.mjs
+          git diff --cached --quiet && exit 0
+          git commit -m 'Preserve public upstream media URLs for provider references'
+          git push origin main
