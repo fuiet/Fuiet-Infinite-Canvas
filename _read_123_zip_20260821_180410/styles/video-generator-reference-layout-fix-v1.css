@@ -1,0 +1,57 @@
+/* Video generator connected-reference layout fix.
+ * The base video composer had a hard !important 258px height. app.js already
+ * computes extra height for incoming reference rows, but that inline height was
+ * losing to the stylesheet and the inner composer was also clipped at 258px.
+ * Let the composer grow with reference rows so model/reference/cost controls stay
+ * permanently visible instead of appearing only during wheel-triggered repaints.
+ */
+.generator-panel.video-generator{
+  height:auto!important;
+  min-height:258px!important;
+  max-height:none!important;
+  overflow:visible!important;
+}
+
+.generator-panel.video-generator>.video-generator-main,
+.generator-panel.video-generator .video-generator-main{
+  height:auto!important;
+  min-height:258px!important;
+  max-height:none!important;
+  box-sizing:border-box;
+  overflow:visible!important;
+}
+
+.generator-panel.video-generator .generator-reference-strip{
+  flex:0 0 auto;
+  min-height:44px;
+  overflow:visible;
+}
+
+.generator-panel.video-generator .video-gen-top,
+.generator-panel.video-generator .video-gen-controls{
+  flex-shrink:0;
+}
+
+.generator-panel.video-generator .video-gen-controls{
+  display:flex!important;
+  visibility:visible!important;
+  opacity:1!important;
+  pointer-events:auto!important;
+  position:relative;
+  z-index:4;
+  background:#262626;
+  overflow:visible;
+}
+
+.generator-panel.video-generator .video-gen-controls .model-pill,
+.generator-panel.video-generator .video-gen-controls .generation-cost,
+.generator-panel.video-generator .video-ref-slot,
+.generator-panel.video-generator [data-generator-reference-strip]{
+  visibility:visible!important;
+  opacity:1!important;
+}
+
+.generator-panel.video-generator .prompt-box.video-prompt-box{
+  flex:1 1 116px;
+  min-height:116px;
+}
