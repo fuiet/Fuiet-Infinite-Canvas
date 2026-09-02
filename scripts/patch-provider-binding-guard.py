@@ -5,6 +5,7 @@ root=Path('_read_123_zip_20260821_180410')
 contract=root/'provider-adapter-contract.js'
 app=root/'app.js'
 index=root/'index.html'
+bootstrap=root/'browser-bootstrap.js'
 
 def replace_once(path, old, new, label):
     text=path.read_text(encoding='utf-8')
@@ -48,11 +49,13 @@ replace_once(app,"""  function allModelsForType(type){
 
 replace_once(app,"""if(provider&&model&&modelRuntimeReady(provider,model))out.push({provider,model,providerId:provider.id,modelId:model.id,modelName:model.name||model.id,primary:Boolean(ref.primary)})""","""if(provider&&model&&providerOwnsModel(provider,model)&&modelRuntimeReady(provider,model))out.push({provider,model,providerId:provider.id,modelId:model.id,modelName:model.name||model.id,primary:Boolean(ref.primary)})""",'fallback ownership guard')
 
+replace_once(bootstrap,"""const v='20260902-public-upstream-media-1';""","""const v='20260902-provider-binding-guard-1';""",'bootstrap cache version')
+
 text=index.read_text(encoding='utf-8')
 text,n=re.subn(r'provider-adapter-contract\.js\?v=[^\"]+', 'provider-adapter-contract.js?v=20260902-provider-model-ownership-2', text, count=1)
 if n!=1: raise SystemExit(f'provider adapter cache: expected 1 match, got {n}')
-text,n=re.subn(r'app\.js\?v=[^\"]+', 'app.js?v=20260902-provider-binding-guard-1', text, count=1)
-if n!=1: raise SystemExit(f'app cache: expected 1 match, got {n}')
+text,n=re.subn(r'browser-bootstrap\.js\?v=[^\"]+', 'browser-bootstrap.js?v=20260902-provider-binding-guard-1', text, count=1)
+if n!=1: raise SystemExit(f'bootstrap cache: expected 1 match, got {n}')
 index.write_text(text,encoding='utf-8')
 
 (root/'tests/provider-binding-guard.test.mjs').write_text(r'''import assert from 'node:assert/strict';
@@ -90,8 +93,12 @@ assert.match(appSrc,/function providerOwnsModel\(p,m\)/);
 assert.match(appSrc,/normalizeClientModality\(m\.modality\)===wanted&&providerOwnsModel\(p,m\)/);
 assert.match(appSrc,/provider&&model&&providerOwnsModel\(provider,model\)&&modelRuntimeReady/);
 
+const bootstrapSrc=fs.readFileSync(new URL('browser-bootstrap.js',root),'utf8');
+assert.match(bootstrapSrc,/const v='20260902-provider-binding-guard-1'/);
+assert.match(bootstrapSrc,/\.\/app\.js\?v=\$\{v\}/);
+
 const indexSrc=fs.readFileSync(new URL('index.html',root),'utf8');
 assert.match(indexSrc,/provider-adapter-contract\.js\?v=20260902-provider-model-ownership-2/);
-assert.match(indexSrc,/app\.js\?v=20260902-provider-binding-guard-1/);
+assert.match(indexSrc,/browser-bootstrap\.js\?v=20260902-provider-binding-guard-1/);
 console.log('provider binding guard ok');
 ''',encoding='utf-8')
