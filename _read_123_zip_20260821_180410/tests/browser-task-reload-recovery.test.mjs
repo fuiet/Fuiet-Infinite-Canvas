@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-const runtime=fs.readFileSync(new URL('../browser-runtime.js',import.meta.url),'utf8');
+const runtime=fs.readFileSync(new URL('../browser-runtime-preview.js',import.meta.url),'utf8');
 const server=fs.readFileSync(new URL('../server.js',import.meta.url),'utf8');
 const index=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
-const BUILD='20260901-video-wait-progress-1';
+const ROUTER_BUILD='20260902-desktop-runtime-router-1';
+const PREVIEW_SW_BUILD='20260901-video-wait-progress-1';
 
 test('browser reload resumes only already-persisted upstream active tasks',()=>{
   assert.match(runtime,/\['provider_succeeded','result_pending','running','polling','fallback','retrying'\]\.includes\(t\.status\)&&t\.upstreamTaskId/);
@@ -27,7 +28,7 @@ test('Agnes task alias pollution is healed instead of reused as a video id',()=>
   assert.match(server,/const ambiguousTaskAlias=Boolean\(videoId&&taskId&&videoId===taskId&&\/\^task\[_-\]\/i\.test\(videoId\)\)/);
 });
 
-test('fresh browser build is deployed for task recovery healing',()=>{
-  assert.ok(index.includes(`browser-runtime.js?v=${BUILD}`));
-  assert.ok(runtime.includes(`browser-media-sw.js?v=${BUILD}`));
+test('fresh runtime router is deployed while preview media keeps its internal worker revision',()=>{
+  assert.ok(index.includes(`browser-runtime.js?v=${ROUTER_BUILD}`));
+  assert.ok(runtime.includes(`browser-media-sw.js?v=${PREVIEW_SW_BUILD}`));
 });
