@@ -3,6 +3,7 @@
  * - text/script upstream nodes become the effective prompt
  * - media upstream nodes remain real provider references
  * - a local generator prompt is optional and only supplements upstream text
+ * - connected media promotes a default text-to-video task to reference generation
  *
  * app.js already includes every incoming connection in parameters.creativeContext.
  * Older mode-specific validation may filter task.references (notably text2video).
@@ -15,7 +16,6 @@
 const TEXT_TYPES=new Set(['text','script','markdown']);
 const MEDIA_TYPES=new Set(['image','video','audio']);
 const clean=value=>String(value??'').trim();
-const clone=value=>value==null?value:JSON.parse(JSON.stringify(value));
 
 function refKey(ref={}){
   const id=clean(ref.sourceNodeId||ref.id);
@@ -61,8 +61,9 @@ function upstreamTextParts(refs=[]){
   }
   return out;
 }
+function mediaReferences(refs=[]){return refs.filter(ref=>MEDIA_TYPES.has(clean(ref.type||ref.kind).toLowerCase())&&clean(ref.url))}
 function fallbackPrompt(nodeType,refs=[]){
-  if(!refs.some(ref=>MEDIA_TYPES.has(clean(ref.type||ref.kind).toLowerCase())&&clean(ref.url)))return'';
+  if(!mediaReferences(refs).length)return'';
   if(nodeType==='video')return'严格依据已连接的上游参考素材生成视频，保持主体身份、外观、场景、构图、风格和关键视觉特征一致。';
   if(nodeType==='image')return'严格依据已连接的上游参考素材生成图片，保持主体身份、外观、构图、风格和关键视觉特征一致。';
   return'严格依据已连接的上游参考素材生成。';
@@ -72,18 +73,35 @@ function effectivePrompt(task={},refs=[]){
   if(local&&!seen.has(local))parts.push(local);
   return parts.join('\n\n')||fallbackPrompt(clean(task.nodeType).toLowerCase(),refs);
 }
+function referenceVideoParameters(task={},refs=[]){
+  const current={...(task.parameters||{})},media=mediaReferences(refs);
+  if(!media.length)return current;
+  const explicit=clean(current.operation||current.videoOperation).toLowerCase();
+  const roles=media.map(ref=>clean(ref.role||ref.semanticRole).toLowerCase());
+  const hasFirst=roles.some(role=>/first/.test(role)),hasLast=roles.some(role=>/last/.test(role));
+  let operation=explicit;
+  if(!operation){
+    if(hasFirst&&hasLast)operation='first-last-frame';
+    else operation='reference2video';
+  }
+  const currentMode=clean(current.videoMode||current.generationMode).toLowerCase();
+  const keepSpecial=['image2video','frame2video','omni_reference'].includes(currentMode);
+  const mode=keepSpecial?currentMode:(hasFirst&&hasLast?'frame2video':'omni_reference');
+  return{...current,operation,videoMode:mode,generationMode:mode};
+}
 function normalizeTask(task={}){
   const type=clean(task.nodeType).toLowerCase();
   if(!['image','video'].includes(type))return task;
   const refs=linkedReferences(task),prompt=effectivePrompt(task,refs);
-  const textCount=upstreamTextParts(refs).length,mediaCount=refs.filter(ref=>MEDIA_TYPES.has(clean(ref.type||ref.kind).toLowerCase())&&clean(ref.url)).length;
+  const textCount=upstreamTextParts(refs).length,mediaCount=mediaReferences(refs).length;
+  const parameters=type==='video'?referenceVideoParameters(task,refs):{...(task.parameters||{})};
   return{
     ...task,
     prompt,
     references:refs,
     parameters:{
-      ...(task.parameters||{}),
-      upstreamInputContract:{version:1,connected:true,textCount,mediaCount,localPromptOptional:true}
+      ...parameters,
+      upstreamInputContract:{version:1,connected:refs.length>0,textCount,mediaCount,localPromptOptional:refs.length>0}
     }
   };
 }
@@ -127,9 +145,10 @@ function syncGeneratorHint(){
   if(typeof document==='undefined')return;
   const panel=document.querySelector('#generatorPanel');if(!panel||panel.classList.contains('hidden'))return;
   if(!panel.classList.contains('image-generator')&&!panel.classList.contains('video-generator'))return;
-  const input=panel.querySelector('#promptInput'),strip=panel.querySelector('[data-generator-reference-strip]');if(!input||!strip)return;
+  const input=panel.querySelector('#promptInput'),strip=panel.querySelector('[data-generator-reference-strip]');if(!input)return;
+  if(!strip){delete input.dataset.upstreamPromptOptional;return}
   const hasText=Boolean(strip.querySelector('.generator-reference-text-icon'));
-  input.placeholder=hasText?'已连接上游文本：上游文本会直接作为提示词；这里可留空，输入内容仅作为补充要求。':'已连接上游参考：这里可留空，输入内容仅作为补充要求。';
+  input.placeholder=hasText?'已连接上游文本：上游文本直接作为提示词；这里可留空，填写内容只作为补充要求。':'已连接上游参考：无需再填写提示词；这里可留空，填写内容只作为补充要求。';
   input.dataset.upstreamPromptOptional='1';
 }
 function installUiHint(){
@@ -139,7 +158,7 @@ function installUiHint(){
   syncGeneratorHint();
 }
 
-const api=Object.freeze({linkedReferences,upstreamTextParts,effectivePrompt,normalizeTask});
+const api=Object.freeze({linkedReferences,upstreamTextParts,mediaReferences,effectivePrompt,referenceVideoParameters,normalizeTask});
 globalThis.CanvasUpstreamGenerationInputs=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 installFetchBridge();
