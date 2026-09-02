@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-const browser=fs.readFileSync(new URL('../browser-runtime.js',import.meta.url),'utf8');
+const browser=fs.readFileSync(new URL('../browser-runtime-preview.js',import.meta.url),'utf8');
 const server=fs.readFileSync(new URL('../server.js',import.meta.url),'utf8');
 const index=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
-const BUILD='20260901-video-wait-progress-1';
+const BUILD='20260902-desktop-runtime-router-1';
 
 test('Agnes browser uses legacy task endpoint when create response has only task id',()=>{
   assert.match(browser,/const identity=providerVideoIdentity\(createdRaw\),videoId=identity\.videoId,providerTaskId=identity\.taskId/);
@@ -29,7 +29,7 @@ test('desktop standard video runtime preserves the same Agnes identity semantics
   assert.match(server,/\/v1\/videos\/\$\{encodeURIComponent\(id\)\}/);
 });
 
-test('fresh identity-aware browser runtime build is deployed',()=>{
+test('fresh identity-aware runtime router build is deployed',()=>{
   assert.ok(index.includes(`browser-runtime.js?v=${BUILD}`));
   assert.ok(index.includes(`browser-bootstrap.js?v=${BUILD}`));
 });
