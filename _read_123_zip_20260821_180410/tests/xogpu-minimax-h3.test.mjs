@@ -11,7 +11,7 @@ test('XOGPU provider injects documented MiniMax-H3 special-group model and Beare
   const p=A.finalizeProvider(provider),m=p.models.find(x=>x.id==='MiniMax-H3');
   assert.ok(m);assert.equal(m.modality,'video');assert.equal(m.createPath,'/v1/videos');assert.equal(m.videoProtocolFamily,'xogpu-minimax-h3');
   assert.equal(p.authHeader,'Authorization');assert.equal(p.authScheme,'Bearer');
-  assert.equal(m.capabilities.billingGroup,'特惠视频生成');
+  assert.equal(m.capabilities.billingGroup,'discount_video_generation');
   assert.deepEqual(m.capabilities.durations,Array.from({length:15},(_,i)=>i+1));
   assert.deepEqual(m.capabilities.resolutions,['768p']);assert.ok(m.capabilities.aspectRatios.includes('adaptive'));
 });
