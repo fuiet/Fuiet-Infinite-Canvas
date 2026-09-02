@@ -1,0 +1,44 @@
+name: Patch stale XOGPU family
+on:
+  push:
+    paths:
+      - 'scripts/patch-stale-xogpu-family.py'
+      - '.github/workflows/patch-stale-xogpu-family.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply patch
+        run: python scripts/patch-stale-xogpu-family.py
+      - name: Syntax check
+        working-directory: _read_123_zip_20260821_180410
+        run: npm run check
+      - name: Focused provider routing tests
+        working-directory: _read_123_zip_20260821_180410
+        run: |
+          node --test tests/stale-xogpu-family-heal.test.mjs
+          node --test tests/xogpu-minimax-h3.test.mjs
+      - name: Commit repair
+        run: |
+          git config user.name 'Codex'
+          git config user.email 'codex@openai.local'
+          git add \
+            _read_123_zip_20260821_180410/provider-adapter-contract.js \
+            _read_123_zip_20260821_180410/index.html \
+            _read_123_zip_20260821_180410/tests/stale-xogpu-family-heal.test.mjs
+          git diff --cached --quiet || git commit -m 'Heal stale XOGPU protocol on changed providers'
+          git push
+      - name: Remove temporary patch files
+        if: success()
+        run: |
+          git rm -f scripts/patch-stale-xogpu-family.py .github/workflows/patch-stale-xogpu-family.yml
+          git commit -m 'chore: remove temporary stale XOGPU patch'
+          git push
