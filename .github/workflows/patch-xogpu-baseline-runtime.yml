@@ -4,6 +4,7 @@ on:
     paths:
       - 'scripts/patch-xogpu-baseline-runtime.py'
       - '.github/workflows/patch-xogpu-baseline-runtime.yml'
+      - '_read_123_zip_20260821_180410/tests/xogpu-minimax-h3.test.mjs'
 permissions:
   contents: write
 jobs:
@@ -39,9 +40,7 @@ jobs:
           git diff --cached --quiet || git commit -m 'Restore XOGPU baseline runtime and add safe diagnostics'
           git push
       - name: Remove temporary patch files
-        if: always()
         run: |
-          git pull --rebase
           git rm -f scripts/patch-xogpu-baseline-runtime.py .github/workflows/patch-xogpu-baseline-runtime.yml
-          git commit -m 'chore: remove temporary XOGPU baseline patch' || true
-          git push || true
+          git commit -m 'chore: remove temporary XOGPU baseline patch'
+          git push
