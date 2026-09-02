@@ -169,8 +169,8 @@ app = replace_once(
 
 app = replace_once(
     app,
-    "optionList(caps.aspectRatios,n.aspectRatio||caps.aspectRatios?.[0])",
-    "optionList(studioRatios,n.aspectRatio||studioRatios[0])",
+    "<select id=\"videoStudioRatio\">${optionList(caps.aspectRatios,n.aspectRatio||caps.aspectRatios?.[0])}</select>",
+    "<select id=\"videoStudioRatio\">${optionList(studioRatios,n.aspectRatio||studioRatios[0])}</select>",
     'use fixed ratios in video studio',
 )
 
