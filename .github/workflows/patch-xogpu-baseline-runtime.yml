@@ -1,0 +1,47 @@
+name: Patch XOGPU baseline runtime
+on:
+  push:
+    paths:
+      - 'scripts/patch-xogpu-baseline-runtime.py'
+      - '.github/workflows/patch-xogpu-baseline-runtime.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply patch
+        run: python scripts/patch-xogpu-baseline-runtime.py
+      - name: Syntax check
+        working-directory: _read_123_zip_20260821_180410
+        run: npm run check
+      - name: Focused XOGPU tests
+        working-directory: _read_123_zip_20260821_180410
+        run: |
+          node --test tests/xogpu-minimax-h3.test.mjs
+          node --test tests/xogpu-baseline-runtime.test.mjs
+      - name: Commit repair
+        run: |
+          git config user.name 'Codex'
+          git config user.email 'codex@openai.local'
+          git add \
+            _read_123_zip_20260821_180410/provider-adapter-contract.js \
+            _read_123_zip_20260821_180410/browser-runtime-preview.js \
+            _read_123_zip_20260821_180410/browser-runtime.js \
+            _read_123_zip_20260821_180410/index.html \
+            _read_123_zip_20260821_180410/tests/xogpu-baseline-runtime.test.mjs
+          git diff --cached --quiet || git commit -m 'Restore XOGPU baseline runtime and add safe diagnostics'
+          git push
+      - name: Remove temporary patch files
+        if: always()
+        run: |
+          git pull --rebase
+          git rm -f scripts/patch-xogpu-baseline-runtime.py .github/workflows/patch-xogpu-baseline-runtime.yml
+          git commit -m 'chore: remove temporary XOGPU baseline patch' || true
+          git push || true
