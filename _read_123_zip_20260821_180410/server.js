@@ -1113,7 +1113,7 @@ async function executeStandardVideoAsync(task,provider,model,payload){
     for(const candidate of createPaths){
       createPath=candidate;taskLog(task,`标准异步视频 [${config.protocolFamily||'generic-video'}]：${createMethod} ${createPath}`);
       try{created=await fetchJson(joinUrl(provider.baseUrl,createPath),{method:createMethod,headers:providerHeaders(provider),body:['GET','HEAD'].includes(createMethod)?undefined:JSON.stringify(body),timeoutMs:Math.min(config.timeoutMs,120000),provider});break}
-      catch(error){lastCreateError=error;const retryableCreateError=isXogpuVideoConfig(config)?Number(error?.status)===404:[400,404,405,415,422].includes(Number(error?.status));if(!retryableCreateError)throw error}
+      catch(error){lastCreateError=error;if(![400,404,405,415,422].includes(Number(error?.status)))throw error}
     }
     if(!created)throw lastCreateError||new Error('没有可用的视频创建接口');
     taskId=standardVideoTaskId(created,config);
