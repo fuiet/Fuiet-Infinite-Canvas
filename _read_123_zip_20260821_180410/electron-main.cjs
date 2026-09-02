@@ -5,6 +5,7 @@ const net = require('net');
 const http = require('http');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
+const { installDesktopReferenceMediaTransport } = require('./desktop-reference-media-transport.cjs');
 
 const execFileAsync = promisify(execFile);
 const APP_NAME = 'Fuiet Infinite Canvas';
@@ -100,8 +101,16 @@ async function startLocalServer() {
   process.env.PORT = String(serverPort);
   process.env.CANVAS_DATA_DIR = path.join(userDataRoot, 'data');
   process.env.CANVAS_DESKTOP = '1';
+  process.env.CANVAS_RUNTIME = 'local';
   const bundledTools = configureBundledMediaTools();
   await verifyBundledMediaTools(bundledTools);
+
+  // Install the desktop reference-media transport before server.js captures/uses
+  // the global fetch implementation. This keeps local /media and data URLs from
+  // leaking into provider requests and lets each model choose data-url, upload,
+  // or public-url transport according to its own capability contract.
+  installDesktopReferenceMediaTransport({ dataDir: process.env.CANVAS_DATA_DIR });
+
   require('./server.js');
   serverStarted = true;
   if (!(await waitForServer(serverPort))) throw new Error('本地服务启动失败');
