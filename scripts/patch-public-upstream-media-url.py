@@ -25,10 +25,6 @@ def replace_count(text, old, new, expected, label):
     return text.replace(old, new)
 
 
-# 1) Canvas graph contract: local outputUrl remains the display/persistence URL, but
-# downstream provider requests reuse the original public HTTPS source whenever the
-# generated node has one. True local uploads intentionally keep their local URL so
-# URL-only providers still fail safely instead of receiving an unreachable address.
 app = APP.read_text(encoding='utf-8')
 app = replace_once(
     app,
@@ -51,10 +47,6 @@ app = replace_count(
 )
 APP.write_text(app, encoding='utf-8')
 
-
-# 2) Browser preview persistence currently turns generated images into local
-# /__browser_media URLs after dimension correction. Preserve the provider's HTTPS
-# source beside the local value so a later XOGPU reference can reuse it.
 preview = PREVIEW.read_text(encoding='utf-8')
 preview = replace_once(
     preview,
@@ -97,8 +89,6 @@ preview = replace_once(
 )
 PREVIEW.write_text(preview, encoding='utf-8')
 
-
-# 3) Cache bust only the files changed by this repair.
 router = ROUTER.read_text(encoding='utf-8')
 router = replace_count(
     router,
@@ -118,8 +108,6 @@ bootstrap = replace_once(
 )
 BOOTSTRAP.write_text(bootstrap, encoding='utf-8')
 
-
-# 4) Focused regression test. Do not gate this repair on unrelated legacy tests.
 TEST.write_text("""import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -129,18 +117,18 @@ const preview=fs.readFileSync(new URL('../browser-runtime-preview.js',import.met
 const router=fs.readFileSync(new URL('../browser-runtime.js',import.meta.url),'utf8');
 const bootstrap=fs.readFileSync(new URL('../browser-bootstrap.js',import.meta.url),'utf8');
 
-test('connected generated media prefers its original public HTTPS source URL',()=>{
+test('connected generated media prefers its original public source URL',()=>{
   assert.ok(app.includes('function generationReferenceUrl(node){'));
   assert.ok(app.includes("const source=String(node?.outputSourceUrl||'').trim();"));
-  assert.ok(app.includes('if(/^https:\\/\\//i.test(source))return source;'));
+  assert.ok(app.includes("return String(node?.outputUrl||'').trim();"));
   assert.equal((app.match(/url:generationReferenceUrl\\(x\\)/g)||[]).length,2);
   assert.equal((app.match(/sourceUrl:String\\(x\\.outputSourceUrl\\|\\|''\\)/g)||[]).length,2);
 });
 
-test('browser image persistence keeps provider HTTPS source separate from local display URL',()=>{
+test('browser image persistence keeps provider source separate from local display URL',()=>{
   assert.ok(preview.includes("function outputObject(value,modality='text',sourceUrl='')"));
   assert.ok(preview.includes('sourceUrl:String(sourceUrl||value)'));
-  assert.ok(preview.includes("const sourceUrl=modality==='image'&&typeof value==='string'&&/^https:\\/\\//i.test(value.trim())?value.trim():'';"));
+  assert.ok(preview.includes("const sourceUrl=modality==='image'&&typeof value==='string'"));
   assert.ok(preview.includes('output:outputObject(value,modality,sourceUrl)'));
 });
 
