@@ -19,7 +19,7 @@ test('XOGPU provider injects documented MiniMax-H3 special-group model and Beare
 test('XOGPU MiniMax-H3 uses exact create poll and content endpoints',()=>{
   const model=A.finalizeProvider({...provider,models:[{id:'MiniMax-H3',name:'MiniMax H3',modality:'video',modalitySource:'provider'}]}).models.find(x=>x.id==='MiniMax-H3'),route=V.resolve(provider,model,'text-to-video');
   assert.equal(route.profile,'xogpu:minimax-h3');assert.equal(route.createPath,'/v1/videos');assert.equal(route.pollPath,'/v1/videos/{{taskId}}');assert.equal(route.contentPath,'/v1/videos/{{taskId}}/content');
-  assert.deepEqual(route.pollPathCandidates,['/v1/videos/{{taskId}}','/v1/tasks/{{taskId}}']);
+  assert.deepEqual(route.pollPathCandidates,['/v1/videos/{{taskId}}','/v1/videos/generations/{{taskId}}','/v1/video/generations/{{taskId}}','/v1/tasks/{{taskId}}']);
   assert.equal(route.strictPollPath,true);assert.equal(route.taskIdPath,'id');assert.equal(route.statusPath,'status');assert.equal(route.progressPath,'progress');assert.equal(route.referenceTransport,'url');assert.equal(route.pollIntervalMs,15000);
   assert.equal(C.extractTaskId({id:'task_123',task_id:'task_123'},route),'task_123');
 });

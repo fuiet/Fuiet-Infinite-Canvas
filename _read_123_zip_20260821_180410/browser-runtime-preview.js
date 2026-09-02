@@ -430,7 +430,7 @@ async function buildStandardVideoForm(model,task,refs){const p=VideoParams?.norm
 function autoVideoRoute(model,route){return route?.adapterKey==='standard-video-async-v1'&&(model?.routeOrigin==='auto'||model?.adapterResolved?.auto===true||!String(model?.createPath||'').trim())}
 const VIDEO_AUTO_RETRY_STATUSES=new Set([400,404,405,415,422]);
 function alternateVideoCreatePaths(route,model){
-  const first=String(route.createPath||'/v1/videos'),profile=Array.isArray(route.createCandidates)?route.createCandidates:[];if(!autoVideoRoute(model,route))return[first];
+  const first=String(route.createPath||'/v1/videos'),profile=Array.isArray(route.createCandidates)?route.createCandidates:[];if(isXogpuVideoRoute(route))return[...new Set([first,...profile])];if(!autoVideoRoute(model,route))return[first];
   return[...new Set([first,...profile,'/v1/video/generations','/v1/videos','/v1/videos/generations','/v1/video/generation','/video/generations','/videos/generations','/api/v1/videos','/api/v1/video/generations'])];
 }
 function matchingPollPath(createPath,taskId,route){if(createPath==='/v1/video/generations'||createPath==='/api/v1/video/generations')return `${createPath}/${taskId}`;if(createPath==='/v1/videos/generations'||createPath==='/video/generations'||createPath==='/videos/generations')return `${createPath}/${taskId}`;return fillTemplate(route.pollPath||'/v1/videos/{{taskId}}',{taskId})}
@@ -602,7 +602,7 @@ async function executeTask(task){
           throw error;
         }
         if(Number(error?.status)===429&&modality==='video')recordProviderCreateRateLimit(provider,route,error?.retryAfterMs);
-        if(!autoVideoRoute(model,route)||!VIDEO_AUTO_RETRY_STATUSES.has(Number(error?.status)))throw error;
+        const retryMissingXogpuRoute=isXogpuVideoRoute(route)&&Number(error?.status)===404;if(!retryMissingXogpuRoute&&(!autoVideoRoute(model,route)||!VIDEO_AUTO_RETRY_STATUSES.has(Number(error?.status))))throw error;
       }
     }
     if(!created)throw lastCreateError||new Error('视频创建接口不可用');
