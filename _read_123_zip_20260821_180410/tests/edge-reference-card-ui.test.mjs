@@ -5,6 +5,7 @@ import fs from 'node:fs';
 const app=fs.readFileSync(new URL('../app.js',import.meta.url),'utf8');
 const css=fs.readFileSync(new URL('../styles/edge-reference-cards-v1.css',import.meta.url),'utf8');
 const bootstrap=fs.readFileSync(new URL('../browser-bootstrap.js',import.meta.url),'utf8');
+const portal=fs.readFileSync(new URL('../reference-popover-portal-v1.js',import.meta.url),'utf8');
 
 test('incoming edges remain real generation references',()=>{
   assert.match(app,/state\.edges\.filter\(e=>e\.target===nodeId\)[\s\S]*?addRef\(/);
@@ -29,14 +30,26 @@ test('every incoming edge becomes one visible reference chip',()=>{
   assert.doesNotMatch(helper,/refs\.slice\(/);
 });
 
-test('generator reference chips support text, media and upward hover detail',()=>{
+test('generator reference chips support text, media and unclipped portal hover detail',()=>{
   assert.match(app,/source\?\.generatedText\|\|source\?\.text\|\|source\?\.prompt/);
   assert.match(app,/source\?\.outputUrl/);
   assert.match(app,/class="generator-reference-popover" role="tooltip"/);
   assert.match(css,/\.generator-reference-strip\{/);
-  assert.match(css,/\.generator-reference-chip:hover \.generator-reference-popover/);
-  assert.match(css,/bottom:calc\(100% \+ 10px\)/);
+  assert.match(css,/\.generator-reference-chip>\.generator-reference-popover\{/);
+  assert.match(css,/display:none!important/);
+  assert.match(css,/\.generator-reference-popover-portal\{/);
+  assert.match(css,/position:fixed!important/);
+  assert.match(css,/max-width:min\(340px,calc\(100vw - 24px\)\)/);
+  assert.match(css,/max-height:min\(420px,calc\(100vh - 24px\)\)/);
+  assert.match(css,/overflow:auto/);
   assert.doesNotMatch(css,/\.node-reference-stack/);
+
+  assert.match(portal,/document\.body\.appendChild\(portal\)/);
+  assert.match(portal,/portal\.style\.position='fixed'/);
+  assert.match(portal,/activeChip\.getBoundingClientRect\(\)/);
+  assert.match(portal,/left=clamp\(left,VIEWPORT_MARGIN,viewportWidth-width-VIEWPORT_MARGIN\)/);
+  assert.match(portal,/top=clamp\(top,VIEWPORT_MARGIN,viewportHeight-height-VIEWPORT_MARGIN\)/);
+  assert.match(portal,/frame=requestAnimationFrame\(positionPortal\)/);
 });
 
 test('fixed generator shells expand to contain connected-reference rows',()=>{
@@ -48,4 +61,5 @@ test('fixed generator shells expand to contain connected-reference rows',()=>{
 test('generator reference assets are explicitly cache busted',()=>{
   assert.match(bootstrap,/edge-reference-cards-v1\.css\?v=\$\{v\}&ui=generator-reference-strip-1/);
   assert.match(bootstrap,/app\.js\?v=\$\{v\}&fix=generator-input-focus-1&ui=text-result-editor-1&wheel=text-editor-1&refs=generator-reference-strip-1/);
+  assert.match(bootstrap,/reference-popover-portal-v1\.js\?v=\$\{v\}/);
 });
