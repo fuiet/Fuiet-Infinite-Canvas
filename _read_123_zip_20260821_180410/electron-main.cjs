@@ -5,6 +5,7 @@ const net = require('net');
 const http = require('http');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
+const { installDesktopVideoProtocolBridge } = require('./desktop-video-protocol-bridge.cjs');
 const { installDesktopReferenceMediaTransport } = require('./desktop-reference-media-transport.cjs');
 
 const execFileAsync = promisify(execFile);
@@ -105,10 +106,11 @@ async function startLocalServer() {
   const bundledTools = configureBundledMediaTools();
   await verifyBundledMediaTools(bundledTools);
 
-  // Install the desktop reference-media transport before server.js captures/uses
-  // the global fetch implementation. This keeps local /media and data URLs from
-  // leaking into provider requests and lets each model choose data-url, upload,
-  // or public-url transport according to its own capability contract.
+  // Desktop runtime deliberately separates protocol request-shape mapping from
+  // local-reference portability. The protocol bridge allows local references to
+  // reach the transport layer; the transport layer then converts/uploads them
+  // before any provider HTTP request leaves this machine.
+  installDesktopVideoProtocolBridge();
   installDesktopReferenceMediaTransport({ dataDir: process.env.CANVAS_DATA_DIR });
 
   require('./server.js');
