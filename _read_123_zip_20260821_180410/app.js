@@ -1171,16 +1171,17 @@
     const url=String(source?.outputUrl||'').trim(),type=source?.type||'';
     if(url&&type==='image')return`<img src="${escapeAttr(url)}" alt="${escapeAttr(source.title||'参考图片')}" loading="lazy">`;
     if(url&&type==='video')return`<video src="${escapeAttr(url)}" muted playsinline preload="metadata" ${detail?'controls':''}></video>`;
-    if(url&&type==='audio')return detail?`<audio src="${escapeAttr(url)}" controls preload="none"></audio>`:`<span class="node-reference-fallback">音</span>`;
+    if(url&&type==='audio')return detail?`<audio src="${escapeAttr(url)}" controls preload="none"></audio>`:`<span class="generator-reference-fallback">音</span>`;
+    if(type==='text'&&!detail)return`<span class="generator-reference-text-icon" aria-hidden="true"><i></i><i></i><i></i></span>`;
     const glyph=type==='text'?'文':type==='image'?'图':type==='video'?'视':type==='audio'?'音':'参';
-    return`<span class="node-reference-fallback">${glyph}</span>`;
+    return`<span class="generator-reference-fallback">${glyph}</span>`;
   }
-  function nodeIncomingReferenceHtml(target){
+  function generatorIncomingReferenceHtml(target){
     const refs=incomingEdgeReferences(target);
     if(!refs.length)return'';
-    return`<div class="node-reference-stack" data-node-reference-stack aria-label="已连接参考">${refs.map(({source,role})=>{
-      const title=source.title||labelForType(source.type),text=nodeReferenceCurrentText(source),detailText=text?`<p>${escapeHtml(text.slice(0,600))}</p>`:'';
-      return`<div class="node-reference-chip" data-reference-source="${escapeAttr(source.id)}" tabindex="0" aria-label="参考：${escapeAttr(title)}"><div class="node-reference-thumb">${nodeReferenceMediaHtml(source,false)}</div><div class="node-reference-popover" role="tooltip"><div class="node-reference-preview">${nodeReferenceMediaHtml(source,true)}</div><div class="node-reference-detail"><b>${escapeHtml(title)}</b><small>${escapeHtml(labelForType(source.type))} · ${escapeHtml(edgeRoleLabel(role||'reference'))}</small>${detailText}</div></div></div>`;
+    return`<div class="generator-reference-strip" data-generator-reference-strip aria-label="上游节点参考">${refs.map(({source,role},index)=>{
+      const title=source.title||labelForType(source.type),text=nodeReferenceCurrentText(source),detailText=text?`<p>${escapeHtml(text.slice(0,900))}</p>`:'';
+      return`<div class="generator-reference-chip" data-reference-source="${escapeAttr(source.id)}" data-reference-order="${index+1}" tabindex="0" aria-label="参考 ${index+1}：${escapeAttr(title)}"><span class="generator-reference-index">${index+1}</span><div class="generator-reference-thumb">${nodeReferenceMediaHtml(source,false)}</div><div class="generator-reference-popover" role="tooltip"><div class="generator-reference-preview">${nodeReferenceMediaHtml(source,true)}</div><div class="generator-reference-detail"><b>${escapeHtml(title)}</b><small>${escapeHtml(labelForType(source.type))} · ${escapeHtml(edgeRoleLabel(role||'reference'))}</small>${detailText}</div></div></div>`;
     }).join('')}</div>`;
   }
   function renderNode(n){
@@ -1260,10 +1261,8 @@
     const footerHtml=contentState==='empty'&&(footerLabel||footerStatus)?`<div class="node-footer"><span>${footerLabel}</span><span style="margin-left:auto">${footerStatus}</span></div>`:'';
     const resizeHtml=contentState==='result'&&n.type!=='video'?`<div class="node-resize-handle ui-v23-resize-handle" data-node-resize="${n.id}" title="调整大小" aria-label="调整节点大小"></div>`:'';
     const resultMetaHtml=mediaResult?'<span class="ui-v23-result-meta" data-node-result-meta hidden></span>':'';
-    const incomingReferenceHtml=nodeIncomingReferenceHtml(n);if(incomingReferenceHtml)el.dataset.hasReferences='1';
     el.innerHTML = `
       <div class="node-header"><div class="node-header-left"><span class="node-type-icon">${uiIcon(nodeTypeIconName(n.type))}</span><span class="node-title-stack"><b>${escapeHtml(nodeTitleBase(n))}</b><small>${nodeSequenceNumber(n.id)}</small></span></div><div class="node-header-right">${n.toolParams?.shotId?`<button class="node-shot-chip" data-shot-back="${n.id}">Shot ${scriptShotForProductionNode(n)?.no||''}</button>`:''}<div class="node-guard-badges">${n.locked?`<i title="位置已锁定">${uiIcon('lock')}</i>`:''}${n.frozen?`<i title="结果已冻结">${uiIcon('freeze')}</i>`:''}${Number(n.fallbackAttempt||0)>0?`<i title="本次使用备用模型">${uiIcon('fallback')}</i>`:''}</div>${showHeaderStatus?`<span class="node-run-status ${taskState}">${headerStatusLabel}${taskState==='running'&&hasRealProgress?` ${Math.round(rawProgress)}%`:''}</span>`:''}${resultMetaHtml}<button class="node-menu-btn" aria-label="更多">${uiIcon('dotMenu')}</button></div></div>
-      ${incomingReferenceHtml}
       <div class="node-body">${body}</div>
       ${nodeInlineCandidateHtml(n)}
       ${versionNav}
@@ -1892,14 +1891,15 @@
   }
 
   function positionGeneratorBelowNode(n,el,desiredWidth){
-    const gap=12,edge=16,dockReserve=84,r=el.getBoundingClientRect(),isText=n?.type==='text',isImage=n?.type==='image',isVideo=n?.type==='video',isAudio=n?.type==='audio';
+    const gap=12,edge=16,dockReserve=84,r=el.getBoundingClientRect(),isText=n?.type==='text',isImage=n?.type==='image',isVideo=n?.type==='video',isAudio=n?.type==='audio',incomingRefCount=incomingEdgeReferences(n).length;
     generator.dataset.nodeType=n?.type||'';
     generator.classList.toggle('text-generator',isText);
     generator.classList.toggle('image-generator',isImage);
     generator.classList.toggle('video-generator',isVideo);
     generator.classList.toggle('audio-generator',isAudio);
     if(isText||isImage||isVideo||isAudio){
-      const width=isImage||isVideo?820:isAudio?660:594,height=isImage?246:isVideo?258:isAudio?210:226,bottomLimit=window.innerHeight-dockReserve-edge;
+      // Baseline generator sizing contract: height=isImage?246:isVideo?258:isAudio?210:226; connected references add rows on top of this baseline.
+      const width=isImage||isVideo?820:isAudio?660:594,baseHeight=isImage?246:isVideo?258:isAudio?210:226,refsPerRow=isImage||isVideo?13:isAudio?10:8,referenceRows=incomingRefCount?Math.ceil(incomingRefCount/refsPerRow):0,height=baseHeight+Math.min(3,referenceRows)*52,bottomLimit=window.innerHeight-dockReserve-edge;
       generator.style.width=width+'px';
       generator.style.minWidth=width+'px';
       generator.style.maxWidth=width+'px';
@@ -1950,6 +1950,7 @@
     const el=$(`.node[data-id="${n.id}"]`);if(!el){generator.classList.add('hidden');return}
     const r=el.getBoundingClientRect();
     const desiredWidth=Math.min(660,window.innerWidth-64);
+    const incomingReferenceHtml=generatorIncomingReferenceHtml(n);
 
     if(n.type==='script'){
       const textModels=availableModels('text');
@@ -1959,6 +1960,7 @@
       const mode=n.scriptMode||'breakdown';
       const placeholder=mode==='character'?'连接角色参考图，并描述你想发生的剧情，为你生成分镜脚本':'描述剧情片段、故事，为你生成分镜脚本';
       generator.innerHTML=`<div class="lib-gen-main script-detail-main">
+        ${incomingReferenceHtml}
         <div class="script-detail-mode"><span>${mode==='character'?'角色生成分镜脚本':'脚本生成分镜脚本'}</span><button id="openFullScriptDetail">打开完整脚本</button></div>
         <div class="prompt-box libtv-prompt script-prompt-box"><textarea id="scriptDetailPrompt" placeholder="${placeholder}">${escapeHtml(n.sourceText||'')}</textarea><button class="generate-btn" id="scriptGenerateBtn" ${model?'':'disabled'}>${uiIcon('next')}</button></div>
         <div class="lib-gen-controls">
@@ -1994,6 +1996,7 @@
       generator.dataset.imageCapabilityManaged='1';generator.dataset.imageRatios=JSON.stringify(ratios);generator.dataset.imageResolutions=JSON.stringify(imageResolutions);generator.dataset.imageQualities=JSON.stringify(imageQualities);generator.dataset.imageQuality=n.imageQuality||imageQualities[0];generator.dataset.imageCapabilityFamily=imageCaps?.family||'';generator.dataset.imageCapabilitySource=imageCaps?.source||'';
       generator.innerHTML=`<div class="lib-gen-main image-generator-main">
         <div class="image-gen-top">${slot('style_reference','风格','◇')}${slot('character_reference','标记','⌾')}${slot('image_reference','聚焦','◎')}<button type="button" class="image-gen-expand" id="imageGenExpand" title="打开图像工作台">↗</button></div>
+        ${incomingReferenceHtml}
         <div class="prompt-box image-prompt-box"><textarea id="promptInput" placeholder="描述你想要生成的画面内容，按 / 呼出指令，@引用素材" ${frozen?'disabled':''}>${escapeHtml(n.prompt||'')}</textarea></div>
         <div class="image-gen-controls">
           <button id="modelPickerBtn" class="model-pill ${noModel?'needs-model':''}"><span class="model-dot"></span><b>${escapeHtml(modelLabel)}</b><i>${uiIcon('chevronDown')}</i></button>
@@ -2033,6 +2036,7 @@
           <div class="video-gen-spacer"></div>
           <span class="video-mode-label">${escapeHtml(videoModeLabel(n.videoMode||modes[0]?.key))}</span>
         </div>
+        ${incomingReferenceHtml}
         <div class="prompt-box video-prompt-box"><textarea id="promptInput" placeholder="描述动作、机位、运镜、节奏、环境和声音，按 / 呼出指令，@引用素材" ${frozen?'disabled':''}>${escapeHtml(n.prompt||'')}</textarea></div>
         <div class="video-gen-controls">
           <button id="modelPickerBtn" class="model-pill ${noModel?'needs-model':''}"><span class="model-dot"></span><b>${escapeHtml(modelLabel)}</b><i>${uiIcon('chevronDown')}</i></button>
@@ -2065,6 +2069,7 @@
     if(n.type==='audio'){
       generator.innerHTML=`<div class="lib-gen-main audio-generator-main">
         <div class="audio-gen-head"><span>音频生成</span><button type="button" id="audioReferenceBtn">${uiIcon('plus')}<span>参考${refs.length?` ${refs.length}`:''}</span></button><div class="audio-gen-spacer"></div></div>
+        ${incomingReferenceHtml}
         <div class="prompt-box audio-prompt-box"><textarea id="promptInput" placeholder="描述音乐 / 声音 / 旁白内容、情绪、节奏、风格与声音质感，按 / 呼出指令，@引用素材" ${frozen?'disabled':''}>${escapeHtml(n.prompt||'')}</textarea></div>
         <div class="audio-gen-controls"><button id="modelPickerBtn" class="model-pill ${noModel?'needs-model':''}"><span class="model-dot"></span><b>${escapeHtml(modelLabel)}</b><i>${uiIcon('chevronDown')}</i></button><button type="button" id="audioContextBtn" class="audio-gen-action">${uiIcon('context')}<span>Context</span></button><div class="audio-gen-spacer"></div>${costBadgeHtml(n)}<button type="button" class="audio-generate-btn" id="generateBtn" ${noModel||frozen?'disabled':''} title="生成">${uiIcon('next')}</button></div>
         ${noModel?`<button class="inline-setup-model" id="inlineSetupModel">还没有音频模型，点击添加</button>`:''}
@@ -2082,6 +2087,7 @@
     const textModelLabel=`${modelLabel} ▼`;
     generator.innerHTML=`
       <div class="lib-gen-main ${n.type==='text'?'text-generator-main':''}">
+        ${incomingReferenceHtml}
         <div class="prompt-box libtv-prompt"><textarea id="promptInput" placeholder="${n.type==='text'?'写下你想讲的故事、场景或角色设定。例如：一个来自未来的机器人，在城市屋顶看星星。':'描述你想生成的内容，输入 @ 引用画布素材…'}" ${frozen?'disabled':''}>${escapeHtml(n.prompt||'')}</textarea><button class="generate-btn" id="generateBtn" ${noModel||frozen?'disabled':''}>${uiIcon('next')}</button></div>${frozen?'<div class="frozen-generator-note">'+uiIcon('freeze')+'<span>当前节点结果已冻结。工作流会复用这个结果，不会再次扣费生成。</span></div>':''}
         ${hints.length?`<div class="autolink-bar smart"><span>AutoLink</span>${hints.map((h,i)=>`<button data-autolink="${i}" title="${escapeAttr((h.reason||'')+' · '+edgeRoleLabel(h.role||'reference'))}">@${escapeHtml(h.title)}<i>${escapeHtml(h.source||edgeRoleLabel(h.role||'reference'))}</i></button>`).join('')}<small>Tab 确认 · Shift+Tab 全部</small></div>`:''}
         ${semanticWarningHtml(n)}
