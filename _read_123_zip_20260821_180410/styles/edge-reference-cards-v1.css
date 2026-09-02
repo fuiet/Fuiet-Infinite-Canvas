@@ -65,9 +65,28 @@
   transition:opacity .12s ease,transform .12s ease,visibility .12s;
   pointer-events:none;
 }
-.generator-reference-chip:hover .generator-reference-popover,
-.generator-reference-chip:focus-within .generator-reference-popover{
-  opacity:1;visibility:visible;transform:translateY(0);pointer-events:auto;
+/* The source popover stays inside the chip only as a template. The visible
+   copy is rendered at document.body level by reference-popover-portal-v1.js. */
+.generator-reference-chip>.generator-reference-popover{
+  display:none!important;
+}
+.generator-reference-popover-portal{
+  display:block!important;
+  position:fixed!important;
+  right:auto!important;
+  bottom:auto!important;
+  width:250px;
+  max-width:min(340px,calc(100vw - 24px));
+  max-height:min(420px,calc(100vh - 24px));
+  overflow:auto;
+  z-index:2147483000!important;
+  opacity:1!important;
+  visibility:visible!important;
+  transform:none!important;
+  transition:none!important;
+  pointer-events:none!important;
+  box-sizing:border-box;
+  overscroll-behavior:contain;
 }
 .generator-reference-preview{
   width:100%;max-height:220px;border-radius:8px;overflow:hidden;
@@ -83,5 +102,5 @@
 .generator-reference-detail small{font-size:10px;color:rgba(255,255,255,.5);}
 .generator-reference-detail p{
   margin:4px 0 0;max-height:118px;overflow:auto;font-size:11px;line-height:1.55;
-  color:rgba(255,255,255,.74);white-space:pre-wrap;word-break:break-word;
+  color:rgba(255,255,255,.74);white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;
 }
