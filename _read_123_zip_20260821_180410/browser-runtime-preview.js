@@ -593,6 +593,13 @@ async function executeTask(task){
         usedCreatePath=createPath;break;
       }catch(error){
         lastCreateError=error;
+        if(modality==='video'&&isXogpuVideoRoute(route)){
+          const safeUrl=value=>{try{const u=new URL(String(value||''));return u.origin+u.pathname}catch{return String(value||'')}};
+          const requestBody=await videoJsonBody().catch(()=>({}));
+          const original=runtimeErrorText(error)||String(error?.message||error||'XOGPU 请求失败');
+          error.message=`${original} [XOGPU URL ${safeUrl(createUrl)}；Base ${safeUrl(provider.baseUrl)}；model ${String(requestBody?.model||model?.id||'')}；group ${String(requestBody?.group||'')}]`;
+          updateTask(task.id,{videoProtocolDiagnostics:{...(findTask(task.id)?.videoProtocolDiagnostics||{}),createPath,createUrl:safeUrl(createUrl),baseUrl:safeUrl(provider.baseUrl),requestModel:String(requestBody?.model||model?.id||''),requestGroup:String(requestBody?.group||'')}});
+        }
         if(modality==='video'&&isXogpuVideoRoute(route)&&isXogpuNotImplementedError(error,route)){
           const original=runtimeErrorText(error)||'HTTP 501 not_implemented';
           error.noRetry=true;

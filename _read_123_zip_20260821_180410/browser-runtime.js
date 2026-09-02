@@ -34,6 +34,6 @@ if(localDesktopHost){
 // Preserve the full IndexedDB browser-preview implementation in a separate file.
 // document.write is intentional here: this router itself is parser-blocking. The
 // refreshed image mapper must execute before preview captures CanvasModelImageCapabilities.
-const previewSrc=new URL('./browser-runtime-preview.js?v=20260902-xogpu-official-contract-1',base).href;
+const previewSrc=new URL('./browser-runtime-preview.js?v=20260902-xogpu-baseline-runtime-1',base).href;
 document.write(scriptTag(imageCapsSrc)+scriptTag(previewSrc));
 })();
