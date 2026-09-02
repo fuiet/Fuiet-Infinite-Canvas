@@ -233,11 +233,11 @@ async function fetchProviderResource(provider,url,init={}){
   return providerFetch(url,{...init,headers:stripCredentialHeaders(init.headers||{})});
 }
 async function readResponse(res){const ct=String(res.headers.get('content-type')||'').toLowerCase();if(ct.includes('application/json')||ct.includes('+json'))return{kind:'json',value:await res.json()};if(ct.startsWith('text/'))return{kind:'text',value:await res.text()};const blob=await res.blob(),stored=await storeMediaBlob(blob,{name:'provider-output'});return{kind:'blob',value:stored.url,blob,type:ct,mediaId:stored.id,persistent:true}}
-function outputObject(value,modality='text'){
+function outputObject(value,modality='text',sourceUrl=''){
   if(value==null)return null;
   if(typeof value==='object'&&value.type&&('value'in value))return value;
   if(modality==='text')return{type:'text',value:String(value),text:String(value)};
-  return{type:'url',value:String(value),url:String(value),sourceUrl:String(value)};
+  return{type:'url',value:String(value),url:String(value),sourceUrl:String(sourceUrl||value)};
 }
 function validMediaOutput(value){const text=String(value||'').trim();return /^(https?:\/\/|data:|blob:|\/\/|\/media\/|\/__browser_media\/)/i.test(text)}
 async function normalizeGeneratedOutput(value,modality,provider){
@@ -616,12 +616,13 @@ async function executeTask(task){
       const raw=created.value,extracted=Core?.extractOutput?Core.extractOutput(raw,route,modality):undefined;
       let value=extracted!==undefined?extracted:(modality==='text'?(raw?.choices?.[0]?.message?.content??raw?.text??raw?.content??JSON.stringify(raw)):raw?.url??raw?.data?.url);
       value=await normalizeGeneratedOutput(value,modality,provider);
+      const sourceUrl=modality==='image'&&typeof value==='string'&&/^https:\/\//i.test(value.trim())?value.trim():'';
       if(modality==='video')value=await materializeGeneratedVideoOutput(value,provider);
       if(modality==='image'&&!validMediaOutput(value))throw new Error('上游已返回成功响应，但未识别到图片结果字段');
       if(modality==='video'&&!validMediaOutput(value))throw new Error('上游已返回成功响应，但未识别到视频结果字段');
       let dimensionInfo=null;if(modality==='image'){dimensionInfo=await enforceGeneratedImageDimensions(value,provider,model,task.parameters||{});value=dimensionInfo.value}
       const upstreamSize=modality==='image'?imageResponseSize(raw):'';
-      return updateTask(task.id,{status:'succeeded',progress:100,output:outputObject(value,modality),...imageDimensionTaskPatch(dimensionInfo),...(upstreamSize?{upstreamSize}:{})});
+      return updateTask(task.id,{status:'succeeded',progress:100,output:outputObject(value,modality,sourceUrl),...imageDimensionTaskPatch(dimensionInfo),...(upstreamSize?{upstreamSize}:{})});
     }
   }
 
