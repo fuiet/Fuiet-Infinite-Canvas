@@ -12,8 +12,8 @@ test('shared nested mapper rewrites local media strings anywhere in a JSON body'
   assert.equal(out.keep,'https://cdn.example/x');
 });
 
-test('browser video JSON request portableizes local media outside task.references too',()=>{
-  const source=fs.readFileSync(new URL('../browser-runtime.js',import.meta.url),'utf8');
+test('browser preview video JSON request portableizes local media outside task.references too',()=>{
+  const source=fs.readFileSync(new URL('../browser-runtime-preview.js',import.meta.url),'utf8');
   assert.match(source,/function browserLocalMediaReference\(value\)/);
   assert.match(source,/async function portableizeVideoJsonBody\(body,route=\{\}\)/);
   assert.match(source,/browserLocalMediaReference\(value\)/);
@@ -21,16 +21,22 @@ test('browser video JSON request portableizes local media outside task.reference
   assert.match(source,/JSON\.stringify\(modality==='video'\?await videoJsonBody\(\):body\)/);
 });
 
-test('desktop video JSON request converts loopback media paths before upstream submission',()=>{
-  const source=fs.readFileSync(new URL('../server.js',import.meta.url),'utf8');
-  assert.match(source,/function localVideoMediaReference\(value\)/);
-  assert.match(source,/async function portableizeLocalVideoJsonBody\(body,config=\{\}\)/);
-  assert.match(source,/const body=await portableizeLocalVideoJsonBody\(rawBody,config\)/);
-  assert.match(source,/return 'data:'\+localMediaMime\(file\)\+';base64,'/);
+test('desktop runtime has a dedicated reference-media transport before provider submission',()=>{
+  const transport=fs.readFileSync(new URL('../desktop-reference-media-transport.cjs',import.meta.url),'utf8');
+  const electron=fs.readFileSync(new URL('../electron-main.cjs',import.meta.url),'utf8');
+  assert.match(transport,/function effectiveTransport\(provider = \{\}, model = \{\}\)/);
+  assert.match(transport,/function localMediaFileFromValue\(value, mediaDir\)/);
+  assert.match(transport,/async function uploadReference/);
+  assert.match(transport,/function createReferenceAwareFetch/);
+  assert.match(electron,/installDesktopReferenceMediaTransport/);
+  assert.ok(electron.indexOf('installDesktopReferenceMediaTransport')<electron.indexOf("require('./server.js')"));
 });
 
-test('explicit public-url or upload transport refuses unreachable local media instead of sending it',()=>{
-  const browser=fs.readFileSync(new URL('../browser-runtime.js',import.meta.url),'utf8');
-  const server=fs.readFileSync(new URL('../server.js',import.meta.url),'utf8');
-  for(const source of [browser,server]){assert.match(source,/transport==='url'/);assert.match(source,/transport==='upload'/)}
+test('explicit URL transport refuses unreachable local media instead of leaking it upstream',()=>{
+  const desktop=fs.readFileSync(new URL('../desktop-reference-media-transport.cjs',import.meta.url),'utf8');
+  const browser=fs.readFileSync(new URL('../browser-runtime-preview.js',import.meta.url),'utf8');
+  assert.match(desktop,/if \(transport === 'url'\)/);
+  assert.match(desktop,/要求公网 URL 参考素材/);
+  assert.match(browser,/transport==='url'/);
+  assert.match(browser,/transport==='upload'/);
 });
