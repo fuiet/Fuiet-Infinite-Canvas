@@ -623,7 +623,7 @@
           image.title='首帧参考';image.prompt='作为参考生视频的首帧或参考图，保持主体清晰、构图明确。';image.aspectRatio='16:9';
           const video=addNode('video',{x:center.x+420,y:center.y},true);
           video.title='全能参考生视频';video.prompt='使用首帧参考图和剧情描述生成完整视频，保持动作和镜头连续。';
-          video.videoMode='frame2video';
+          video.videoMode='omni_reference';
           state.edges.push(makeSemanticEdge(image.id,video.id,'asset','first_frame'));
           expandedNodeId=video.id;selectedId=video.id;state.selectedIds=[video.id];saveState();render();setTimeout(()=>openVideoStudio(video),0);return;
         }
@@ -634,7 +634,7 @@
           image.title='画面参考';image.prompt='与音频一起驱动视频生成的主体参考图。';
           const video=addNode('video',{x:center.x+430,y:center.y+70},true);
           video.title='音频生视频';video.prompt='根据音频节奏和参考图生成视频，保持主体和节奏统一。';
-          video.videoMode='audio2video';
+          video.videoMode='omni_reference';
           state.edges.push(makeSemanticEdge(audio.id,video.id,'asset','audio_reference'),makeSemanticEdge(image.id,video.id,'asset','first_frame'));
           expandedNodeId=video.id;selectedId=video.id;state.selectedIds=[video.id];saveState();render();setTimeout(()=>openVideoStudio(video),0);return;
         }
@@ -1816,57 +1816,64 @@
   }
   function modelCapabilitiesFor(type,p,m){return {...defaultCapabilities(type,m?.id,m?.name),...(m?.capabilities||{})}}
   function modelCapabilities(n){const p=providerById(n.providerId),m=modelForNode(n);return modelCapabilitiesFor(n.type,p,m)}
+  const VIDEO_GENERATION_MODES=Object.freeze([
+    Object.freeze({key:'text2video',label:'文生视频'}),
+    Object.freeze({key:'image2video',label:'图生视频'}),
+    Object.freeze({key:'frame2video',label:'首尾帧'}),
+    Object.freeze({key:'omni_reference',label:'全能参考'})
+  ]);
+  const VIDEO_ASPECT_RATIOS_BY_MODE=Object.freeze({
+    text2video:Object.freeze(['16:9','9:16','1:1','4:3','3:4','21:9']),
+    image2video:Object.freeze(['16:9','9:16','1:1','4:3','3:4','21:9']),
+    frame2video:Object.freeze(['16:9','9:16','1:1','4:3','3:4','21:9']),
+    omni_reference:Object.freeze(['16:9','9:16','1:1','4:3','3:4','21:9'])
+  });
   function normalizeVideoModeKey(value){
     const v=String(value||'').trim().toLowerCase();
     if(!v)return '';
     if(['text2video','text-video','text_video','文生视频','文生'].includes(v))return 'text2video';
     if(['image2video','image-video','image_video','图生视频','图生'].includes(v))return 'image2video';
-    if(['audio2video','audio-video','audio_video','音频生视频','音频生'].includes(v))return 'audio2video';
-    if(['frame2video','first_last','first-last','首帧 / 末帧','首帧末帧','首帧视频','末帧视频'].includes(v))return 'frame2video';
-    return v;
+    if(['frame2video','first_last','first-last','首帧 / 末帧','首帧末帧','首尾帧','首帧视频','末帧视频'].includes(v))return 'frame2video';
+    if(['omni_reference','omni-reference','omni','multimodal','multi-modal','全能参考','多模态','多模态视频','audio2video','audio-video','audio_video','音频生视频','音频生'].includes(v))return 'omni_reference';
+    return '';
   }
-  function videoModeOptions(caps={}){
-    const fromCaps=Array.isArray(caps.generationModes)?caps.generationModes.map(normalizeVideoModeKey).filter(Boolean):[];
-    const options=[];
-    const add=(key,label)=>{if(!options.some(x=>x.key===key))options.push({key,label})};
-    if(fromCaps.length){
-      for(const key of fromCaps){
-        if(key==='text2video')add(key,'文生视频');
-        else if(key==='image2video')add(key,'图生视频');
-        else if(key==='audio2video')add(key,'音频生视频');
-        else if(key==='frame2video')add(key,'首帧 / 末帧');
-        else add(key,key);
-      }
-      return options;
-    }
-    add('text2video','文生视频');
-    if(caps.supportsImageReference!==false)add('image2video','图生视频');
-    if(caps.supportsAudioReference||caps.supportsNativeAudio)add('audio2video','音频生视频');
-    if(caps.supportsFirstFrame||caps.supportsLastFrame)add('frame2video','首帧 / 末帧');
-    return options;
-  }
+  function videoModeOptions(){return VIDEO_GENERATION_MODES.map(item=>({...item}))}
   function videoModeLabel(mode){
-    const key=normalizeVideoModeKey(mode);
-    return ({text2video:'文生视频',image2video:'图生视频',audio2video:'音频生视频',frame2video:'首帧 / 末帧'})[key]||'文生视频';
+    const key=normalizeVideoModeKey(mode)||'text2video';
+    return VIDEO_GENERATION_MODES.find(item=>item.key===key)?.label||'文生视频';
+  }
+  function videoAspectRatiosForMode(mode){
+    const key=normalizeVideoModeKey(mode)||'text2video';
+    return [...(VIDEO_ASPECT_RATIOS_BY_MODE[key]||VIDEO_ASPECT_RATIOS_BY_MODE.text2video)];
+  }
+  function videoReferencesForMode(n,refs=[]){
+    const mode=normalizeVideoModeKey(n?.videoMode||'text2video')||'text2video',list=Array.isArray(refs)?refs.filter(Boolean):[];
+    if(mode==='text2video')return [];
+    if(mode==='image2video')return list.filter(ref=>String(ref?.type||'').toLowerCase()==='image');
+    if(mode==='frame2video')return list.filter(ref=>{
+      const role=String(ref?.role||'').toLowerCase();
+      return String(ref?.type||'').toLowerCase()==='image'&&(role==='first_frame'||role==='last_frame');
+    });
+    return list;
   }
   function syncVideoNodeCapabilities(n,caps){
     if(!n||n.type!=='video')return;
-    const modes=videoModeOptions(caps);
-    if(modes.length&&!modes.some(x=>x.key===normalizeVideoModeKey(n.videoMode)))n.videoMode=modes[0].key;
+    n.videoMode=normalizeVideoModeKey(n.videoMode)||'text2video';
     const durations=(caps.durations||[]).map(Number).filter(Number.isFinite);
     if(durations.length&&!durations.includes(Number(n.duration)))n.duration=durations[0];
     const resolutions=(caps.resolutions||[]).map(String).filter(Boolean);
     if(resolutions.length&&!resolutions.includes(String(n.resolution||'')))n.resolution=resolutions[0];
-    const aspectRatios=(caps.aspectRatios||[]).map(String).filter(Boolean);
-    if(aspectRatios.length&&!aspectRatios.includes(String(n.aspectRatio||'')))n.aspectRatio=aspectRatios[0];
+    const aspectRatios=videoAspectRatiosForMode(n.videoMode);
+    if(!aspectRatios.includes(String(n.aspectRatio||'')))n.aspectRatio=aspectRatios[0];
   }
   function defaultVideoModeForSource(source,params={},targetType='video'){
     if(targetType!=='video')return '';
     const explicit=normalizeVideoModeKey(params.generationMode||params.videoMode||'');
     if(explicit)return explicit;
     const op=String(params.operation||params.tool||'').toLowerCase();
-    if(source?.type==='audio'||/audio|voice|speech/.test(op))return 'audio2video';
-    if(source?.type==='image'||/image|reference|first_frame|last_frame|frame/.test(op))return 'image2video';
+    if(/first_frame|last_frame|first-last|frame2video/.test(op))return 'frame2video';
+    if(source?.type==='audio'||source?.type==='video'||/audio|voice|speech|video_reference|motion_reference|multimodal|omni/.test(op))return 'omni_reference';
+    if(source?.type==='image'||/image|reference/.test(op))return 'image2video';
     return 'text2video';
   }
   function optionList(values,current){const arr=[...new Set((values||[]).map(String))];return arr.map(x=>`<option value="${escapeAttr(x)}" ${String(current)===x?'selected':''}>${escapeHtml(x)}</option>`).join('')}
@@ -1982,7 +1989,7 @@
     const m=ensureDefaultModel(n),baseCaps=modelCapabilities(n),imageCaps=n.type==='image'&&m?imageCapabilitiesFor(providerById(n.providerId),m):null,caps=imageCaps?{...baseCaps,aspectRatios:imageCaps.aspectRatios,resolutions:imageCaps.resolutions,imageQualities:imageCaps.qualityLabels,maxImages:imageCaps.maxImages}:baseCaps,hints=getAutoLinkHints(n.prompt||'',n.id),refs=collectReferences(n.id),contextCandidates=creativeContextCandidates(n),contextHigh=contextCandidates.filter(x=>x.score>=80).length;
     if(n.type==='image'&&imageCaps)syncImageNodeCapabilities(n,imageCaps);
     if(n.type==='video')syncVideoNodeCapabilities(n,caps);
-    const ratios=caps.aspectRatios||['16:9','9:16','1:1'],durations=caps.durations||[4,5,10],resolutions=caps.resolutions||['720p'],videoModes=videoModeOptions(caps);
+    const ratios=n.type==='video'?videoAspectRatiosForMode(n.videoMode):(caps.aspectRatios||['16:9','9:16','1:1']),durations=caps.durations||[4,5,10],resolutions=caps.resolutions||['720p'],videoModes=videoModeOptions();
     const modelLabel=m?.name||m?.id||'选择模型';
     const noModel=!m;
     const frozen=Boolean(n.frozen);
@@ -2055,7 +2062,7 @@
       input?.addEventListener('input',e=>{n.prompt=e.target.value;saveState()});
       $('#modelPickerBtn')?.addEventListener('click',e=>openModelPickerForNode(n,e.currentTarget));
       $('#inlineSetupModel')?.addEventListener('click',()=>{if(providers.some(p=>(p.models||[]).length))window.location.href='./models.html';else openProviderModal()});
-      $('#videoModeSelect')?.addEventListener('change',e=>{n.videoMode=normalizeVideoModeKey(e.target.value);saveState();renderGenerator()});
+      $('#videoModeSelect')?.addEventListener('change',e=>{n.videoMode=normalizeVideoModeKey(e.target.value)||'text2video';const allowed=videoAspectRatiosForMode(n.videoMode);if(!allowed.includes(String(n.aspectRatio||'')))n.aspectRatio=allowed[0];saveState();renderGenerator()});
       $('#ratioSelect')?.addEventListener('change',e=>{n.aspectRatio=e.target.value;saveState()});
       $('#durationSelect')?.addEventListener('change',e=>{n.duration=Number(e.target.value);saveState()});
       $('#resolutionSelect')?.addEventListener('change',e=>{n.resolution=e.target.value;saveState()});
@@ -2206,19 +2213,28 @@
   }
 
   function validateSemanticInputs(n,modelOverride=null){
-    const refs=collectReferences(n.id),caps=modelOverride?.model?modelCapabilitiesFor(n.type,modelOverride.provider,modelOverride.model):modelCapabilities(n),warnings=[],errors=[];
+    const allRefs=collectReferences(n.id),refs=n.type==='video'?videoReferencesForMode(n,allRefs):allRefs,caps=modelOverride?.model?modelCapabilitiesFor(n.type,modelOverride.provider,modelOverride.model):modelCapabilities(n),warnings=[],errors=[];
     const byRole={};refs.forEach(r=>{const role=r.role||'reference';(byRole[role]||(byRole[role]=[])).push(r)});
     const mediaMissing=refs.filter(r=>['image','video','audio'].includes(r.type)&&!r.url);
     if(mediaMissing.length)warnings.push(`${mediaMissing.length} 个参考素材还没有可发送的生成结果`);
     if((byRole.first_frame||[]).length>1)errors.push('首帧只能有 1 个，请点击连线修改用途');
     if((byRole.last_frame||[]).length>1)errors.push('尾帧只能有 1 个，请点击连线修改用途');
     if(n.type==='video'){
-      const currentMode=normalizeVideoModeKey(n.videoMode||'text2video'),allowedModes=videoModeOptions(caps).map(x=>x.key);
-      if(allowedModes.length&&currentMode&&!allowedModes.includes(currentMode))errors.push(`当前视频模型不支持 ${videoModeLabel(currentMode)}`);
-      if((byRole.first_frame||[]).length&&caps.supportsFirstFrame===false)errors.push('当前视频模型不支持首帧输入');
-      if((byRole.last_frame||[]).length&&caps.supportsLastFrame===false)errors.push('当前视频模型不支持尾帧输入');
-      if((byRole.video_reference||[]).length+(byRole.motion_reference||[]).length>0&&caps.supportsVideoReference===false)errors.push('当前视频模型不支持参考视频 / 运镜参考');
-      if((byRole.audio_reference||[]).length+(byRole.voice_reference||[]).length>0&&caps.supportsAudioReference===false)errors.push('当前视频模型不支持音频参考');
+      const currentMode=normalizeVideoModeKey(n.videoMode||'text2video')||'text2video';
+      if(currentMode==='image2video'){
+        if(!refs.some(r=>r.type==='image'&&r.url))errors.push('图生视频至少需要 1 张参考图');
+        if(refs.length&&caps.supportsImageReference===false)errors.push('当前视频模型不支持图像参考');
+      }else if(currentMode==='frame2video'){
+        if(!(byRole.first_frame||[]).some(r=>r.url))errors.push('首尾帧模式需要首帧图片');
+        if(!(byRole.last_frame||[]).some(r=>r.url))errors.push('首尾帧模式需要尾帧图片');
+        if((byRole.first_frame||[]).length&&caps.supportsFirstFrame===false)errors.push('当前视频模型不支持首帧输入');
+        if((byRole.last_frame||[]).length&&caps.supportsLastFrame===false)errors.push('当前视频模型不支持尾帧输入');
+      }else if(currentMode==='omni_reference'){
+        if(!refs.some(r=>r.url||String(r.text||'').trim()))errors.push('全能参考至少需要 1 个参考素材');
+        if(refs.some(r=>r.type==='image')&&caps.supportsImageReference===false)errors.push('当前视频模型不支持图像参考');
+        if(refs.some(r=>r.type==='video')&&caps.supportsVideoReference===false)errors.push('当前视频模型不支持参考视频 / 运镜参考');
+        if(refs.some(r=>r.type==='audio')&&caps.supportsAudioReference===false)errors.push('当前视频模型不支持音频参考');
+      }
     }
     const typeCounts={image:refs.filter(r=>r.type==='image').length,video:refs.filter(r=>r.type==='video').length,audio:refs.filter(r=>r.type==='audio').length};
     if(caps.maxReferences&&refs.length>caps.maxReferences)warnings.push(`参考素材 ${refs.length} 个，模型上限 ${caps.maxReferences}，超出部分会被忽略`);
@@ -2325,7 +2341,7 @@
       const attempt=chain[ai],check=validateSemanticInputs(n,{provider:attempt.provider,model:attempt.model}),caps=check.caps,refs=check.refs;if(check.errors.length){lastError=new Error(check.errors.join('；'));if(ai===0&&!chain.slice(1).length)break;continue}if(ai>0){n.taskStatus='fallback';n.fallbackAttempt=ai;n.taskError=`主模型失败，正在切换备用模型：${attempt.modelName}`;saveState();render();workflowLog(latestWorkflowRunForNode(n.id)||{logs:[]},`切换备用模型：${attempt.modelName}`,'warn')}
       try{
         let info=null;const canAdopt=n.taskId&&n.taskProviderId===attempt.providerId&&n.taskModelId===attempt.modelId&&['queued','running','polling','retrying','provider_succeeded','result_pending'].includes(n.taskStatus);if(canAdopt){try{const existing=(await apiJson('/api/tasks/'+encodeURIComponent(n.taskId))).task;if(existing&&!['failed','canceled','succeeded'].includes(existing.status))info=await monitorNodeTask(n,n.taskId,attempt)}catch{}}
-        if(!info){const created=await apiJson('/api/tasks',{method:'POST',body:JSON.stringify({providerId:attempt.providerId,modelId:attempt.modelId,providerSnapshot:snapshotProviderForTask(attempt.provider),modelSnapshot:attempt.model,nodeType:n.type,prompt:n.prompt||'',references:refs,maxRetries:state.workflowSettings?.maxRetries??1,priority:nodePriority(n),parameters:n.type==='image'?imageGenerationParameters(n,caps):{aspectRatio:n.aspectRatio||caps.aspectRatios?.[0]||'16:9',count:n.count||1,duration:n.duration||caps.durations?.[0]||5,resolution:n.resolution||caps.resolutions?.[0]||'720p',capabilities:caps,creativeContext:buildCreativeContextPacket(n),...(n.toolParams||{})}})});n.taskId=created.task.id;n.taskProviderId=attempt.providerId;n.taskModelId=attempt.modelId;n.taskStatus=created.task.status;n.taskProgress=created.task.progress||0;syncNodeTaskDiagnostics(n,created.task);saveState();render();if(created.task.status==='succeeded')info=created.task;else if(['failed','canceled'].includes(created.task.status))throw new Error(taskFailureText(created.task)||'生成失败');else info=await monitorNodeTask(n,n.taskId,attempt,created.task)}
+        if(!info){const created=await apiJson('/api/tasks',{method:'POST',body:JSON.stringify({providerId:attempt.providerId,modelId:attempt.modelId,providerSnapshot:snapshotProviderForTask(attempt.provider),modelSnapshot:attempt.model,nodeType:n.type,prompt:n.prompt||'',references:refs,maxRetries:state.workflowSettings?.maxRetries??1,priority:nodePriority(n),parameters:n.type==='image'?imageGenerationParameters(n,caps):{aspectRatio:n.aspectRatio||(n.type==='video'?videoAspectRatiosForMode(n.videoMode)[0]:caps.aspectRatios?.[0])||'16:9',count:n.count||1,duration:n.duration||caps.durations?.[0]||5,resolution:n.resolution||caps.resolutions?.[0]||'720p',capabilities:caps,creativeContext:buildCreativeContextPacket(n),...(n.toolParams||{}),...(n.type==='video'?{videoMode:normalizeVideoModeKey(n.videoMode)||'text2video',generationMode:normalizeVideoModeKey(n.videoMode)||'text2video'}:{})}})});n.taskId=created.task.id;n.taskProviderId=attempt.providerId;n.taskModelId=attempt.modelId;n.taskStatus=created.task.status;n.taskProgress=created.task.progress||0;syncNodeTaskDiagnostics(n,created.task);saveState();render();if(created.task.status==='succeeded')info=created.task;else if(['failed','canceled'].includes(created.task.status))throw new Error(taskFailureText(created.task)||'生成失败');else info=await monitorNodeTask(n,n.taskId,attempt,created.task)}
         const out=info.output||{};const resolvedUrl=resolveGeneratedOutputUrl(out.value??out);if(resolvedUrl)n.outputUrl=resolvedUrl;
         if(out.type==='url'&&!n.outputUrl)n.outputUrl=String(out.value||'').trim();
         else if(out.type==='text'){if(n.type==='text')n.text=out.value;else n.generatedText=out.value}
@@ -2435,12 +2451,12 @@
     $('#studioImageRefresh').onclick=()=>openImageStudio(n);
   }
   function openVideoStudio(n){
-    ensureDefaultModel(n);const caps=modelCapabilities(n);if(n.type==='video')syncVideoNodeCapabilities(n,caps);const tools=['剪辑','视频合成','解析','逐帧拉片','智能剪辑','智能续写','片段重拍','高清','人声分离','分离音视频'];const modes=videoModeOptions(caps);const activeMode=normalizeVideoModeKey(n.videoMode||modes[0]?.key||'text2video');
-    modalShell('Video Studio · 视频工作台',`<div class="studio-shell video-studio"><aside class="studio-toolrail"><div class="studio-rail-title">视频工具</div>${tools.map(t=>`<button data-studio-video-tool="${t}">${t}</button>`).join('')}<button id="openStudioTimeline" class="primary-tool">多轨时间轴</button></aside><section class="studio-canvas"><div class="studio-canvas-head"><div><b>${escapeHtml(n.title||'视频节点')}</b><span>${videoModeLabel(activeMode)} · ${Number(n.duration||caps.durations?.[0]||5)}s · ${escapeHtml(n.resolution||caps.resolutions?.[0]||'720p')}</span></div><button id="studioVideoRefresh">刷新</button></div><div class="studio-media-frame video">${n.outputUrl?`<video id="videoStudioPreview" src="${escapeAttr(n.outputUrl)}" controls playsinline preload="metadata"></video>`:`<div class="studio-placeholder" style="background:${themeBg(n.content||'city')}"><span>视频结果将在这里预览</span></div>`}</div><div class="studio-prompt-bar"><textarea id="videoStudioPrompt" placeholder="描述动作、机位、运镜、节奏和声音…">${escapeHtml(n.prompt||'')}</textarea><button id="videoStudioGenerate" class="studio-generate">生成</button></div><div class="studio-bottom-controls">${studioModelButton(n,'videoStudioModel')}<select id="videoStudioMode">${modes.map(v=>`<option value="${escapeAttr(v.key)}" ${activeMode===v.key?'selected':''}>${escapeHtml(v.label)}</option>`).join('')}</select><select id="videoStudioRatio">${optionList(caps.aspectRatios,n.aspectRatio||caps.aspectRatios?.[0])}</select><select id="videoStudioDuration">${(caps.durations||[4,5,10]).map(x=>`<option value="${x}" ${Number(n.duration||5)===Number(x)?'selected':''}>${x}s</option>`).join('')}</select><select id="videoStudioResolution">${optionList(caps.resolutions,n.resolution||caps.resolutions?.[0])}</select></div></section><aside class="studio-inspector"><div class="studio-panel-title">输入关系</div>${studioReferenceRows(n)}${studioDiagnosticHtml(n)}<div class="studio-panel-title">模型能力</div><div class="studio-cap-grid"><span>生成方式 <b>${modes.map(x=>x.label).join(' / ')||'文生视频'}</b></span><span>首帧 <b>${caps.supportsFirstFrame?'✓':'—'}</b></span><span>尾帧 <b>${caps.supportsLastFrame?'✓':'—'}</b></span><span>参考视频 <b>${caps.supportsVideoReference?'✓':'—'}</b></span><span>参考音频 <b>${caps.supportsAudioReference?'✓':'—'}</b></span><span>续写 <b>${caps.supportsExtend?'✓':'—'}</b></span><span>重拍 <b>${caps.supportsReshoot?'✓':'—'}</b></span><span>清晰度 <b>${(caps.resolutions||[]).join(' / ')||'720p'}</b></span></div><div class="studio-panel-title">语义提示</div><div class="studio-semantic-help">连接线会自动区分首帧、尾帧、角色、场景、运镜和音频。点击画布中的连线可修改用途。</div></aside></div>`,{full:true});
+    ensureDefaultModel(n);const caps=modelCapabilities(n);if(n.type==='video')syncVideoNodeCapabilities(n,caps);const tools=['剪辑','视频合成','解析','逐帧拉片','智能剪辑','智能续写','片段重拍','高清','人声分离','分离音视频'];const modes=videoModeOptions(),activeMode=normalizeVideoModeKey(n.videoMode||modes[0]?.key||'text2video')||'text2video',studioRatios=videoAspectRatiosForMode(activeMode);
+    modalShell('Video Studio · 视频工作台',`<div class="studio-shell video-studio"><aside class="studio-toolrail"><div class="studio-rail-title">视频工具</div>${tools.map(t=>`<button data-studio-video-tool="${t}">${t}</button>`).join('')}<button id="openStudioTimeline" class="primary-tool">多轨时间轴</button></aside><section class="studio-canvas"><div class="studio-canvas-head"><div><b>${escapeHtml(n.title||'视频节点')}</b><span>${videoModeLabel(activeMode)} · ${Number(n.duration||caps.durations?.[0]||5)}s · ${escapeHtml(n.resolution||caps.resolutions?.[0]||'720p')}</span></div><button id="studioVideoRefresh">刷新</button></div><div class="studio-media-frame video">${n.outputUrl?`<video id="videoStudioPreview" src="${escapeAttr(n.outputUrl)}" controls playsinline preload="metadata"></video>`:`<div class="studio-placeholder" style="background:${themeBg(n.content||'city')}"><span>视频结果将在这里预览</span></div>`}</div><div class="studio-prompt-bar"><textarea id="videoStudioPrompt" placeholder="描述动作、机位、运镜、节奏和声音…">${escapeHtml(n.prompt||'')}</textarea><button id="videoStudioGenerate" class="studio-generate">生成</button></div><div class="studio-bottom-controls">${studioModelButton(n,'videoStudioModel')}<select id="videoStudioMode">${modes.map(v=>`<option value="${escapeAttr(v.key)}" ${activeMode===v.key?'selected':''}>${escapeHtml(v.label)}</option>`).join('')}</select><select id="videoStudioRatio">${optionList(studioRatios,n.aspectRatio||studioRatios[0])}</select><select id="videoStudioDuration">${(caps.durations||[4,5,10]).map(x=>`<option value="${x}" ${Number(n.duration||5)===Number(x)?'selected':''}>${x}s</option>`).join('')}</select><select id="videoStudioResolution">${optionList(caps.resolutions,n.resolution||caps.resolutions?.[0])}</select></div></section><aside class="studio-inspector"><div class="studio-panel-title">输入关系</div>${studioReferenceRows(n)}${studioDiagnosticHtml(n)}<div class="studio-panel-title">模型能力</div><div class="studio-cap-grid"><span>生成方式 <b>${modes.map(x=>x.label).join(' / ')||'文生视频'}</b></span><span>首帧 <b>${caps.supportsFirstFrame?'✓':'—'}</b></span><span>尾帧 <b>${caps.supportsLastFrame?'✓':'—'}</b></span><span>参考视频 <b>${caps.supportsVideoReference?'✓':'—'}</b></span><span>参考音频 <b>${caps.supportsAudioReference?'✓':'—'}</b></span><span>续写 <b>${caps.supportsExtend?'✓':'—'}</b></span><span>重拍 <b>${caps.supportsReshoot?'✓':'—'}</b></span><span>清晰度 <b>${(caps.resolutions||[]).join(' / ')||'720p'}</b></span></div><div class="studio-panel-title">语义提示</div><div class="studio-semantic-help">连接线会自动区分首帧、尾帧、角色、场景、运镜和音频。点击画布中的连线可修改用途。</div></aside></div>`,{full:true});
     $$('[data-studio-video-tool]',featureModal).forEach(b=>b.onclick=()=>openVideoTool(b.dataset.studioVideoTool,n));
     $('#openStudioTimeline').onclick=()=>{closeFeatureModal();openTimelineEditor(n,{trimOnly:false})};
     $('#videoStudioPrompt').oninput=e=>{n.prompt=e.target.value;saveState()};
-    $('#videoStudioMode').onchange=e=>{n.videoMode=normalizeVideoModeKey(e.target.value);saveState()};
+    $('#videoStudioMode').onchange=e=>{n.videoMode=normalizeVideoModeKey(e.target.value)||'text2video';const allowed=videoAspectRatiosForMode(n.videoMode);if(!allowed.includes(String(n.aspectRatio||'')))n.aspectRatio=allowed[0];saveState();openVideoStudio(n)};
     $('#videoStudioRatio').onchange=e=>{n.aspectRatio=e.target.value;saveState()};
     $('#videoStudioDuration').onchange=e=>{n.duration=Number(e.target.value);saveState()};
     $('#videoStudioResolution').onchange=e=>{n.resolution=e.target.value;saveState()};
