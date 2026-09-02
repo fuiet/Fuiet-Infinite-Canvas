@@ -1,0 +1,39 @@
+name: Patch video generation modes
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/patch-video-generation-modes.py'
+      - '_read_123_zip_20260821_180410/tests/video-generation-mode-logic.test.mjs'
+      - '.github/workflows/patch-video-generation-modes.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply video mode patch
+        run: python scripts/patch-video-generation-modes.py
+      - name: Syntax check
+        working-directory: _read_123_zip_20260821_180410
+        run: npm run check
+      - name: Video mode regression test
+        working-directory: _read_123_zip_20260821_180410
+        run: node --test tests/video-generation-mode-logic.test.mjs
+      - name: Commit video mode repair
+        run: |
+          git config user.name 'Codex'
+          git config user.email 'codex@openai.local'
+          git add _read_123_zip_20260821_180410/app.js _read_123_zip_20260821_180410/browser-bootstrap.js
+          git diff --cached --quiet && exit 0
+          git commit -m 'Fix video generation modes and ratios'
+          git push origin main
