@@ -27,7 +27,7 @@ test('XOGPU MiniMax-H3 uses exact create poll and content endpoints',()=>{
 test('XOGPU text-to-video body follows supplied API docs exactly',()=>{
   const model={id:'MiniMax-H3',name:'MiniMax H3',modality:'video',videoProtocolFamily:'xogpu-minimax-h3'},route=V.resolve(provider,model,'text-to-video');
   const mapped=V.mapRequest(provider,model,{prompt:'cinematic ocean',parameters:{duration:5,aspectRatio:'16:9',resolution:'1080p'}},route,[]);
-  assert.deepEqual(mapped.body,{model:'MiniMax-H3',group:'特惠视频生成',prompt:'cinematic ocean',duration:5,ratio:'16:9'});
+  assert.deepEqual(mapped.body,{model:'MiniMax-H3',prompt:'cinematic ocean',duration:5,ratio:'16:9',group:'discount_video_generation',n:1});
 });
 
 test('XOGPU image and first-last-frame requests use documented content items and adaptive ratio',()=>{

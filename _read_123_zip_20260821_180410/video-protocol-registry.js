@@ -77,7 +77,7 @@ function mapXogpuVideoRequest(model={},task={},refs=[],operation='generate'){
   const images=entries.filter(x=>x.type==='image'),videos=entries.filter(x=>x.type==='video'),audios=entries.filter(x=>x.type==='audio');
   if(images.length>9)throw new Error('XOGPU MiniMax-H3 最多支持 9 张图片');if(videos.length>3)throw new Error('XOGPU MiniMax-H3 最多支持 3 段参考视频');if(audios.length>3)throw new Error('XOGPU MiniMax-H3 最多支持 3 段参考音频');
   const hasVisual=images.length>0||videos.length>0,allowed=['16:9','9:16','1:1','4:3','3:4','21:9','adaptive'];let ratio=String(p.ratio||p.aspectRatio||p.aspect_ratio||(hasVisual?'adaptive':'16:9')).trim().toLowerCase();if(!allowed.includes(ratio))ratio=hasVisual?'adaptive':'16:9';if(ratio==='adaptive'&&!hasVisual)throw new Error('XOGPU MiniMax-H3 的 adaptive 比例仅适用于包含图片或视频参考的模式；文生视频请使用固定比例');
-  const body={model:'MiniMax-H3',group:'特惠视频生成',prompt,duration,ratio};
+  const body={model:'MiniMax-H3',prompt,duration,ratio,group:'discount_video_generation',n:1};
   if(entries.length){
     const explicitFirst=images.find(x=>/first/.test(x.role)),explicitLast=images.find(x=>/last/.test(x.role));
     const firstFallback=operation==='first-last-frame'&&!explicitFirst?images[0]:null,lastFallback=operation==='first-last-frame'&&!explicitLast&&images.length>1?images[1]:null;
