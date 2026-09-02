@@ -64,7 +64,7 @@ import vm from 'node:vm';
 
 const root=new URL('../',import.meta.url);
 const contractSrc=fs.readFileSync(new URL('provider-adapter-contract.js',root),'utf8');
-const ctx={globalThis:{}};
+const ctx={globalThis:{},URL};
 vm.createContext(ctx);
 vm.runInContext(contractSrc,ctx);
 const A=ctx.globalThis.CanvasProviderAdapters;
