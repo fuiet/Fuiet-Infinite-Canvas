@@ -91,7 +91,18 @@ src = replace_once(
 )
 index.write_text(src, encoding='utf-8')
 
-# 5) Focused regression test for route ordering and retry safety.
+# 5) Update the existing XOGPU contract test to describe the expanded fallback set.
+legacy_test = ROOT / 'tests' / 'xogpu-minimax-h3.test.mjs'
+src = legacy_test.read_text(encoding='utf-8')
+src = replace_once(
+    src,
+    "assert.deepEqual(route.pollPathCandidates,['/v1/videos/{{taskId}}','/v1/tasks/{{taskId}}']);",
+    "assert.deepEqual(route.pollPathCandidates,['/v1/videos/{{taskId}}','/v1/videos/generations/{{taskId}}','/v1/video/generations/{{taskId}}','/v1/tasks/{{taskId}}']);",
+    'legacy XOGPU poll candidates assertion',
+)
+legacy_test.write_text(src, encoding='utf-8')
+
+# 6) Focused regression test for route ordering and retry safety.
 test_file = ROOT / 'tests' / 'xogpu-create-path-fallback.test.mjs'
 if test_file.exists():
     raise SystemExit('xogpu-create-path-fallback.test.mjs already exists')
