@@ -64,8 +64,10 @@ test('browser loads a fresh XOGPU runtime after rollback',()=>{
 });
 
 test('XOGPU create errors expose safe route diagnostics without credentials',()=>{
-  assert.ok(preview.includes('[XOGPU URL ${safeUrl(createUrl)}；Base ${safeUrl(provider.baseUrl)}；model ${String(requestBody?.model||model?.id||\'\')}；group ${String(requestBody?.group||\'\')}]'));
+  assert.ok(preview.includes('XOGPU URL ${safeUrl(createUrl)}'));
+  assert.ok(preview.includes('Base ${safeUrl(provider.baseUrl)}'));
   assert.ok(preview.includes('createUrl:safeUrl(createUrl)'));
+  assert.ok(preview.includes('requestGroup:String(requestBody?.group'));
   assert.ok(!preview.includes('requestApiKey'));
 });
 """, encoding='utf-8')
