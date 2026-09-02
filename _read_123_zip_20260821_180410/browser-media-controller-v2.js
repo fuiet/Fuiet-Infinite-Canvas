@@ -22,7 +22,7 @@ async function ensureController(){
     return false;
   }
   try{
-    const scriptUrl=new URL('./browser-media-sw.js?v=20260902-media-controller-2',document.baseURI);
+    const scriptUrl=new URL('./browser-media-sw.js?v=20260902-reference-transport-3',document.baseURI);
     const scopeUrl=new URL('./',document.baseURI);
     const registration=await navigator.serviceWorker.register(scriptUrl.href,{scope:scopeUrl.pathname,updateViaCache:'none'});
     try{await registration.update()}catch(error){console.warn('[media-controller] service worker update failed',error)}
