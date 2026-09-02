@@ -204,7 +204,9 @@ function mapVideoRequest(provider={},model={},task={},route={},references=[]){
   return VideoProtocols?.mapRequest?VideoProtocols.mapRequest(provider,model,task,route,references):null;
 }
 function finalizeModel(provider={},model={},nodeType=''){
-  const next=clone(model||{}); next.modality=normalizeModelModality(next.modality,next); const type=normalizeModelModality(nodeType||next.modality,next);
+  const next=clone(model||{}),autoRoute=next.routeOrigin==='auto'||next.adapterResolved?.auto===true;
+  if(autoRoute&&!isXogpuProvider(provider)&&String(next.videoProtocolFamily||'').trim().toLowerCase()==='xogpu-minimax-h3'){delete next.videoProtocolFamily;delete next.videoProtocolProfile}
+  next.modality=normalizeModelModality(next.modality,next); const type=normalizeModelModality(nodeType||next.modality,next);
   const before=routeIsExplicit(next), route=resolveRoute(provider,next,type,'generate');
   const ready=Boolean(next.id&&route.adapterKey&&route.adapterKey!=='auto'&&route.createPath);
   if(!before.explicitAdapter&&route.adapterKey&&route.adapterKey!=='auto')next.adapterKey=route.adapterKey;
