@@ -1,11 +1,10 @@
-name: Patch video generation modes
+name: Patch XOGPU four video modes
 
 on:
   push:
     branches: [main]
     paths:
-      - 'scripts/patch-video-generation-modes.py'
-      - '_read_123_zip_20260821_180410/tests/video-generation-mode-logic.test.mjs'
+      - 'scripts/patch-xogpu-four-mode-contract.py'
       - '.github/workflows/patch-video-generation-modes.yml'
 
 permissions:
@@ -21,19 +20,31 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Apply video mode patch
-        run: python scripts/patch-video-generation-modes.py
+      - name: Apply XOGPU four-mode contract patch
+        run: python scripts/patch-xogpu-four-mode-contract.py
       - name: Syntax check
         working-directory: _read_123_zip_20260821_180410
         run: npm run check
-      - name: Video mode regression test
+      - name: Full regression suite
         working-directory: _read_123_zip_20260821_180410
-        run: node --test tests/video-generation-mode-logic.test.mjs
-      - name: Commit video mode repair
+        run: npm test
+      - name: Commit XOGPU four-mode repair
         run: |
           git config user.name 'Codex'
           git config user.email 'codex@openai.local'
-          git add _read_123_zip_20260821_180410/app.js _read_123_zip_20260821_180410/browser-bootstrap.js
+          git add \
+            _read_123_zip_20260821_180410/video-protocol-registry.js \
+            _read_123_zip_20260821_180410/provider-adapter-contract.js \
+            _read_123_zip_20260821_180410/browser-runtime-preview.js \
+            _read_123_zip_20260821_180410/desktop-video-protocol-bridge.cjs \
+            _read_123_zip_20260821_180410/app.js \
+            _read_123_zip_20260821_180410/browser-bootstrap.js \
+            _read_123_zip_20260821_180410/browser-runtime.js \
+            _read_123_zip_20260821_180410/index.html \
+            _read_123_zip_20260821_180410/tests/xogpu-minimax-h3.test.mjs \
+            _read_123_zip_20260821_180410/tests/xogpu-browser-strict-request.test.mjs \
+            _read_123_zip_20260821_180410/tests/desktop-video-protocol-bridge.test.mjs \
+            _read_123_zip_20260821_180410/tests/video-generation-mode-logic.test.mjs
           git diff --cached --quiet && exit 0
-          git commit -m 'Fix video generation modes and ratios'
+          git commit -m 'Align XOGPU MiniMax-H3 four video modes with docs'
           git push origin main
