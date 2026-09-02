@@ -47,7 +47,7 @@ jobs:
 
           tests = test_file.read_text(encoding='utf-8')
           marker = "test('shared video parameters preserve adaptive for XOGPU instead of coercing it to 16:9',()=>{"
-          addition = """test('XOGPU image references accept Base64 data URLs while video and audio stay HTTPS-only',()=>{\n  const model={id:'MiniMax-H3',name:'MiniMax H3',modality:'video',videoProtocolFamily:'xogpu-minimax-h3'},route=V.resolve(provider,model,'image-to-video'),imageData='data:image/png;base64,iVBORw0KGgo=';\n  const mapped=V.mapRequest(provider,model,{prompt:'animate local image',parameters:{duration:5,ratio:'adaptive'}},route,[{type:'image',url:imageData}]);\n  assert.equal(mapped.body.content[1].type,'image_url');assert.equal(mapped.body.content[1].image_url.url,imageData);\n  assert.throws(()=>V.mapRequest(provider,model,{prompt:'bad video data',parameters:{duration:5,ratio:'adaptive'}},V.resolve(provider,model,'reference-to-video'),[{type:'video',url:'data:video/mp4;base64,AAAA'}]),/HTTPS URL/);\n  assert.throws(()=>V.mapRequest(provider,model,{prompt:'bad audio data',parameters:{duration:5,ratio:'adaptive'}},V.resolve(provider,model,'reference-to-video'),[{type:'audio',url:'data:audio/wav;base64,AAAA'}]),/HTTPS URL/);\n  assert.throws(()=>V.mapRequest(provider,model,{prompt:'bad browser local',parameters:{duration:5,ratio:'adaptive'}},route,[{type:'image',url:'/__browser_media/media_local'}]),/Base64 Data URL/);\n});\n\n"""
+          addition = """test('XOGPU image references accept Base64 data URLs while video and audio stay HTTPS-only',()=>{\n  const model={id:'MiniMax-H3',name:'MiniMax H3',modality:'video',videoProtocolFamily:'xogpu-minimax-h3'},route=V.resolve(provider,model,'image-to-video'),imageData='data:image/png;base64,iVBORw0KGgo=';\n  const mapped=V.mapRequest(provider,model,{prompt:'animate local image',parameters:{duration:5,ratio:'adaptive'}},route,[{type:'image',url:imageData}]);\n  assert.equal(mapped.body.content[1].type,'image_url');assert.equal(mapped.body.content[1].image_url.url,imageData);\n  assert.throws(()=>V.mapRequest(provider,model,{prompt:'bad video data',parameters:{duration:5,ratio:'adaptive'}},V.resolve(provider,model,'reference-to-video'),[{type:'video',url:'data:video/mp4;base64,AAAA'}]),/HTTPS URL/);\n  assert.throws(()=>V.mapRequest(provider,model,{prompt:'bad audio data',parameters:{duration:5,ratio:'16:9'}},V.resolve(provider,model,'reference-to-video'),[{type:'audio',url:'data:audio/wav;base64,AAAA'}]),/HTTPS URL/);\n  assert.throws(()=>V.mapRequest(provider,model,{prompt:'bad browser local',parameters:{duration:5,ratio:'adaptive'}},route,[{type:'image',url:'/__browser_media/media_local'}]),/Base64 Data URL/);\n});\n\n"""
           if addition.strip() in tests:
               raise SystemExit('XOGPU Base64 regression test already exists')
           if marker not in tests:
@@ -69,7 +69,7 @@ jobs:
         run: npm run check
       - name: Focused XOGPU regression tests
         working-directory: _read_123_zip_20260821_180410
-        run: node --test tests/xogpu-minimax-h3.test.mjs tests/xogpu-browser-strict-request.test.mjs tests/video-reference-transport.test.mjs
+        run: node --test tests/xogpu-minimax-h3.test.mjs tests/video-reference-transport.test.mjs tests/video-protocol-registry.test.mjs
       - name: Commit repair and remove temporary workflow
         run: |
           git config user.name 'Codex'
