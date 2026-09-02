@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
 import {createRequire} from 'node:module';
 
 const require=createRequire(import.meta.url);
@@ -19,10 +21,35 @@ test('video task restores all connected upstream refs and uses upstream text as 
   assert.equal(task.prompt,'赛博朋克雨夜里，黑衣人物缓慢向镜头走来。');
   assert.equal(task.references.length,2);
   assert.equal(task.references[1].url,'https://cdn.example.com/street.png');
-  assert.equal(task.parameters.videoMode,'omni_reference');
-  assert.equal(task.parameters.generationMode,'omni_reference');
-  assert.equal(task.parameters.operation,'reference2video');
+  assert.equal(task.parameters.videoMode,'image2video');
+  assert.equal(task.parameters.generationMode,'image2video');
+  assert.equal(task.parameters.operation,'image2video');
   assert.deepEqual(task.parameters.upstreamInputContract,{version:1,connected:true,textCount:1,mediaCount:1,localPromptOptional:true});
+});
+
+test('single connected image becomes XOGPU first frame instead of weak omni reference',()=>{
+  const task=Upstream.normalizeTask({
+    nodeType:'video',prompt:'',references:[],
+    parameters:{videoMode:'text2video',generationMode:'text2video',creativeContext:{linkedReferences:[
+      {id:'text-1',type:'text',role:'prompt_context',text:'让角色缓慢向镜头走来'},
+      {id:'image-1',type:'image',role:'reference',url:'https://cdn.example.com/character.png'}
+    ]}}
+  });
+  const src=fs.readFileSync(new URL('../video-protocol-registry.js',import.meta.url),'utf8');
+  const ctx={globalThis:{},URL};vm.createContext(ctx);vm.runInContext(src,ctx);
+  const V=ctx.globalThis.CanvasVideoProtocolRegistry;
+  const operation=V.detectOperation({references:task.references,parameters:task.parameters});
+  assert.equal(operation,'image-to-video');
+  const mapped=V.mapRequest(
+    {baseUrl:'https://xogpu.com/v1'},
+    {id:'MiniMax-H3',name:'MiniMax H3'},
+    task,
+    {protocolFamily:'xogpu-minimax-h3',videoOperation:operation},
+    task.references
+  );
+  const image=mapped.body.content.find(item=>item.type==='image_url');
+  assert.equal(image.role,'first_frame');
+  assert.equal(image.image_url.url,'https://cdn.example.com/character.png');
 });
 
 test('explicit first and last frames preserve frame generation semantics',()=>{
@@ -55,7 +82,7 @@ test('reference-only generation gets a safe provider prompt without requiring ge
   });
   assert.match(task.prompt,/严格依据已连接的上游参考素材生成视频/);
   assert.equal(task.references.length,1);
-  assert.equal(task.parameters.videoMode,'omni_reference');
+  assert.equal(task.parameters.videoMode,'image2video');
 });
 
 test('seedream image request actually includes the connected image and upstream text',()=>{

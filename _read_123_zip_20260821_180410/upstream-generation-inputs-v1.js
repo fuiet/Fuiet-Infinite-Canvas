@@ -77,16 +77,21 @@ function referenceVideoParameters(task={},refs=[]){
   const current={...(task.parameters||{})},media=mediaReferences(refs);
   if(!media.length)return current;
   const explicit=clean(current.operation||current.videoOperation).toLowerCase();
+  const images=media.filter(ref=>clean(ref.type||ref.kind).toLowerCase()==='image');
+  const videos=media.filter(ref=>clean(ref.type||ref.kind).toLowerCase()==='video');
+  const audios=media.filter(ref=>clean(ref.type||ref.kind).toLowerCase()==='audio');
   const roles=media.map(ref=>clean(ref.role||ref.semanticRole).toLowerCase());
   const hasFirst=roles.some(role=>/first/.test(role)),hasLast=roles.some(role=>/last/.test(role));
+  const singleImage=images.length===1&&!videos.length&&!audios.length;
   let operation=explicit;
   if(!operation){
     if(hasFirst&&hasLast)operation='first-last-frame';
+    else if(singleImage)operation='image2video';
     else operation='reference2video';
   }
   const currentMode=clean(current.videoMode||current.generationMode).toLowerCase();
   const keepSpecial=['image2video','frame2video','omni_reference'].includes(currentMode);
-  const mode=keepSpecial?currentMode:(hasFirst&&hasLast?'frame2video':'omni_reference');
+  const mode=keepSpecial?currentMode:(hasFirst&&hasLast?'frame2video':singleImage?'image2video':'omni_reference');
   return{...current,operation,videoMode:mode,generationMode:mode};
 }
 function normalizeTask(task={}){
