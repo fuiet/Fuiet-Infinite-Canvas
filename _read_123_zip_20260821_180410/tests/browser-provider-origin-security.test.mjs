@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-const runtime=fs.readFileSync(path.join(ROOT,'browser-runtime.js'),'utf8');
+const runtime=fs.readFileSync(path.join(ROOT,'browser-runtime-preview.js'),'utf8');
 
 function sliceBetween(start,end){
   const a=runtime.indexOf(start),b=runtime.indexOf(end,a+start.length);
