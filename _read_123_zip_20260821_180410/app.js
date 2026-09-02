@@ -352,7 +352,13 @@
   function providerHasApiKey(p){
     return Boolean(String(p?.apiKey||p?.apiKeyEncrypted||'').trim()) || p?.hasApiKey===true;
   }
-  function modelForNode(n){const p=providerById(n.providerId);return p?.models?.find(m=>m.id===n.modelId&&normalizeClientModality(m.modality)===n.type)||null}
+  function providerOwnsModel(p,m){
+    if(!p||!m)return false;
+    const family=String(m.videoProtocolFamily||m.protocolFamily||'').trim().toLowerCase();
+    if(family!=='xogpu-minimax-h3')return true;
+    try{const h=new URL(String(p.baseUrl||'')).hostname.toLowerCase();return h==='xogpu.com'||h.endsWith('.xogpu.com')}catch{return false}
+  }
+  function modelForNode(n){const p=providerById(n.providerId);return p?.models?.find(m=>m.id===n.modelId&&normalizeClientModality(m.modality)===n.type&&providerOwnsModel(p,m))||null}
   function modelRuntimeReady(p,m){
     if(!m||m.enabled===false||!String(m.id||'').trim())return false;
     const modality=normalizeClientModality(m.modality);
@@ -373,7 +379,7 @@
   }
   function allModelsForType(type){
     const wanted=normalizeClientModality(type);
-    return providers.flatMap(p=>(p.models||[]).filter(m=>m.enabled!==false&&normalizeClientModality(m.modality)===wanted).map(m=>({...m,modality:wanted,providerId:p.id,providerName:p.name||'API',runtimeReady:modelRuntimeReady(p,m)})));
+    return providers.flatMap(p=>(p.models||[]).filter(m=>m.enabled!==false&&normalizeClientModality(m.modality)===wanted&&providerOwnsModel(p,m)).map(m=>({...m,modality:wanted,providerId:p.id,providerName:p.name||'API',runtimeReady:modelRuntimeReady(p,m)})));
   }
   function availableModels(type){ return allModelsForType(type).filter(m=>m.runtimeReady!==false); }
   function imageCapabilitiesFor(provider,model){
@@ -2316,7 +2322,7 @@
 
 
   function fallbackModelChain(n){
-    const refs=[{providerId:n.providerId,modelId:n.modelId,primary:true},...(state.workflowSettings?.autoFallback===false?[]:(n.fallbackModels||[]))],seen=new Set(),out=[];for(const ref of refs){const key=`${ref.providerId}:${ref.modelId}`;if(!ref.providerId||!ref.modelId||seen.has(key))continue;seen.add(key);const provider=providerById(ref.providerId),model=provider?.models?.find(m=>m.id===ref.modelId&&m.enabled!==false&&normalizeClientModality(m.modality)===n.type);if(provider&&model&&modelRuntimeReady(provider,model))out.push({provider,model,providerId:provider.id,modelId:model.id,modelName:model.name||model.id,primary:Boolean(ref.primary)})}return out;
+    const refs=[{providerId:n.providerId,modelId:n.modelId,primary:true},...(state.workflowSettings?.autoFallback===false?[]:(n.fallbackModels||[]))],seen=new Set(),out=[];for(const ref of refs){const key=`${ref.providerId}:${ref.modelId}`;if(!ref.providerId||!ref.modelId||seen.has(key))continue;seen.add(key);const provider=providerById(ref.providerId),model=provider?.models?.find(m=>m.id===ref.modelId&&m.enabled!==false&&normalizeClientModality(m.modality)===n.type);if(provider&&model&&providerOwnsModel(provider,model)&&modelRuntimeReady(provider,model))out.push({provider,model,providerId:provider.id,modelId:model.id,modelName:model.name||model.id,primary:Boolean(ref.primary)})}return out;
   }
   function openFallbackModelPicker(n){
     const items=availableModels(n.type).filter(x=>!(x.providerId===n.providerId&&x.id===n.modelId)),selected=new Map((n.fallbackModels||[]).map((x,i)=>[`${x.providerId}:${x.modelId}`,i])),ordered=[...items].sort((a,b)=>(selected.get(`${a.providerId}:${a.id}`)??999)-(selected.get(`${b.providerId}:${b.id}`)??999));modalShell('备用模型 · 自动故障切换',`<div class="fallback-picker"><div class="fallback-explain"><b>主模型失败时自动切备用</b><span>只在请求真正失败后切换，不会因为排队或生成时间长而误切。顺序按下面列表从上到下执行。</span></div><div class="fallback-list">${ordered.map((m,i)=>{const key=`${m.providerId}:${m.id}`,checked=selected.has(key);return `<label class="fallback-row ${checked?'selected':''}"><input type="checkbox" data-fallback-key="${escapeAttr(key)}" ${checked?'checked':''}><span><b>${escapeHtml(m.name||m.id)}</b><small>${escapeHtml(m.providerName||'API')}</small></span><em>${checked?'备用 '+(selected.get(key)+1):'可选'}</em></label>`}).join('')||'<div class="feature-empty">没有其他可用的同类型模型</div>'}</div><div class="feature-actions"><button id="clearFallbacks">清空备用</button><button id="saveFallbacks" class="primary">保存备用模型</button></div></div>`,{wide:true});$('#clearFallbacks').onclick=()=>{$$('[data-fallback-key]',featureModal).forEach(x=>x.checked=false)};$('#saveFallbacks').onclick=()=>{const chosen=$$('[data-fallback-key]:checked',featureModal).map(x=>{const [providerId,...rest]=x.dataset.fallbackKey.split(':');return{providerId,modelId:rest.join(':')}});snapshot('配置备用模型');n.fallbackModels=chosen;saveState();closeFeatureModal();renderGenerator();render();showToast(chosen.length?`已配置 ${chosen.length} 个备用模型`:'已清空备用模型')};

@@ -236,12 +236,7 @@ function finalizeProvider(provider={}){
   let models=Array.isArray(next.models)?next.models:[];
   const xogpuProvider=isXogpuProvider(next);
   if(!xogpuProvider){
-    models=models.filter(model=>{
-      const family=String(model?.videoProtocolFamily||model?.protocolFamily||'').trim().toLowerCase();
-      const auto=model?.routeOrigin==='auto'||model?.adapterResolved?.auto===true;
-      const userOwned=String(model?.modalitySource||'').trim().toLowerCase()==='user';
-      return !(auto&&!userOwned&&family==='xogpu-minimax-h3');
-    });
+    models=models.filter(model=>String(model?.videoProtocolFamily||model?.protocolFamily||'').trim().toLowerCase()!=='xogpu-minimax-h3');
   }
   if(isAgnesProvider(next)){
     if(!next.protocol||next.protocol==='auto')next.protocol='openai-compatible';
