@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/patch-xogpu-create-404-fallback.yml'
+      - 'scripts/patch-xogpu-create-fallback.py'
 
 permissions:
   contents: write
@@ -37,6 +38,7 @@ jobs:
           git add _read_123_zip_20260821_180410/browser-runtime.js
           git add _read_123_zip_20260821_180410/server.js
           git add _read_123_zip_20260821_180410/index.html
+          git add _read_123_zip_20260821_180410/tests/xogpu-minimax-h3.test.mjs
           git add _read_123_zip_20260821_180410/tests/xogpu-create-path-fallback.test.mjs
           git diff --cached --quiet && exit 0
           git commit -m 'Fallback XOGPU video create path on 404'
