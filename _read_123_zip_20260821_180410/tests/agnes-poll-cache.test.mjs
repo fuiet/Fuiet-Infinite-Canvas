@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-const runtime=fs.readFileSync(new URL('../browser-runtime.js',import.meta.url),'utf8');
+const runtime=fs.readFileSync(new URL('../browser-runtime-preview.js',import.meta.url),'utf8');
 const index=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
-const BUILD='20260901-video-wait-progress-1';
+const ROUTER_BUILD='20260902-desktop-runtime-router-1';
+const PREVIEW_SW_BUILD='20260901-video-wait-progress-1';
 
 test('provider GET and HEAD requests bypass browser HTTP cache',()=>{
   assert.match(runtime,/const fetchInit=\{\.\.\.init,mode:'cors',redirect:'follow',\.\.\.\(\['GET','HEAD'\]\.includes\(method\)\?\{cache:'no-store'\}:\{\}\)\}/);
@@ -29,8 +30,8 @@ test('poll response refreshes provider video and task ids',()=>{
   assert.match(runtime,/providerTaskId:String\(pollTaskId\)/);
 });
 
-test('fresh browser runtime build is deployed',()=>{
-  assert.ok(index.includes(`browser-runtime.js?v=${BUILD}`));
-  assert.ok(index.includes(`browser-bootstrap.js?v=${BUILD}`));
-  assert.ok(runtime.includes(`browser-media-sw.js?v=${BUILD}`));
+test('fresh browser runtime router is deployed while preview worker keeps its internal revision',()=>{
+  assert.ok(index.includes(`browser-runtime.js?v=${ROUTER_BUILD}`));
+  assert.ok(index.includes(`browser-bootstrap.js?v=${ROUTER_BUILD}`));
+  assert.ok(runtime.includes(`browser-media-sw.js?v=${PREVIEW_SW_BUILD}`));
 });
