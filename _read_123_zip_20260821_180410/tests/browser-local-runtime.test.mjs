@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-const runtime=fs.readFileSync(path.join(ROOT,'browser-runtime.js'),'utf8');
+const runtime=fs.readFileSync(path.join(ROOT,'browser-runtime-preview.js'),'utf8');
 const proxy=fs.readFileSync(path.join(ROOT,'functions/api/[[path]].js'),'utf8');
 const wrangler=fs.readFileSync(path.join(ROOT,'wrangler.toml'),'utf8');
 const activeWrangler=wrangler.split(/\r?\n/).filter(x=>!x.trim().startsWith('#')).join('\n');
