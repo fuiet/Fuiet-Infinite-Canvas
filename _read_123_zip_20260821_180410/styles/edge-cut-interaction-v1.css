@@ -1,0 +1,79 @@
+/* Single-purpose edge interaction: neutral at rest, blue source->target flow and scissors on hover. */
+#edgeLayer path.edge:not(.temp-edge){
+  stroke:#4a5058!important;
+  stroke-width:1.45!important;
+  stroke-dasharray:none!important;
+  stroke-dashoffset:0!important;
+  opacity:.78!important;
+  filter:none!important;
+  animation:none!important;
+}
+#edgeLayer path.edge.edge-cut-hover{
+  stroke:#2f82ff!important;
+  stroke-width:2!important;
+  opacity:1!important;
+  filter:drop-shadow(0 0 4px rgba(47,130,255,.55))!important;
+}
+#edgeLayer .edge-label,
+#edgeLayer .edge-end-handle{
+  display:none!important;
+}
+#edgeLayer .edge-hit[data-edge-cut-owned="1"]{
+  stroke-width:18!important;
+  cursor:none!important;
+}
+#edgeLayer .edge-cut-flow{
+  fill:none;
+  stroke:#69b7ff;
+  stroke-width:4;
+  stroke-linecap:round;
+  stroke-dasharray:24 92;
+  stroke-dashoffset:0;
+  opacity:0;
+  pointer-events:none;
+  filter:drop-shadow(0 0 3px #43a0ff) drop-shadow(0 0 8px rgba(55,145,255,.8));
+}
+#edgeLayer .edge-cut-flow.visible{
+  opacity:1;
+  animation:edge-cut-flow-forward .9s linear infinite;
+}
+.edge-cut-scissor{
+  position:fixed;
+  left:0;
+  top:0;
+  width:28px;
+  height:28px;
+  display:grid;
+  place-items:center;
+  border:1px solid rgba(87,166,255,.9);
+  border-radius:999px;
+  background:rgba(8,17,32,.94);
+  box-shadow:0 0 0 1px rgba(39,119,255,.18),0 0 12px rgba(47,130,255,.48);
+  opacity:0;
+  transform:translate(-50%,-50%) scale(.86);
+  pointer-events:none;
+  z-index:2147483000;
+  transition:opacity .08s ease,transform .08s ease;
+}
+.edge-cut-scissor.visible{
+  opacity:1;
+  transform:translate(-50%,-50%) scale(1);
+}
+.edge-cut-scissor svg{
+  width:17px;
+  height:17px;
+  fill:none;
+  stroke:#bfe2ff;
+  stroke-width:1.8;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+html.edge-cut-delete-pending #contextMenu{
+  display:none!important;
+}
+@keyframes edge-cut-flow-forward{
+  to{stroke-dashoffset:-116}
+}
+@media (prefers-reduced-motion:reduce){
+  #edgeLayer .edge-cut-flow.visible{animation:none}
+}
