@@ -35,8 +35,10 @@ function metadataCaps(model={}){
   const resolutions=uniq(arrayAt(raw,['supported_resolutions','supportedResolutions','resolutions','image_resolutions','imageResolutions','capabilities.image.resolutions']));
   const qualities=arrayAt(raw,['supported_qualities','supportedQualities','qualities','image_qualities','imageQualities','capabilities.image.qualities']);
   const requestMode=String(valueAt(raw,['image_request_mode','imageRequestMode','request_mode','requestMode','capabilities.image.requestMode'])||'').trim();
+  const supportsImageReference=valueAt(raw,['supportsImageReference','supports_image_reference','image_reference','capabilities.image.supportsImageReference','capabilities.image.supports_image_reference']);
+  const referenceField=String(valueAt(raw,['imageReferenceField','image_reference_field','referenceField','capabilities.image.referenceField'])||'').trim();
   const exact=sizes.map(parseSize).filter(Boolean);
-  return{sizes:exact.map(x=>x.size),ratios:ratios.length?ratios:uniq(exact.map(x=>ratioFromSize(x.size))),resolutions,qualities:qualityObjects(qualities),requestMode};
+  return{sizes:exact.map(x=>x.size),ratios:ratios.length?ratios:uniq(exact.map(x=>ratioFromSize(x.size))),resolutions,qualities:qualityObjects(qualities),requestMode,supportsImageReference,referenceField};
 }
 function exactMap(sizes=[]){const map={};for(const size of sizes){const r=ratioFromSize(size);if(r&&!map[r])map[r]=String(size).replace('×','x')}return map}
 function areaSize(resolution,ratio){
@@ -45,15 +47,15 @@ function areaSize(resolution,ratio){
 }
 function defaultCapability(provider={},model={}){
   const h=hint(provider,model);
-  if(/agnes[-_. ]?image[-_. ]?2\.1[-_. ]?flash/.test(h))return{family:'agnes-image-2.1-flash',source:'registry',confidence:1,requestMode:'agnes-image',aspectRatios:AGNES_RATIOS,resolutions:['1K','2K','3K','4K'],qualities:[QUALITY.native],maxImages:8};
-  if(/gpt[-_. ]?image/.test(h))return{family:'gpt-image',source:'registry',confidence:.99,requestMode:'openai-size',aspectRatios:['1:1','3:2','2:3'],resolutions:['原生'],qualities:[QUALITY.auto,QUALITY.low,QUALITY.medium,QUALITY.high],exactSizes:{'1:1':'1024x1024','3:2':'1536x1024','2:3':'1024x1536'},maxImages:4};
-  if(/dall[-_. ]?e[-_. ]?3/.test(h))return{family:'dall-e-3',source:'registry',confidence:.99,requestMode:'openai-size',aspectRatios:['1:1','7:4','4:7'],resolutions:['原生'],qualities:[QUALITY.standard,QUALITY.hd],exactSizes:{'1:1':'1024x1024','7:4':'1792x1024','4:7':'1024x1792'},maxImages:1};
-  if(/gemini[-_. /]?(3(?:\.1)?|3-pro).*image|gemini.*image.*(3(?:\.1)?|3-pro)/.test(h))return{family:'gemini-3-image',source:'registry',confidence:.97,requestMode:'aspect-image-size',aspectRatios:GEMINI_RATIOS,resolutions:['512','1K','2K','4K'],qualities:[QUALITY.native],maxImages:1};
-  if(/gemini[-_. /]?2\.5.*flash.*image|gemini.*flash.*image.*2\.5/.test(h))return{family:'gemini-2.5-flash-image',source:'registry',confidence:.97,requestMode:'aspect-ratio',aspectRatios:GEMINI_RATIOS,resolutions:['1K'],qualities:[QUALITY.native],maxImages:1};
-  if(/doubao[-_. /]?seedream|seedream[-_. /]?(4|4\.5|5)|ark\.cn-.*seedream/.test(h))return{family:'seedream-modern',source:'registry',confidence:.97,requestMode:'seedream-size',aspectRatios:SEEDREAM_RATIOS,resolutions:['1K','2K','4K'],qualities:[QUALITY.native],maxImages:1,areaBased:true};
-  if(/jimeng|即梦/.test(h))return{family:'jimeng',source:'registry',confidence:.94,requestMode:'width-height',aspectRatios:SEEDREAM_RATIOS,resolutions:['1K','2K','4K'],qualities:[QUALITY.native],maxImages:1,areaBased:true};
-  if(/siliconflow|silicon-flow/.test(h)&&/qwen[-_/ ]?image(?!.*edit)/.test(h))return{family:'siliconflow-qwen-image',source:'registry',confidence:.98,requestMode:'siliconflow-image-size',aspectRatios:['1:1','16:9','9:16','4:3','3:4','3:2','2:3'],resolutions:['原生'],qualities:[QUALITY.native],exactSizes:{'1:1':'1328x1328','16:9':'1664x928','9:16':'928x1664','4:3':'1472x1140','3:4':'1140x1472','3:2':'1584x1056','2:3':'1056x1584'},maxImages:1};
-  if(/siliconflow|silicon-flow/.test(h)&&/flux\.2[-_/ ]?(pro|flex)|black-forest-labs\/flux\.2/.test(h))return{family:'siliconflow-flux2',source:'registry',confidence:.98,requestMode:'siliconflow-image-size',aspectRatios:['1:1','3:4','4:3','9:16','16:9'],resolutions:['原生'],qualities:[QUALITY.native],exactSizes:{'1:1':'512x512','3:4':'768x1024','4:3':'1024x768','9:16':'576x1024','16:9':'1024x576'},maxImages:1};
+  if(/agnes[-_. ]?image[-_. ]?2\.1[-_. ]?flash/.test(h))return{family:'agnes-image-2.1-flash',source:'registry',confidence:1,requestMode:'agnes-image',aspectRatios:AGNES_RATIOS,resolutions:['1K','2K','3K','4K'],qualities:[QUALITY.native],maxImages:8,supportsImageReference:true,referenceField:'extra_body.image'};
+  if(/gpt[-_. ]?image/.test(h))return{family:'gpt-image',source:'registry',confidence:.99,requestMode:'openai-size',aspectRatios:['1:1','3:2','2:3'],resolutions:['原生'],qualities:[QUALITY.auto,QUALITY.low,QUALITY.medium,QUALITY.high],exactSizes:{'1:1':'1024x1024','3:2':'1536x1024','2:3':'1024x1536'},maxImages:4,supportsImageReference:false};
+  if(/dall[-_. ]?e[-_. ]?3/.test(h))return{family:'dall-e-3',source:'registry',confidence:.99,requestMode:'openai-size',aspectRatios:['1:1','7:4','4:7'],resolutions:['原生'],qualities:[QUALITY.standard,QUALITY.hd],exactSizes:{'1:1':'1024x1024','7:4':'1792x1024','4:7':'1024x1792'},maxImages:1,supportsImageReference:false};
+  if(/gemini[-_. /]?(3(?:\.1)?|3-pro).*image|gemini.*image.*(3(?:\.1)?|3-pro)/.test(h))return{family:'gemini-3-image',source:'registry',confidence:.97,requestMode:'aspect-image-size',aspectRatios:GEMINI_RATIOS,resolutions:['512','1K','2K','4K'],qualities:[QUALITY.native],maxImages:1,supportsImageReference:true,referenceField:'image'};
+  if(/gemini[-_. /]?2\.5.*flash.*image|gemini.*flash.*image.*2\.5/.test(h))return{family:'gemini-2.5-flash-image',source:'registry',confidence:.97,requestMode:'aspect-ratio',aspectRatios:GEMINI_RATIOS,resolutions:['1K'],qualities:[QUALITY.native],maxImages:1,supportsImageReference:true,referenceField:'image'};
+  if(/doubao[-_. /]?seedream|seedream[-_. /]?(4|4\.5|5)|ark\.cn-.*seedream/.test(h))return{family:'seedream-modern',source:'registry',confidence:.97,requestMode:'seedream-size',aspectRatios:SEEDREAM_RATIOS,resolutions:['1K','2K','4K'],qualities:[QUALITY.native],maxImages:1,areaBased:true,supportsImageReference:true,referenceField:'image'};
+  if(/jimeng|即梦/.test(h))return{family:'jimeng',source:'registry',confidence:.94,requestMode:'width-height',aspectRatios:SEEDREAM_RATIOS,resolutions:['1K','2K','4K'],qualities:[QUALITY.native],maxImages:1,areaBased:true,supportsImageReference:true,referenceField:'image'};
+  if(/siliconflow|silicon-flow/.test(h)&&/qwen[-_/ ]?image(?!.*edit)/.test(h))return{family:'siliconflow-qwen-image',source:'registry',confidence:.98,requestMode:'siliconflow-image-size',aspectRatios:['1:1','16:9','9:16','4:3','3:4','3:2','2:3'],resolutions:['原生'],qualities:[QUALITY.native],exactSizes:{'1:1':'1328x1328','16:9':'1664x928','9:16':'928x1664','4:3':'1472x1140','3:4':'1140x1472','3:2':'1584x1056','2:3':'1056x1584'},maxImages:1,supportsImageReference:false};
+  if(/siliconflow|silicon-flow/.test(h)&&/flux\.2[-_/ ]?(pro|flex)|black-forest-labs\/flux\.2/.test(h))return{family:'siliconflow-flux2',source:'registry',confidence:.98,requestMode:'siliconflow-image-size',aspectRatios:['1:1','3:4','4:3','9:16','16:9'],resolutions:['原生'],qualities:[QUALITY.native],exactSizes:{'1:1':'512x512','3:4':'768x1024','4:3':'1024x768','9:16':'576x1024','16:9':'1024x576'},maxImages:1,supportsImageReference:true,referenceField:'image'};
   if(/siliconflow|silicon-flow/.test(h))return{family:'siliconflow-generic',source:'registry',confidence:.9,requestMode:'siliconflow-image-size',aspectRatios:UI_RATIOS,resolutions:['1K'],qualities:[QUALITY.native],maxImages:4};
   if(/flux|stable[-_/ ]?diffusion|sdxl|kolors/.test(h))return{family:'diffusion-generic',source:'registry',confidence:.78,requestMode:'width-height',aspectRatios:UI_RATIOS,resolutions:['1K','2K'],qualities:[QUALITY.native],maxImages:4};
   const openAI=provider?.protocol==='openai-compatible'||/openai/.test(h)||/\/v1\/?$/.test(String(provider?.baseUrl||''));
@@ -62,12 +64,14 @@ function defaultCapability(provider={},model={}){
 }
 function resolve(provider={},model={}){
   const base=defaultCapability(provider,model),meta=metadataCaps(model),explicit=model.imageCapabilities&&typeof model.imageCapabilities==='object'?clone(model.imageCapabilities):{};
-  const hasMeta=Boolean(meta.sizes.length||meta.ratios.length||meta.resolutions.length||meta.requestMode||meta.qualities.some(x=>x.value));
+  const hasMeta=Boolean(meta.sizes.length||meta.ratios.length||meta.resolutions.length||meta.requestMode||meta.qualities.some(x=>x.value)||meta.supportsImageReference!==undefined||meta.referenceField);
   const merged={...base,...explicit};
   if(meta.requestMode)merged.requestMode=meta.requestMode;
   if(meta.ratios.length)merged.aspectRatios=meta.ratios;
   if(meta.resolutions.length)merged.resolutions=meta.resolutions;
   if(meta.qualities.some(x=>x.value))merged.qualities=meta.qualities;
+  if(meta.supportsImageReference!==undefined&&meta.supportsImageReference!==null&&meta.supportsImageReference!=='')merged.supportsImageReference=meta.supportsImageReference===true||String(meta.supportsImageReference).toLowerCase()==='true';
+  if(meta.referenceField)merged.referenceField=meta.referenceField;
   if(meta.sizes.length){merged.exactSizes={...(merged.exactSizes||{}),...exactMap(meta.sizes)};if(!meta.ratios.length)merged.aspectRatios=uniq(Object.keys(merged.exactSizes))}
   if(hasMeta&&!explicit.source){merged.source='metadata';merged.confidence=Math.max(Number(merged.confidence||0),.995)}
   merged.aspectRatios=uniq(merged.aspectRatios?.length?merged.aspectRatios:['1:1']);
@@ -87,10 +91,33 @@ function normalizeSelection(provider,model,parameters={}){
   if(!size&&!['原生','自动'].includes(resolution)){const p=Params();size=p?.dimensions?p.dimensions(resolution,ratio).size:''}
   return{...parameters,aspectRatio:ratio,aspect_ratio:ratio,resolution,imageQuality:q.label,qualityLabel:q.label,quality:q.value,size:size||parameters.size||'',capability:{family:cap.family,source:cap.source,confidence:cap.confidence,requestMode:cap.requestMode},imageCapabilities:cap};
 }
+function effectivePrompt(prompt,references=[]){
+  const parts=[],seen=new Set();
+  for(const ref of (Array.isArray(references)?references:[])){
+    const type=String(ref?.type||ref?.kind||'').toLowerCase(),role=String(ref?.role||ref?.semanticRole||'').toLowerCase(),text=String(ref?.text||'').trim();
+    if(!text||(!['text','script','markdown'].includes(type)&&!['prompt','prompt_context'].includes(role))||seen.has(text))continue;
+    seen.add(text);parts.push(text);
+  }
+  const local=String(prompt||'').trim();if(local&&!seen.has(local))parts.push(local);
+  return parts.join('\n\n');
+}
+function setPath(target,path,value){
+  const parts=String(path||'').split('.').filter(Boolean);if(!parts.length)return target;
+  let current=target;for(let i=0;i<parts.length-1;i++){const key=parts[i];if(!current[key]||typeof current[key]!=='object'||Array.isArray(current[key]))current[key]={};current=current[key]}
+  current[parts[parts.length-1]]=value;return target;
+}
+function referenceFieldFor(provider,model,cap){
+  const explicit=String(cap?.referenceField||model?.imageReferenceField||model?.referenceField||'').trim();if(explicit)return explicit;
+  if(cap?.supportsImageReference===true)return'image';
+  const h=hint(provider,model);
+  if(/seedream|gemini.*image|jimeng|即梦|flux\.2|kontext|image[-_ /]?edit|qwen.*image.*edit|nano[-_ /]?banana|img2img|i2i/.test(h))return'image';
+  return'';
+}
 function mapRequest(provider,model,parameters={},prompt='',count=1,references=[]){
-  const p=normalizeSelection(provider,model,parameters),cap=p.imageCapabilities,n=Math.max(1,Math.min(Number(cap.maxImages||4),Number(count||parameters.count||1))),common={model:model.id,prompt:String(prompt||'')};
-  let body,profile=cap.requestMode;
-  const referenceImages=(Array.isArray(references)?references:[]).filter(r=>String(r?.type||r?.kind||'').toLowerCase()==='image'&&String(r?.url||r?.value||'').trim()).map(r=>String(r.url||r.value).trim()).slice(0,Number(cap.maxImages||8));
+  const refs=Array.isArray(references)?references:[],p=normalizeSelection(provider,model,parameters),cap=p.imageCapabilities,n=Math.max(1,Math.min(Number(cap.maxImages||4),Number(count||parameters.count||1)));
+  const referenceImages=refs.filter(r=>String(r?.type||r?.kind||'').toLowerCase()==='image'&&String(r?.url||r?.value||'').trim()).map(r=>String(r.url||r.value).trim()).slice(0,Number(cap.maxImages||8));
+  const composed=effectivePrompt(prompt,refs)||(referenceImages.length?'严格依据已连接的上游参考图片生成，保持主体身份、外观、构图、风格和关键视觉特征一致。':'');
+  const common={model:model.id,prompt:composed};let body,profile=cap.requestMode;
   if(cap.requestMode==='agnes-image')body={...common,size:['1K','2K','3K','4K'].includes(String(p.resolution||'').toUpperCase())?String(p.resolution).toUpperCase():'1K',ratio:AGNES_RATIOS.includes(p.aspectRatio)?p.aspectRatio:'1:1',extra_body:{...(referenceImages.length?{image:referenceImages}:{}),response_format:'url'}};
   else if(cap.requestMode==='openai-size')body={...common,n,...(p.size?{size:p.size}:{}),...(p.quality?{quality:p.quality}:{})};
   else if(cap.requestMode==='seedream-size')body={...common,size:p.size||p.resolution,sequential_image_generation:'disabled',stream:false,response_format:'url'};
@@ -98,14 +125,20 @@ function mapRequest(provider,model,parameters={},prompt='',count=1,references=[]
   else if(cap.requestMode==='aspect-image-size')body={...common,aspect_ratio:p.aspectRatio,image_size:p.resolution};
   else if(cap.requestMode==='aspect-ratio')body={...common,aspect_ratio:p.aspectRatio};
   else {const dim=parseSize(p.size)||Params()?.dimensions?.(p.resolution,p.aspectRatio)||{};body={...common,width:Number(dim.width||p.width||1024),height:Number(dim.height||p.height||1024),...(n>1?{batch_size:n}:{})};}
+  if(referenceImages.length&&cap.requestMode!=='agnes-image'){
+    if(cap.supportsImageReference===false)throw new Error(`当前图片模型 ${model.name||model.id} 的生成接口不支持参考图；已阻止忽略 ${referenceImages.length} 张上游图片后继续生成`);
+    const field=referenceFieldFor(provider,model,cap);
+    if(!field)throw new Error(`已连接 ${referenceImages.length} 张上游图片，但当前图片模型没有声明参考图请求字段；已阻止静默忽略参考图。请使用支持图生图/多图参考的模型，或在模型能力中配置 imageReferenceField`);
+    const value=referenceImages.length===1?referenceImages[0]:referenceImages;setPath(body,field,value);profile=`${profile}+reference`;
+  }
   return{profile,body,capability:cap,selection:p};
 }
 function decorateDiscoveredModel(provider,raw={},model={}){
   if(String(model.modality||'').toLowerCase()!=='image')return model;
-  const rawCapabilities={};for(const key of ['supported_sizes','supportedSizes','sizes','image_sizes','imageSizes','supported_aspect_ratios','supportedAspectRatios','aspect_ratios','aspectRatios','supported_resolutions','supportedResolutions','resolutions','supported_qualities','supportedQualities','qualities','image_request_mode','imageRequestMode','capabilities'])if(raw?.[key]!==undefined)rawCapabilities[key]=clone(raw[key]);
+  const rawCapabilities={};for(const key of ['supported_sizes','supportedSizes','sizes','image_sizes','imageSizes','supported_aspect_ratios','supportedAspectRatios','aspect_ratios','aspectRatios','supported_resolutions','supportedResolutions','resolutions','supported_qualities','supportedQualities','qualities','image_request_mode','imageRequestMode','supportsImageReference','supports_image_reference','imageReferenceField','image_reference_field','capabilities'])if(raw?.[key]!==undefined)rawCapabilities[key]=clone(raw[key]);
   const next={...model,...(Object.keys(rawCapabilities).length?{rawCapabilities}:{})};next.imageCapabilities=resolve(provider,next);return next;
 }
-const api=Object.freeze({UI_RATIOS,GEMINI_RATIOS,resolve,normalizeSelection,mapRequest,decorateDiscoveredModel,ratioFromSize,parseSize,areaSize});
+const api=Object.freeze({UI_RATIOS,GEMINI_RATIOS,resolve,normalizeSelection,mapRequest,decorateDiscoveredModel,ratioFromSize,parseSize,areaSize,effectivePrompt});
 globalThis.CanvasModelImageCapabilities=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })();
