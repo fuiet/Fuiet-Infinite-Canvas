@@ -1,0 +1,84 @@
+name: Patch XOGPU image data URL support
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/patch-xogpu-image-data-url.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply surgical XOGPU image transport repair
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          root = Path('_read_123_zip_20260821_180410')
+          registry = root / 'video-protocol-registry.js'
+          test_file = root / 'tests' / 'xogpu-minimax-h3.test.mjs'
+          index = root / 'index.html'
+
+          def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected exactly 1 match, found {count}')
+              return text.replace(old, new, 1)
+
+          src = registry.read_text(encoding='utf-8')
+          old_validator = "function xogpuPublicMediaUrl(value,label){const text=String(value||'').trim();if(!/^https:\\/\\//i.test(text))throw new Error('XOGPU MiniMax-H3 的'+label+'必须是公网可访问的 HTTPS URL；不支持浏览器本地地址、HTTP、blob URL、Base64 或 data URI');return text}"
+          new_validator = "function xogpuMediaReference(value,type){const text=String(value||'').trim(),label=type==='image'?'图片':type==='video'?'参考视频':'参考音频';if(/^https:\\/\\//i.test(text))return text;if(type==='image'&&/^data:image\\/(?:png|jpeg|jpg|webp|heic|heif);base64,/i.test(text))return text;throw new Error('XOGPU MiniMax-H3 的'+label+'必须使用公网 HTTPS URL'+(type==='image'?' 或 Base64 Data URL':'')+'；不支持浏览器本地地址、HTTP 或 blob URL')}"
+          src = replace_once(src, old_validator, new_validator, 'XOGPU media validator')
+
+          old_call = "const url=xogpuPublicMediaUrl(x.url,x.type==='image'?'图片':x.type==='video'?'参考视频':'参考音频');"
+          new_call = "const url=xogpuMediaReference(x.url,x.type);"
+          src = replace_once(src, old_call, new_call, 'XOGPU mapper call')
+          registry.write_text(src, encoding='utf-8')
+
+          tests = test_file.read_text(encoding='utf-8')
+          marker = "test('shared video parameters preserve adaptive for XOGPU instead of coercing it to 16:9',()=>{"
+          addition = """test('XOGPU image references accept Base64 data URLs while video and audio stay HTTPS-only',()=>{\n  const model={id:'MiniMax-H3',name:'MiniMax H3',modality:'video',videoProtocolFamily:'xogpu-minimax-h3'},route=V.resolve(provider,model,'image-to-video'),imageData='data:image/png;base64,iVBORw0KGgo=';\n  const mapped=V.mapRequest(provider,model,{prompt:'animate local image',parameters:{duration:5,ratio:'adaptive'}},route,[{type:'image',url:imageData}]);\n  assert.equal(mapped.body.content[1].type,'image_url');assert.equal(mapped.body.content[1].image_url.url,imageData);\n  assert.throws(()=>V.mapRequest(provider,model,{prompt:'bad video data',parameters:{duration:5,ratio:'adaptive'}},V.resolve(provider,model,'reference-to-video'),[{type:'video',url:'data:video/mp4;base64,AAAA'}]),/HTTPS URL/);\n  assert.throws(()=>V.mapRequest(provider,model,{prompt:'bad audio data',parameters:{duration:5,ratio:'adaptive'}},V.resolve(provider,model,'reference-to-video'),[{type:'audio',url:'data:audio/wav;base64,AAAA'}]),/HTTPS URL/);\n  assert.throws(()=>V.mapRequest(provider,model,{prompt:'bad browser local',parameters:{duration:5,ratio:'adaptive'}},route,[{type:'image',url:'/__browser_media/media_local'}]),/Base64 Data URL/);\n});\n\n"""
+          if addition.strip() in tests:
+              raise SystemExit('XOGPU Base64 regression test already exists')
+          if marker not in tests:
+              raise SystemExit('XOGPU test insertion marker not found')
+          tests = tests.replace(marker, addition + marker, 1)
+          test_file.write_text(tests, encoding='utf-8')
+
+          html = index.read_text(encoding='utf-8')
+          html = replace_once(
+              html,
+              './video-protocol-registry.js?v=20260901-video-wait-progress-1',
+              './video-protocol-registry.js?v=20260902-xogpu-image-data-url-1',
+              'XOGPU registry cache key',
+          )
+          index.write_text(html, encoding='utf-8')
+          PY
+      - name: Syntax check
+        working-directory: _read_123_zip_20260821_180410
+        run: npm run check
+      - name: Focused XOGPU regression tests
+        working-directory: _read_123_zip_20260821_180410
+        run: node --test tests/xogpu-minimax-h3.test.mjs tests/xogpu-browser-strict-request.test.mjs tests/video-reference-transport.test.mjs
+      - name: Commit repair and remove temporary workflow
+        run: |
+          git config user.name 'Codex'
+          git config user.email 'codex@openai.local'
+          git rm .github/workflows/patch-xogpu-image-data-url.yml
+          git add \
+            _read_123_zip_20260821_180410/video-protocol-registry.js \
+            _read_123_zip_20260821_180410/tests/xogpu-minimax-h3.test.mjs \
+            _read_123_zip_20260821_180410/index.html
+          git diff --cached --quiet && exit 0
+          git commit -m 'Allow Base64 image references for XOGPU MiniMax-H3'
+          git push origin main
