@@ -1,55 +1,30 @@
-/* Fuiet Agent · left workspace rail / expanded panel */
+/* Fuiet Agent · top-right entry / expanded right panel */
 
-/* The original topbar Agent button stays as the behavior bridge but is no longer visible. */
-#agentBtn{display:none!important}
-
-.agent-left-rail{
-  position:absolute;
-  left:8px;
-  top:54px;
-  z-index:84;
-  width:86px;
-  pointer-events:auto;
-  transition:opacity .16s ease,transform .16s ease;
-}
-.agent-left-rail.panel-open{
-  opacity:0;
-  transform:translateX(-8px);
-  pointer-events:none;
-}
-.agent-rail-button{
-  width:86px;
-  height:38px;
-  display:flex;
+/* Agent is the final control in the top-right toolbar, immediately after Settings. */
+#agentBtn{
+  display:inline-flex!important;
   align-items:center;
   justify-content:center;
-  gap:7px;
-  border:1px solid #3a3d42;
-  border-radius:8px;
-  background:#1d1f22;
-  color:#f2f3f4;
-  box-shadow:0 5px 16px rgba(0,0,0,.22);
-  font-size:12px;
-  font-weight:650;
-  letter-spacing:.1px;
+  gap:6px;
+  order:999;
 }
-.agent-rail-button:hover,.agent-rail-button.active{background:#242629;border-color:#50545a}
-.agent-rail-button svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+#agentBtn .ui-icon{width:15px;height:15px}
+.agent-left-rail{display:none!important}
 
-/* Move the existing global Agent from the right side to the left side. */
+/* Keep the enhanced Agent surface, but open it from the right side. */
 .agent-panel.agent-left-v2,
 #agentPanel{
-  left:0!important;
-  right:auto!important;
+  left:auto!important;
+  right:0!important;
   top:42px!important;
   bottom:0!important;
   width:404px!important;
-  border-left:0!important;
-  border-right:1px solid #303236!important;
+  border-left:1px solid #303236!important;
+  border-right:0!important;
   background:#202123!important;
-  box-shadow:18px 0 38px rgba(0,0,0,.28)!important;
-  transform:translateX(-100%)!important;
-  transform-origin:left center;
+  box-shadow:-18px 0 38px rgba(0,0,0,.28)!important;
+  transform:translateX(100%)!important;
+  transform-origin:right center;
 }
 .app-shell.agent-open #agentPanel{
   transform:translateX(0)!important;
@@ -57,12 +32,12 @@
   pointer-events:auto!important;
 }
 .app-shell.agent-open .canvas-viewport{
-  left:404px!important;
-  right:0!important;
-  transition:left .18s ease!important;
+  left:0!important;
+  right:404px!important;
+  transition:right .18s ease!important;
 }
-.app-shell.agent-open .bottom-left{left:418px!important;transition:left .18s ease}
-.app-shell.agent-open .minimap{left:418px!important;transition:left .18s ease}
+.app-shell.agent-open .bottom-left{left:14px!important}
+.app-shell.agent-open .minimap{left:14px!important}
 
 .agent-left-v2 .agent-head{
   height:50px;
@@ -232,7 +207,7 @@
 
 @media(max-width:820px){
   #agentPanel{width:min(404px,92vw)!important}
-  .app-shell.agent-open .canvas-viewport{left:0!important}
+  .app-shell.agent-open .canvas-viewport{left:0!important;right:0!important}
   .app-shell.agent-open .bottom-left{left:14px!important}
   .app-shell.agent-open .minimap{left:14px!important}
 }
