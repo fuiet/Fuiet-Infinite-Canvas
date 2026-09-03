@@ -14,7 +14,7 @@ const canvasScripts=[
   `./app.js?v=${v}&fix=generator-input-focus-1&ui=text-result-editor-1&wheel=text-editor-1&refs=generator-reference-strip-1`,
   `./upstream-generation-inputs-v1.js?v=${v}`,
   `./reference-popover-portal-v1.js?v=${v}`,
-  `./video-hover-player-v1.js?v=${v}`,
+  `./video-hover-player-v1.js?v=${v}&audio=default-on-1`,
   `./security-client.js?v=${v}`,
   `./ui-zh.js?v=${v}`,
   `./ui-v2.js?v=${v}&fix=text-controls-stable-1`,
