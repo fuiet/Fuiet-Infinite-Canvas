@@ -26,7 +26,9 @@ test('click-selected script result toolbar is the compact three-action bar',()=>
   assert.ok(!app.includes('node-toolbar-script"><span class="selection-toolbar-label">脚本结果</span>'));
 });
 
-test('script open control remains button-like and assets are cache-busted',()=>{
+test('script open control remains button-like and changed assets are cache-busted',()=>{
   assert.match(css,/\.script-ready-open\{[^}]*border:0;[^}]*cursor:pointer/);
-  assert.ok(bootstrap.includes("const v='20260903-script-node-click-toolbar-3';"));
+  assert.ok(bootstrap.includes("const v='20260903-script-node-compact-2';"));
+  assert.ok(bootstrap.includes('&scriptclick=toolbar-3'));
+  assert.ok(bootstrap.includes('script-node-progress-v1.css?v=${v}&scriptclick=toolbar-3'));
 });
