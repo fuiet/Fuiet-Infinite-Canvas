@@ -1,4 +1,4 @@
-/* Fuiet Agent · LibTV-style left workspace surface
+/* Fuiet Agent · top-right entry / right workspace surface
  * Enhances the existing Agent engine in app.js without duplicating its state,
  * node creation, Skill routing, task-center or context actions.
  */
@@ -6,29 +6,27 @@
 'use strict';
 const app=document.querySelector('#app');
 const panel=document.querySelector('#agentPanel');
-const legacyButton=document.querySelector('#agentBtn');
+const agentButton=document.querySelector('#agentBtn');
+const settingsButton=document.querySelector('#settingsBtn');
 const nodeLayer=document.querySelector('#nodeLayer');
-if(!app||!panel||!legacyButton)return;
+if(!app||!panel||!agentButton)return;
 
 let panelObserver=null;
 let appObserver=null;
 let patchQueued=false;
 
-const icon=`<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="13" rx="3"/><path d="M7.5 18v2"/><path d="M16.5 18v2"/><path d="M8 9h.01"/><path d="M16 9h.01"/><path d="M9 13h6"/></svg>`;
 const typeIcon={
   text:'▤',script:'▥',image:'▧',video:'▶',audio:'♪',director:'◇'
 };
 
-function ensureRail(){
-  let rail=document.querySelector('#agentLeftRail');
-  if(rail)return rail;
-  rail=document.createElement('div');
-  rail.id='agentLeftRail';
-  rail.className='agent-left-rail';
-  rail.innerHTML=`<button id="agentRailButton" class="agent-rail-button" type="button" aria-label="打开 Agent" aria-expanded="false">${icon}<span>Agent</span></button>`;
-  app.appendChild(rail);
-  rail.querySelector('#agentRailButton')?.addEventListener('click',()=>legacyButton.click());
-  return rail;
+function placeAgentButton(){
+  document.querySelector('#agentLeftRail')?.remove();
+  agentButton.removeAttribute('aria-hidden');
+  agentButton.setAttribute('aria-label','Agent');
+  agentButton.title='Agent';
+  if(settingsButton?.parentElement&&agentButton.previousElementSibling!==settingsButton){
+    settingsButton.insertAdjacentElement('afterend',agentButton);
+  }
 }
 
 function selectedNodeContexts(){
@@ -115,12 +113,10 @@ function queuePatch(){
 }
 
 function syncOpenState(){
+  placeAgentButton();
   const open=app.classList.contains('agent-open');
-  const rail=ensureRail();
-  rail.classList.toggle('panel-open',open);
-  const btn=rail.querySelector('#agentRailButton');
-  btn?.setAttribute('aria-expanded',open?'true':'false');
-  btn?.classList.toggle('active',open);
+  agentButton.setAttribute('aria-expanded',open?'true':'false');
+  agentButton.classList.toggle('active',open);
   queuePatch();
 }
 
@@ -129,8 +125,7 @@ function refreshContextAfterCanvasChange(){
   queuePatch();
 }
 
-ensureRail();
-legacyButton.setAttribute('aria-hidden','true');
+placeAgentButton();
 panelObserver=new MutationObserver(queuePatch);
 panelObserver.observe(panel,{childList:true,subtree:true});
 appObserver=new MutationObserver(syncOpenState);
