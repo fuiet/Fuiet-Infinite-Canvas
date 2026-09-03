@@ -7,7 +7,7 @@
 'use strict';
 const manager=globalThis.CanvasBrowserStorageManager;
 if(!manager?.ready)throw new Error('Browser Storage Manager 未加载');
-const v='20260903-script-assets-layout-2';
+const v='20260903-script-assets-freeze-fix-1';
 const canvasScripts=[
   `./provider-auto-config-v1.js?v=${v}`,
   `./script-workflow-core.js?v=${v}`,
@@ -46,9 +46,6 @@ async function detectDesktopServer(){
     const data=await res.json().catch(()=>null);
     if(!data?.ok)return false;
     if(String(data.runtime||'').toLowerCase()==='browser-local-preview')return false;
-    // browser-runtime replaces window.fetch only for preview. On desktop, restore
-    // the original fetch before app.js loads so projects/tasks/providers/media all
-    // go through the persistent Node server and desktop ReferenceMediaTransport.
     window.fetch=rawFetch;
     globalThis.CanvasExecutionRuntime=Object.freeze({mode:'desktop-local-server',health:data});
     document.documentElement.dataset.executionRuntime='desktop';
@@ -63,8 +60,6 @@ async function start(){
   const desktop=await detectDesktopServer();
   const isCanvas=Boolean(document.querySelector('#canvasViewport'));
   if(isCanvas){
-    // /__browser_media is preview-only. The Electron build uses /media files served
-    // by the bundled Node runtime, so do not install or depend on a Service Worker.
     if(!desktop){
       await loadScript(`./browser-media-controller-v2.js?v=${v}`);
       try{await globalThis.CanvasMediaControllerReady}catch(error){console.warn('[browser-bootstrap] media controller recovery failed',error)}
