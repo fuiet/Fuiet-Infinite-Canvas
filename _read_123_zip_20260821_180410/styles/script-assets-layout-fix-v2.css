@@ -1,0 +1,83 @@
+/* Script Studio · Prepare Assets layout correction (2026-09-03)
+   Reference target: distinct 角色 / 场景 / 道具 rows, stable card widths,
+   a compact +新增 tile, and normal wrapping without cards being squeezed. */
+
+.script-assets-layout > main{
+  display:block!important;
+  min-width:0!important;
+  width:100%!important;
+}
+
+.script-assets-layout .asset-block{
+  display:block!important;
+  position:relative!important;
+  clear:both!important;
+  width:100%!important;
+  min-width:0!important;
+  height:auto!important;
+  overflow:visible!important;
+}
+
+.script-assets-layout .asset-block + .asset-block{
+  margin-top:26px!important;
+}
+
+.script-assets-layout .script-asset-grid.cards{
+  display:flex!important;
+  flex-flow:row wrap!important;
+  align-items:flex-start!important;
+  align-content:flex-start!important;
+  justify-content:flex-start!important;
+  gap:12px!important;
+  width:100%!important;
+  min-width:0!important;
+  height:auto!important;
+  overflow:visible!important;
+  grid-template-columns:none!important;
+  grid-auto-columns:auto!important;
+  grid-auto-flow:row!important;
+}
+
+.script-assets-layout .script-asset-grid.cards > .script-asset-card{
+  flex:0 0 260px!important;
+  width:260px!important;
+  min-width:260px!important;
+  max-width:260px!important;
+  margin:0!important;
+  align-self:flex-start!important;
+}
+
+.script-assets-layout .script-asset-grid.cards > .script-asset-add-card{
+  flex:0 0 148px!important;
+  width:148px!important;
+  min-width:148px!important;
+  max-width:148px!important;
+  height:145px!important;
+  min-height:145px!important;
+  margin:0!important;
+  align-self:flex-start!important;
+}
+
+/* The native empty state must occupy its own line instead of becoming a tiny flex cell. */
+.script-assets-layout .script-asset-grid.cards > .feature-empty{
+  flex:1 0 100%!important;
+  width:100%!important;
+}
+
+@media(max-width:1400px){
+  .script-assets-layout .script-asset-grid.cards > .script-asset-card{
+    flex-basis:230px!important;
+    width:230px!important;
+    min-width:230px!important;
+    max-width:230px!important;
+  }
+}
+
+@media(max-width:900px){
+  .script-assets-layout .script-asset-grid.cards > .script-asset-card{
+    flex:1 1 calc(50% - 6px)!important;
+    width:auto!important;
+    min-width:180px!important;
+    max-width:none!important;
+  }
+}
