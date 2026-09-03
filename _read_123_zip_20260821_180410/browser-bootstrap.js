@@ -7,7 +7,7 @@
 'use strict';
 const manager=globalThis.CanvasBrowserStorageManager;
 if(!manager?.ready)throw new Error('Browser Storage Manager 未加载');
-const v='20260903-script-editor-fonts-1';
+const v='20260903-script-assets-reference-1';
 const canvasScripts=[
   `./provider-auto-config-v1.js?v=${v}`,
   `./script-workflow-core.js?v=${v}`,
@@ -28,7 +28,8 @@ const canvasScripts=[
   {src:`./node-send-icon-v1.js?v=${v}`,attrs:{'data-node-send-icon':'1'}},
   `./text-node-doubleclick-v1.js?v=${v}`,
   `./image-generator-v2.js?v=${v}`,
-  `./image-ratio-picker-v1.js?v=${v}`
+  `./image-ratio-picker-v1.js?v=${v}`,
+  `./script-assets-reference-v1.js?v=${v}`
 ];
 const modelScripts=[`./provider-auto-config-v1.js?v=${v}`,`./models.js?v=${v}`,`./ui-zh.js?v=${v}`];
 function loadScript(spec){return new Promise((resolve,reject)=>{const cfg=typeof spec==='string'?{src:spec}:spec,s=document.createElement('script');s.src=cfg.src;s.async=false;for(const [k,v] of Object.entries(cfg.attrs||{}))s.setAttribute(k,v);s.onload=()=>resolve();s.onerror=()=>reject(new Error(`脚本加载失败：${cfg.src}`));document.body.appendChild(s)})}
@@ -73,6 +74,7 @@ async function start(){
       loadStyle(`./styles/video-result-autofit-v1.css?v=${v}`),
       loadStyle(`./styles/script-workflow-v2.css?v=${v}`),
       loadStyle(`./styles/script-editor-simplified-v1.css?v=${v}`),
+      loadStyle(`./styles/script-assets-reference-v1.css?v=${v}`),
       loadStyle(`./styles/script-node-progress-v1.css?v=${v}&scriptclick=toolbar-3&scriptbar=large-1`),
       loadStyle(`./styles/edge-reference-cards-v1.css?v=${v}&ui=generator-reference-strip-1`),
       loadStyle(`./styles/video-generator-reference-layout-fix-v1.css?v=${v}`),
