@@ -1,0 +1,29 @@
+name: Patch script node progress
+on:
+  push:
+    paths:
+      - 'scripts/patch-script-node-progress.py'
+      - '.github/workflows/patch-script-node-progress.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply patch
+        run: python scripts/patch-script-node-progress.py
+      - name: Syntax check
+        run: npm run check --prefix _read_123_zip_20260821_180410
+      - name: Script progress tests
+        run: node --test _read_123_zip_20260821_180410/tests/script-node-progress.test.mjs
+      - name: Commit repair
+        run: |
+          git config user.name 'Codex'
+          git config user.email 'codex@openai.local'
+          git add _read_123_zip_20260821_180410/app.js _read_123_zip_20260821_180410/browser-bootstrap.js _read_123_zip_20260821_180410/index.html _read_123_zip_20260821_180410/styles/script-node-progress-v1.css _read_123_zip_20260821_180410/tests/script-node-progress.test.mjs
+          git commit -m 'Add script node generation progress'
+          git push
