@@ -16,6 +16,18 @@ jobs:
           node-version: '22'
       - name: Apply patch
         run: python scripts/patch-script-node-progress.py
+      - name: Stabilize generated test assertion
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('_read_123_zip_20260821_180410/tests/script-node-progress.test.mjs')
+          s=p.read_text(encoding='utf-8')
+          bad="  assert.match(app,/new Array\\(18\\)\\.fill\\('<i><\\\\/i>'\\)/);"
+          good="  assert.ok(app.includes(\"new Array(18).fill('<i></i>')\"));"
+          if bad not in s:
+              raise SystemExit('generated skeleton assertion not found')
+          p.write_text(s.replace(bad,good,1),encoding='utf-8')
+          PY
       - name: Syntax check
         run: npm run check --prefix _read_123_zip_20260821_180410
       - name: Script progress tests
