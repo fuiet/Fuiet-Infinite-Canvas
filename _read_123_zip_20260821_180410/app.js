@@ -959,7 +959,15 @@
   function videoTaskDiagnosticsHtml(){return''}
   function defaultNodeName(type){return({text:'文本节点',image:'图片节点',video:'视频节点',audio:'音频节点',script:'脚本生成器',director:'导演台'})[type]||labelForType(type)}
   function nodeSequenceNumber(id){const idx=state.nodes.findIndex(n=>n.id===id);return idx>=0?idx+1:1}
+  function scriptNodeDisplayTitle(n){
+    const d=n?.scriptData||{},source=String(d.title||d.name||d.summary||d.analysis?.summary||n?.sourceText||'').trim(),book=source.match(/《\s*([^》\n]{2,40})\s*》/),raw=String(n?.title||'').trim();
+    if(book?.[1])return book[1].trim();
+    if(raw&&!['脚本生成器','脚本节点','Script'].includes(raw))return raw;
+    const first=source.split(/\r?\n/).map(x=>x.replace(/^#+\s*/,'').trim()).find(Boolean)||'脚本';
+    return first.length>28?first.slice(0,28)+'…':first;
+  }
   function nodeTitleBase(n){
+    if(n?.type==='script'&&Array.isArray(n?.scriptData?.shots)&&n.scriptData.shots.length)return scriptNodeDisplayTitle(n);
     const raw=String(n?.title||'').trim();
     const seq=nodeSequenceNumber(n?.id);
     const base=defaultNodeName(n?.type);
@@ -1256,7 +1264,8 @@
       if(scriptBusy){
         const scriptPct=Math.max(2,Math.min(99,Math.round(Number(n.taskProgress)||2))),scriptLabel=taskState==='queued'?'排队中':'生成中';
         body=`<div class="script-node-generating"><div class="script-node-skeleton" aria-hidden="true">${new Array(18).fill('<i></i>').join('')}</div><button type="button" class="script-node-progress-pill" data-script-cancel="${n.id}" title="点击取消当前脚本生成任务"><span>${scriptLabel} <b>${scriptPct}%</b>…</span><em>取消</em></button></div>`;
-      }else body = `<div class="script-node-compact"><div class="script-compact-icon"><i></i><i></i><i></i><i></i></div><div class="script-try-label">尝试：</div><button data-script-preset="breakdown">☰ <b>脚本生成分镜脚本</b></button><button data-script-preset="character">♙ <b>角色生成分镜脚本</b></button><button data-script-preset="manual">▤ <b>自己编写分镜脚本</b></button>${shots.length?`<small>${shots.length} 个镜头 · 点击卡片查看/继续编辑</small>`:''}</div>`;
+      }else if(shots.length)body=scriptNodeReadyHtml(n,data);
+      else body = `<div class="script-node-compact"><div class="script-compact-icon"><i></i><i></i><i></i><i></i></div><div class="script-try-label">尝试：</div><button data-script-preset="breakdown">☰ <b>脚本生成分镜脚本</b></button><button data-script-preset="character">♙ <b>角色生成分镜脚本</b></button><button data-script-preset="manual">▤ <b>自己编写分镜脚本</b></button></div>`;
     } else if(n.type==='director'){
       const d=ensureDirectorData(n);
       body = `<div class="director-node-preview"><div class="director-mini-grid"><div class="director-mini-horizon"></div>${d.objects.filter(o=>o.visible!==false).slice(0,6).map((o,i)=>`<i class="director-mini-object ${o.type}" style="left:${40+o.x*16}%;top:${55-o.z*7-o.y*5}%;transform:scale(${Math.max(.6,Number(o.sx||1))})"></i>`).join('')}</div><div class="director-node-meta"><span>${d.objects.length} 个对象</span><span>FOV ${d.camera.fov}°</span></div><button class="director-open-btn" data-open-director="${n.id}">打开导演台</button></div>`;
@@ -1735,7 +1744,7 @@
     if(n.type==='video')return[{label:'高清',tool:'高清',action:'video-hd',primary:true},{label:'片段重拍',tool:'片段重拍',action:'video-reshoot'},{label:'提帧',tool:'逐帧拉片',action:'video-frames'},{label:'剪辑',tool:'剪辑',action:'video-trim'},{label:'音频分离',tool:'分离音视频',action:'video-audio'},{label:'续写',tool:'智能续写',action:'video-extend'},{label:'下载',action:'video-download',iconOnly:true},{label:'全屏',action:'video-fullscreen',iconOnly:true}];
     if(n.type==='audio')return[{label:'截取',tool:'截取',action:'audio-trim',primary:true},{label:'变速',tool:'变速',action:'audio-speed'},{label:'切分',tool:'切分',action:'audio-split'},{label:'下载',action:'audio-download',iconOnly:true}];
     if(n.type==='text')return[];
-    if(n.type==='script')return[{label:'编辑脚本',tool:'打开脚本',primary:true},{label:'看板',tool:'整集看板'},{label:'批量生成',action:'script-batch'},{label:'改生成提示',action:'edit-prompt'},{label:'重新生成',action:'rerun'},{label:'更多',action:'more'}];
+    if(n.type==='script')return[{label:'重新生成',action:'rerun',primary:true},{label:'批量生成分镜',action:'script-batch-image'},{label:'批量生成视频',action:'script-batch-video'}];
     if(n.type==='director')return[{label:'打开导演台',tool:'打开导演台',primary:true},{label:'截图',tool:'截图'},{label:'更多',action:'more'}];
     return[{label:'复制',tool:'复制',primary:true},{label:'改提示词',action:'edit-prompt'},{label:'重新生成',action:'rerun'},{label:'更多',action:'more'}];
   }
@@ -1749,7 +1758,8 @@
   function runTopBarAction(n,a,anchor){
     if(a.tool)return toolAction(a.tool,n);
     if(a.action==='image-video'){runTransaction('创建图转视频',()=>{createDerivedNode(n,'video','图转视频',n.prompt||'保持主体与构图连续，自然运动',{operation:'image_to_video'},430)});return}
-    if(a.action==='script-batch'){openScriptEditor(n,'batch-image');return}
+    if(a.action==='script-batch-image'){const d=ensureScriptData(n);if(scriptWorkflowRequire(n,d,'batch'))openScriptEditor(n,'batch-image');return}
+    if(a.action==='script-batch-video'){const d=ensureScriptData(n);if(scriptWorkflowRequire(n,d,'batch'))openScriptEditor(n,'batch-video');return}
     if(a.action==='image-portrait'){openImagePortraitMenu(n,anchor);return}
     if(a.action==='image-element'||a.action==='image-brush'){openImageTool('重绘',n);return}
     if(a.action==='image-layers'){sendImageLayerSeparation(n);return}
@@ -2851,6 +2861,11 @@
     overlay.addEventListener('pointerdown',e=>{if(e.target===overlay)close()});setTimeout(()=>ta.focus(),0);
   }
   function scriptShotsHtml(n,d){const stats=scriptWorkflowStats(d);return `<div class="script-table-wrap simplified"><table class="script-editor-table simplified"><thead><tr><th>镜号</th><th>时长</th><th>画面描述</th><th>景别</th><th>光影氛围</th><th>对白 / 旁白</th><th>音效</th><th>运镜</th><th>最终提示词</th><th>操作</th></tr></thead><tbody>${d.shots.map((s,i)=>`<tr data-shot-row="${s.id}"><td class="shot-number">${i+1}</td><td><input class="shot-duration" data-shot="duration" type="number" min=".5" step=".5" value="${Number(s.duration||3)}"><span class="shot-duration-unit">s</span></td><td class="shot-description-column"><button type="button" class="shot-description-cell" data-edit-shot-description="${s.id}">${scriptShotDescriptionHtml(d,s)}</button></td><td><select data-shot="shotSize">${['大全景','全景','中景','近景','特写','极特写'].map(x=>`<option ${x===s.shotSize?'selected':''}>${x}</option>`).join('')}</select></td><td><textarea data-shot="lighting">${escapeHtml(s.lighting||'')}</textarea></td><td><textarea data-shot="dialogue">${escapeHtml(s.dialogue||'')}</textarea></td><td><textarea data-shot="sound">${escapeHtml(s.sound||'')}</textarea></td><td><textarea data-shot="cameraMovement">${escapeHtml(s.cameraMovement||'')}</textarea></td><td class="shot-final-prompt-column">${scriptFinalPromptHtml(s)}</td><td class="shot-actions-column"><button type="button" class="shot-more-btn" data-shot-menu="${s.id}" aria-label="镜头操作">•••</button><div class="shot-row-menu hidden" data-shot-row-menu="${s.id}"><button data-move-shot="up" data-shot-id="${s.id}" ${i===0?'disabled':''}>上移</button><button data-move-shot="down" data-shot-id="${s.id}" ${i===d.shots.length-1?'disabled':''}>下移</button><button class="danger" data-delete-shot="${s.id}">删除镜头</button></div></td></tr>`).join('')}</tbody></table></div><div class="script-bottom-actions simplified"><button id="addShot">＋ 添加镜头</button><span class="spacer"></span><button id="confirmScriptShots" class="primary">${stats.shotsConfirmed?'下一步：准备资产':'确认镜头 → 准备资产'}</button></div>`}
+
+  function scriptNodeReadyHtml(n,d){
+    const s=scriptWorkflowStats(d),steps=[['确认镜头',1,s.shotsConfirmed],['准备资产',2,s.assetsReady],['合成提示词',3,s.promptsReady]];
+    return `<button type="button" class="script-node-ready" data-open-script="${escapeAttr(n.id)}" aria-label="打开脚本节点"><span class="script-ready-icon" aria-hidden="true"><i></i><i></i><i></i></span><span class="script-ready-steps">${steps.map(([label,no,done])=>`<span class="script-ready-step ${done?'done':''}"><i>${done?'✓':no}</i><b>${label}</b></span>`).join('<em></em>')}</span><span class="script-ready-open">打开脚本节点 →</span></button>`;
+  }
 
   function scriptWorkflowStats(d){
     const shots=d.shots||[],assets=scriptAssetCatalog(d),promptReady=shots.filter(s=>String(s.imagePrompt||'').trim()&&String(s.videoPrompt||'').trim()&&!s.promptDirty).length,assetReady=assets.filter(a=>String(a.mediaUrl||'').trim()).length,w=d.workflow||{};
