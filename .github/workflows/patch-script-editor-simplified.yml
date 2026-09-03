@@ -1,0 +1,29 @@
+name: Patch script editor simplified
+on:
+  push:
+    paths:
+      - 'scripts/patch-script-editor-simplified.py'
+      - '.github/workflows/patch-script-editor-simplified.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply patch
+        run: python scripts/patch-script-editor-simplified.py
+      - name: Syntax check
+        run: npm run check --prefix _read_123_zip_20260821_180410
+      - name: Script editor tests
+        run: node --test _read_123_zip_20260821_180410/tests/script-editor-simplified.test.mjs
+      - name: Commit repair
+        run: |
+          git config user.name 'Codex'
+          git config user.email 'codex@openai.local'
+          git add _read_123_zip_20260821_180410/app.js _read_123_zip_20260821_180410/browser-bootstrap.js _read_123_zip_20260821_180410/index.html _read_123_zip_20260821_180410/styles/script-editor-simplified-v1.css _read_123_zip_20260821_180410/tests/script-editor-simplified.test.mjs
+          git commit -m 'Simplify script storyboard editor'
+          git push
