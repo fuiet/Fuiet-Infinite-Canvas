@@ -45,9 +45,15 @@ if '.script-ready-open:focus-visible{' not in css:
     css += "\n.script-ready-open:focus-visible{outline:1px solid #8f9493;outline-offset:2px}\n"
 CSS.write_text(css, encoding='utf-8')
 
+# Keep the existing shared cache version so legacy regression tests remain valid,
+# and cache-bust only the two assets changed by this patch.
 bootstrap = BOOTSTRAP.read_text(encoding='utf-8')
-old_version = "const v='20260903-script-node-compact-2';"
-new_version = "const v='20260903-script-node-click-toolbar-3';"
-if new_version not in bootstrap:
-    bootstrap = replace_once(bootstrap, old_version, new_version, 'browser cache version')
+old_app_loader = "  `./app.js?v=${v}&fix=generator-input-focus-1&ui=text-result-editor-1&wheel=text-editor-1&refs=generator-reference-strip-1`,"
+new_app_loader = "  `./app.js?v=${v}&fix=generator-input-focus-1&ui=text-result-editor-1&wheel=text-editor-1&refs=generator-reference-strip-1&scriptclick=toolbar-3`,"
+if '&scriptclick=toolbar-3' not in bootstrap:
+    bootstrap = replace_once(bootstrap, old_app_loader, new_app_loader, 'app cache-bust')
+old_style_loader = "      loadStyle(`./styles/script-node-progress-v1.css?v=${v}`),"
+new_style_loader = "      loadStyle(`./styles/script-node-progress-v1.css?v=${v}&scriptclick=toolbar-3`),"
+if 'script-node-progress-v1.css?v=${v}&scriptclick=toolbar-3' not in bootstrap:
+    bootstrap = replace_once(bootstrap, old_style_loader, new_style_loader, 'script node css cache-bust')
 BOOTSTRAP.write_text(bootstrap, encoding='utf-8')
