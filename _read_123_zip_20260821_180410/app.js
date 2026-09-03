@@ -1400,6 +1400,7 @@
       });
     }
     $('[data-open-script]',el)?.addEventListener('click',e=>{e.stopPropagation();openScriptEditor(n)});
+    $('[data-script-node-ready]',el)?.addEventListener('click',e=>{if(e.target.closest('[data-open-script]'))return;e.stopPropagation();selectNode(n.id)});
     $('[data-open-director]',el)?.addEventListener('click',e=>{e.stopPropagation();openDirectorConsole(n)});
     $$('[data-script-preset]',el).forEach(b=>b.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();selectNode(n.id);expandedNodeId=n.id;n.scriptMode=b.dataset.scriptPreset;if(n.scriptMode==='manual'){render();setTimeout(()=>openScriptEditor(n,'shots'),0);return;}render();setTimeout(()=>$('#scriptDetailPrompt')?.focus(),0);}));
     return el;
@@ -1807,6 +1808,13 @@
       toolbar.style.top=Math.max(CONTEXT_TOOLBAR_SAFE_TOP,r.top-58)+'px';
       toolbar.innerHTML=actions.map((a,i)=>`<button class="tool-btn ${a.primary?'primary':''} ${a.iconOnly?'icon-only':''}" data-top-action="${i}" title="${escapeAttr(a.label)}"><span class="tool-glyph">${n.type==='image'?imageToolbarGlyph(a.action||''):n.type==='video'?videoToolbarGlyph(a.action||''):audioToolbarGlyph(a.action||'')}</span>${a.iconOnly?'':`<span>${escapeHtml(a.label)}</span>`}${a.action==='image-portrait'?'<span class="tool-arrow">⌄</span>':''}</button>`).join('');
       toolbar.classList.remove('hidden');
+      $$('[data-top-action]',toolbar).forEach(b=>b.onclick=()=>runTopBarAction(n,actions[Number(b.dataset.topAction)],b));return;
+    }
+    if(n.type==='script'){
+      const estimatedWidth=Math.min(window.innerWidth-32,Math.max(430,actions.length*132));
+      toolbar.style.left=Math.max(16,Math.min(window.innerWidth-estimatedWidth-16,r.left+r.width/2-estimatedWidth/2))+'px';
+      toolbar.style.top=Math.max(CONTEXT_TOOLBAR_SAFE_TOP,r.top-58)+'px';
+      toolbar.innerHTML=actions.map((a,i)=>`<button class="tool-btn ${a.primary?'primary':''}" data-top-action="${i}">${escapeHtml(a.label)}</button>`).join('');toolbar.classList.remove('hidden');
       $$('[data-top-action]',toolbar).forEach(b=>b.onclick=()=>runTopBarAction(n,actions[Number(b.dataset.topAction)],b));return;
     }
     toolbar.style.left=Math.max(68,Math.min(window.innerWidth-620,r.left))+'px';toolbar.style.top=Math.max(CONTEXT_TOOLBAR_SAFE_TOP,r.top-40)+'px';
@@ -2864,7 +2872,7 @@
 
   function scriptNodeReadyHtml(n,d){
     const s=scriptWorkflowStats(d),steps=[['确认镜头',1,s.shotsConfirmed],['准备资产',2,s.assetsReady],['合成提示词',3,s.promptsReady]];
-    return `<button type="button" class="script-node-ready" data-open-script="${escapeAttr(n.id)}" aria-label="打开脚本节点"><span class="script-ready-icon" aria-hidden="true"><i></i><i></i><i></i></span><span class="script-ready-steps">${steps.map(([label,no,done])=>`<span class="script-ready-step ${done?'done':''}"><i>${done?'✓':no}</i><b>${label}</b></span>`).join('<em></em>')}</span><span class="script-ready-open">打开脚本节点 →</span></button>`;
+    return `<div class="script-node-ready" data-script-node-ready="${escapeAttr(n.id)}" aria-label="脚本节点"><span class="script-ready-icon" aria-hidden="true"><i></i><i></i><i></i></span><span class="script-ready-steps">${steps.map(([label,no,done])=>`<span class="script-ready-step ${done?'done':''}"><i>${done?'✓':no}</i><b>${label}</b></span>`).join('<em></em>')}</span><button type="button" class="script-ready-open" data-open-script="${escapeAttr(n.id)}">打开脚本节点 →</button></div>`;
   }
 
   function scriptWorkflowStats(d){
