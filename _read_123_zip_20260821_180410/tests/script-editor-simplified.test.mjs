@@ -33,3 +33,12 @@ test('script studio is true fullscreen and only exposes the three production ste
   const editor=app.slice(editorStart,editorEnd);
   assert.ok(!editor.includes('script-secondary-tabs'));
 });
+
+test('script studio typography is enlarged by two pixels and centered',()=>{
+  assert.ok(css.includes('/* Script Studio typography: +2px across the editor and centered throughout. */'));
+  assert.ok(css.includes('.script-editor-shell.simplified .script-workflow-head.simplified .script-step b{font-size:13px}'));
+  assert.ok(css.includes('.script-editor-shell.simplified .script-editor-table.simplified th{font-size:12px;text-align:center!important}'));
+  assert.ok(css.includes('.script-editor-shell.simplified .script-editor-table.simplified textarea,.script-editor-shell.simplified .script-editor-table.simplified select,.script-editor-shell.simplified .script-editor-table.simplified input{font-size:13px;text-align:center!important}'));
+  assert.ok(css.includes('.script-editor-shell.simplified .shot-description-cell{font-size:13px;text-align:center;display:flex;align-items:center;justify-content:center}'));
+  assert.ok(css.includes('.script-editor-shell.simplified .shot-final-prompt{font-size:11px;text-align:center;align-items:center;justify-content:center}'));
+});
