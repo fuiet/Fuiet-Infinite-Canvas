@@ -1,0 +1,44 @@
+name: Patch generated script node UI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '_read_123_zip_20260821_180410/scripts/patch-script-node-compact-ui.py'
+      - '_read_123_zip_20260821_180410/tests/script-node-compact-generated-ui.test.mjs'
+      - '.github/workflows/patch-script-node-compact-ui.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply compact script node patch
+        working-directory: _read_123_zip_20260821_180410
+        run: python scripts/patch-script-node-compact-ui.py
+      - name: Syntax check
+        working-directory: _read_123_zip_20260821_180410
+        run: npm run check
+      - name: Script node regression tests
+        working-directory: _read_123_zip_20260821_180410
+        run: node --test tests/script-node-compact-generated-ui.test.mjs tests/script-node-progress.test.mjs tests/script-editor-simplified.test.mjs
+      - name: Commit compact script node UI
+        run: |
+          git config user.name 'Codex'
+          git config user.email 'codex@openai.local'
+          git add \
+            _read_123_zip_20260821_180410/app.js \
+            _read_123_zip_20260821_180410/styles/script-node-progress-v1.css \
+            _read_123_zip_20260821_180410/browser-bootstrap.js
+          git diff --cached --quiet && exit 0
+          git commit -m 'Simplify generated script node UI'
+          git push origin main
