@@ -73,7 +73,7 @@ async function start(){
       loadStyle(`./styles/video-result-autofit-v1.css?v=${v}`),
       loadStyle(`./styles/script-workflow-v2.css?v=${v}`),
       loadStyle(`./styles/script-editor-simplified-v1.css?v=${v}`),
-      loadStyle(`./styles/script-node-progress-v1.css?v=${v}&scriptclick=toolbar-3`),
+      loadStyle(`./styles/script-node-progress-v1.css?v=${v}&scriptclick=toolbar-3&scriptbar=large-1`),
       loadStyle(`./styles/edge-reference-cards-v1.css?v=${v}&ui=generator-reference-strip-1`),
       loadStyle(`./styles/video-generator-reference-layout-fix-v1.css?v=${v}`),
       loadStyle(`./styles/edge-cut-interaction-v1.css?v=${v}`)
