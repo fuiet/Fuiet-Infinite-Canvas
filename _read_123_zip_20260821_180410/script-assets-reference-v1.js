@@ -11,6 +11,7 @@ if(!featureModal)return;
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const now=()=>Date.now();
 let patchQueued=false;
+let observer=null;
 const bulk={running:false,done:0,total:0,failed:0};
 
 function assetsLayout(){return featureModal.querySelector('.script-assets-layout')}
@@ -22,6 +23,11 @@ function assetId(card){return String(card?.dataset.openScriptAsset||'')}
 function normalizeText(v){return String(v||'').trim().toLowerCase().replace(/\.[a-z0-9]{2,5}$/,'').replace(/[\s_\-·•:：()（）【】\[\]{}]/g,'')}
 function sectionInfo(section){const label=String(section?.querySelector('.asset-block-head>b')?.textContent||'资产').trim();return{label,key:label==='角色'?'characters':label==='场景'?'scenes':'props'}}
 function cardName(card){return String(card?.querySelector('.asset-card-copy>b')?.textContent||'').trim()}
+function setText(el,text){if(el&&el.textContent!==text)el.textContent=text}
+function observeFeatureModal(){
+  if(!observer)return;
+  observer.observe(featureModal,{childList:true,subtree:true});
+}
 
 function showInlineToast(text,timeout=2200){
   featureModal.querySelector('.script-asset-inline-toast')?.remove();
@@ -39,7 +45,7 @@ function ensureImageModel(){
 
 function enhanceGlobalStyle(layout){
   const label=layout.querySelector('.script-global-style>span');
-  if(label)label.textContent='全局风格';
+  setText(label,'全局风格');
   const input=layout.querySelector('#scriptAssetGlobalStyle');
   if(input&&!input.placeholder)input.placeholder='输入统一的视觉风格…';
 }
@@ -50,8 +56,9 @@ function enhanceSections(layout){
     if(!grid||!nativeAdd)return;
     section.querySelectorAll('.script-asset-card').forEach(card=>{
       const missing=card.querySelector('.asset-missing');
-      if(missing)missing.textContent=`生成或上传${label}图`;
-      card.setAttribute('aria-label',`编辑${label}：${cardName(card)||'未命名'}`);
+      setText(missing,`生成或上传${label}图`);
+      const aria=`编辑${label}：${cardName(card)||'未命名'}`;
+      if(card.getAttribute('aria-label')!==aria)card.setAttribute('aria-label',aria);
     });
     if(!grid.querySelector('.script-asset-add-card')){
       const add=document.createElement('button');add.type='button';add.className='script-asset-add-card';add.dataset.assetAddCard=label;add.innerHTML='<i>＋</i><span>新增</span>';
@@ -64,7 +71,7 @@ function enhanceSections(layout){
 function relabelDrawerField(label,newText){
   if(!label)return;
   const textNode=[...label.childNodes].find(node=>node.nodeType===Node.TEXT_NODE&&node.nodeValue.trim());
-  if(textNode)textNode.nodeValue=newText;
+  if(textNode){if(textNode.nodeValue!==newText)textNode.nodeValue=newText}
   else label.insertBefore(document.createTextNode(newText),label.firstChild);
 }
 
@@ -102,25 +109,41 @@ function updateStatus(layout){
   sections.forEach(section=>{const {label}=sectionInfo(section);counts[label]=[...section.querySelectorAll('.script-asset-card')].filter(card=>!cardHasMedia(card)).length});
   const total=counts.角色+counts.场景+counts.道具;
   warning.classList.toggle('assets-complete',total===0);
-  if(bulk.running){warning.textContent=`正在批量生成资产，已完成 ${bulk.done}/${bulk.total}${bulk.failed?`，失败 ${bulk.failed}`:''}`}
-  else if(total){warning.textContent=`检测到有 ${counts.角色} 个角色和 ${counts.场景} 个场景和 ${counts.道具} 个道具没有设定图，您可以手动上传或 AI 批量生成`}
-  else warning.textContent='资产已生成，如再次生成将会覆盖之前的角色 / 场景 / 道具资产';
+  let text='';
+  if(bulk.running)text=`正在批量生成资产，已完成 ${bulk.done}/${bulk.total}${bulk.failed?`，失败 ${bulk.failed}`:''}`;
+  else if(total)text=`检测到有 ${counts.角色} 个角色和 ${counts.场景} 个场景和 ${counts.道具} 个道具没有设定图，您可以手动上传或 AI 批量生成`;
+  else text='资产已生成，如再次生成将会覆盖之前的角色 / 场景 / 道具资产';
+  setText(warning,text);
 }
 
 function enhanceBottom(layout){
   const toolbar=layout.querySelector('.script-asset-toolbar.v2'),bottom=layout.querySelector('.script-bottom-actions'),bulkButton=layout.querySelector('#generateAllAssets');
   if(!bottom||!bulkButton)return;
   if(bulkButton.parentElement!==bottom)bottom.appendChild(bulkButton);
-  bulkButton.textContent=bulk.running?`正在生成 ${bulk.done}/${bulk.total}`:'一键生成所有资产';
-  bulkButton.setAttribute('aria-busy',bulk.running?'true':'false');
+  setText(bulkButton,bulk.running?`正在生成 ${bulk.done}/${bulk.total}`:'一键生成所有资产');
+  const busy=bulk.running?'true':'false';
+  if(bulkButton.getAttribute('aria-busy')!==busy)bulkButton.setAttribute('aria-busy',busy);
   bulkButton.disabled=bulk.running;
-  if(toolbar)toolbar.dataset.referenceLayout='1';
+  if(toolbar&&toolbar.dataset.referenceLayout!=='1')toolbar.dataset.referenceLayout='1';
   updateStatus(layout);
 }
 
 function patch(){
-  patchQueued=false;const layout=assetsLayout();if(!layout)return;
-  enhanceGlobalStyle(layout);enhanceSections(layout);enhanceDrawer(layout);enhanceBottom(layout);ensureImageModel();
+  patchQueued=false;
+  const layout=assetsLayout();if(!layout)return;
+  // Critical: the adapter mutates the same subtree it observes. Disconnect while
+  // applying presentation changes, otherwise textContent/appendChild create a
+  // self-triggering MutationObserver microtask loop that freezes the Assets tab.
+  observer?.disconnect();
+  try{
+    enhanceGlobalStyle(layout);
+    enhanceSections(layout);
+    enhanceDrawer(layout);
+    enhanceBottom(layout);
+    ensureImageModel();
+  }finally{
+    observeFeatureModal();
+  }
 }
 function queuePatch(){if(patchQueued)return;patchQueued=true;queueMicrotask(patch)}
 
@@ -195,7 +218,8 @@ document.addEventListener('click',e=>{
   if(!e.target.closest?.('.script-asset-hero-menu'))featureModal.querySelector('.script-asset-hero-menu')?.classList.add('hidden');
 },true);
 
-/* Keep the UI patched across app.js rerenders. */
-const observer=new MutationObserver(queuePatch);observer.observe(featureModal,{childList:true,subtree:true});
+/* Keep the UI patched across app.js rerenders without observing our own patch writes. */
+observer=new MutationObserver(queuePatch);
+observeFeatureModal();
 queuePatch();
 })();
