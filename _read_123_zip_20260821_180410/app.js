@@ -985,6 +985,7 @@
     return({pending:'queued',running:'running',failed:'failed',succeeded:'completed',canceled:'cancelled',frozen:'completed'})[visualStatus]||'idle';
   }
   function uiV23ProgressHtml(n,taskState){
+    if(n?.type==='script')return'';
     if(!['queued','running'].includes(taskState))return'';
     const value=Number(n.taskProgress),hasRealProgress=Number.isFinite(value)&&value>0&&value<=100;
     const label=taskState==='queued'?'排队中':'生成中';
@@ -1251,8 +1252,11 @@
       const media=n.outputUrl?`<div class="audio-result-stage"><div class="audio-wave audio-wave-result">${bars}</div><audio class="node-media-audio" src="${escapeAttr(n.outputUrl)}" controls preload="metadata"></audio></div>`:`<div class="audio-node-placeholder"><div class="audio-wave">${bars}</div><span>音频</span></div>`;
       body=`<div class="audio-node-shell ${emptyAudio?'is-empty':'has-output'}">${uploadAction}${media}${quick}</div>`;
     } else if(n.type==='script'){
-      const data=ensureScriptData(n); const shots=data.shots||[];
-      body = `<div class="script-node-compact"><div class="script-compact-icon"><i></i><i></i><i></i><i></i></div><div class="script-try-label">尝试：</div><button data-script-preset="breakdown">☰ <b>脚本生成分镜脚本</b></button><button data-script-preset="character">♙ <b>角色生成分镜脚本</b></button><button data-script-preset="manual">▤ <b>自己编写分镜脚本</b></button>${shots.length?`<small>${shots.length} 个镜头 · 点击卡片查看/继续编辑</small>`:''}</div>`;
+      const data=ensureScriptData(n),shots=data.shots||[],scriptBusy=['queued','running'].includes(taskState);
+      if(scriptBusy){
+        const scriptPct=Math.max(2,Math.min(99,Math.round(Number(n.taskProgress)||2))),scriptLabel=taskState==='queued'?'排队中':'生成中';
+        body=`<div class="script-node-generating"><div class="script-node-skeleton" aria-hidden="true">${new Array(18).fill('<i></i>').join('')}</div><button type="button" class="script-node-progress-pill" data-script-cancel="${n.id}" title="点击取消当前脚本生成任务"><span>${scriptLabel} <b>${scriptPct}%</b>…</span><em>取消</em></button></div>`;
+      }else body = `<div class="script-node-compact"><div class="script-compact-icon"><i></i><i></i><i></i><i></i></div><div class="script-try-label">尝试：</div><button data-script-preset="breakdown">☰ <b>脚本生成分镜脚本</b></button><button data-script-preset="character">♙ <b>角色生成分镜脚本</b></button><button data-script-preset="manual">▤ <b>自己编写分镜脚本</b></button>${shots.length?`<small>${shots.length} 个镜头 · 点击卡片查看/继续编辑</small>`:''}</div>`;
     } else if(n.type==='director'){
       const d=ensureDirectorData(n);
       body = `<div class="director-node-preview"><div class="director-mini-grid"><div class="director-mini-horizon"></div>${d.objects.filter(o=>o.visible!==false).slice(0,6).map((o,i)=>`<i class="director-mini-object ${o.type}" style="left:${40+o.x*16}%;top:${55-o.z*7-o.y*5}%;transform:scale(${Math.max(.6,Number(o.sx||1))})"></i>`).join('')}</div><div class="director-node-meta"><span>${d.objects.length} 个对象</span><span>FOV ${d.camera.fov}°</span></div><button class="director-open-btn" data-open-director="${n.id}">打开导演台</button></div>`;
@@ -1341,6 +1345,7 @@
       el.addEventListener('drop',e=>{const file=[...(e.dataTransfer?.files||[])].find(f=>String(f.type||'').startsWith('audio/'));if(!file)return;e.preventDefault();e.stopPropagation();el.classList.remove('audio-file-drop-target');applyLocalAudioToNode(n,file)});
     }
     $('[data-node-retry]',el)?.addEventListener('click',e=>{e.stopPropagation();generateForNode(n).catch(()=>{})});
+    $('[data-script-cancel]',el)?.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();cancelScriptNodeTask(n)});
     $('[data-node-rerun]',el)?.addEventListener('click',e=>{e.stopPropagation();rerunFailedDownstream(n.id)});
     $$('[data-text-quick]',el).forEach(b=>b.addEventListener('click',e=>{
       e.preventDefault();e.stopPropagation();
@@ -2902,12 +2907,23 @@
     const raw=String(text||'').trim();const candidates=[];const fenced=[...raw.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)].map(m=>m[1]);candidates.push(...fenced,raw);for(const x of candidates){try{return JSON.parse(x)}catch{}const firstObj=x.indexOf('{'),lastObj=x.lastIndexOf('}');if(firstObj>=0&&lastObj>firstObj)try{return JSON.parse(x.slice(firstObj,lastObj+1))}catch{}const firstArr=x.indexOf('['),lastArr=x.lastIndexOf(']');if(firstArr>=0&&lastArr>firstArr)try{return JSON.parse(x.slice(firstArr,lastArr+1))}catch{}}return null;
   }
   function normalizeScriptAsset(x,prefix){if(typeof x==='string')return{id:uid(prefix),name:x,prompt:'',mediaUrl:'',versions:[]};return{id:x?.id||uid(prefix),name:String(x?.name||x?.title||'未命名'),prompt:String(x?.prompt||x?.description||''),description:String(x?.description||''),mediaUrl:String(x?.mediaUrl||x?.referenceUrl||''),versions:Array.isArray(x?.versions)?x.versions:[]};}
-  async function waitTask(taskId,loops=420){let info;for(let i=0;i<loops;i++){await new Promise(r=>setTimeout(r,700));info=(await apiJson('/api/tasks/'+taskId)).task;if(['succeeded','failed','canceled'].includes(info.status))break}return info;}
+  async function waitTask(taskId,loops=420,onProgress=null){let info;for(let i=0;i<loops;i++){await new Promise(r=>setTimeout(r,700));info=(await apiJson('/api/tasks/'+taskId)).task;try{onProgress?.(info,i)}catch{}if(['succeeded','failed','canceled'].includes(info.status))break}return info;}
+  function scriptTaskProgressMeta(n,info={}){
+    const status=String(info.status||n.taskStatus||'running');if(status==='succeeded')return{percent:100,estimated:false};
+    const provider=Number(info.providerProgress),task=Number(info.progress);if(Number.isFinite(provider)&&provider>0&&provider<100)return{percent:Math.round(provider),estimated:false};if(Number.isFinite(task)&&task>2&&task<100)return{percent:Math.round(task),estimated:false};
+    const started=Math.max(0,Number(n.scriptGenerationStartedAt)||Date.now()),elapsed=Math.max(0,Date.now()-started),current=Math.max(2,Number(n.taskProgress)||2);return{percent:Math.min(92,Math.max(current,2+Math.floor(elapsed/1200))),estimated:true};
+  }
+  function updateScriptTaskNode(n,info={}){
+    if(!n)return;const status=String(info.status||n.taskStatus||'running'),meta=scriptTaskProgressMeta(n,info),changed=status!==String(n.taskStatus||'')||meta.percent!==Math.round(Number(n.taskProgress)||0)||meta.estimated!==Boolean(n.scriptProgressEstimated);if(!changed)return;n.taskStatus=status;n.taskProgress=meta.percent;n.scriptProgressEstimated=meta.estimated;if(info.error)n.taskError=errorText(info.error);syncNodeTaskDiagnostics(n,info);saveState();render();
+  }
+  function beginScriptTaskNode(n,task={}){n.taskId=String(task.id||'');n.taskStatus=String(task.status||'queued');n.taskProgress=Math.max(2,Number(task.progress)||2);n.scriptProgressEstimated=true;n.scriptGenerationStartedAt=Date.now();n.taskError='';syncNodeTaskDiagnostics(n,task);saveState();render()}
+  function finishScriptTaskNode(n,status=''){if(!n)return;n.taskStatus=status; n.taskProgress=status==='succeeded'?100:0;n.scriptProgressEstimated=false;delete n.scriptGenerationStartedAt;saveState();render()}
+  async function cancelScriptNodeTask(n){if(!n?.taskId)return;try{await apiJson('/api/tasks/'+encodeURIComponent(n.taskId),{method:'DELETE'});finishScriptTaskNode(n,'canceled');showToast('已取消脚本生成')}catch(e){showToast('取消失败：'+errorText(e))}}
   async function aiBreakdownScript(n){
     if(!backendOnline){showToast('API 网关未连接');return}const pid=n.scriptProviderId,mid=n.scriptModelId;if(!pid||!mid){showToast('请选择文本 API 供应商与模型');return}
     const schema={style:'统一视觉风格',assets:{characters:[{name:'角色名',description:'身份外形服装',prompt:'用于一致性生成的视觉提示词'}],scenes:[{name:'场景名',description:'空间布局和光线',prompt:'场景一致性提示词'}],props:[{name:'道具名',description:'外观归属',prompt:'道具一致性提示词'}]},shots:[{scene:'场景名',characters:['角色名'],props:['道具名'],shotSize:'全景/中景/近景/特写',lighting:'光影与画面氛围',action:'可视化动作与调度',dialogue:'对白或旁白',sound:'环境音/音效',cameraMovement:'运镜方式',duration:3,imagePrompt:'只写本镜头额外图像信息',videoPrompt:'动作、声音额外信息'}]};
     const prompt=`你是影视分镜与资产拆解引擎。把用户剧本拆成可直接进入 AI 影视生产线的结构化 JSON。必须只返回一个合法 JSON 对象，不要 Markdown，不要解释。\n要求：1) 先抽取角色、场景、道具资产；2) 每个镜头引用明确资产名称；3) 镜头动作必须可视化；4) 时长为数字秒；5) 不要凭空增加重要人物；6) imagePrompt/videoPrompt 只写该镜头额外信息，统一资产由系统之后自动合成。\n严格结构示例：${JSON.stringify(schema)}\n\n用户剧本：\n${n.sourceText||''}`;
-    showToast('正在用第三方文本模型结构化拆解剧本与资产…');try{const provider=providerById(pid),model=provider?.models?.find(x=>x.id===mid);const created=await apiJson('/api/tasks',{method:'POST',body:JSON.stringify({providerId:pid,modelId:mid,providerSnapshot:snapshotProviderForTask(provider),modelSnapshot:model,nodeType:'text',prompt,references:collectReferences(n.id),parameters:{operation:'script_breakdown',responseFormat:'json_object',schema}})});const info=await waitTask(created.task.id);if(info?.status!=='succeeded')throw new Error(errorText(info?.error)||'脚本拆解失败');const text=String(info.output?.value??info.output?.text??info.output?.url??'');applyScriptBreakdownText(n,text);closeFeatureModal();openScriptEditor(n,'shots');showToast('剧本、角色、场景、道具与镜头已结构化拆解');}catch(e){showToast('拆解失败：'+errorText(e))}
+    showToast('正在用第三方文本模型结构化拆解剧本与资产…');try{const provider=providerById(pid),model=provider?.models?.find(x=>x.id===mid);const created=await apiJson('/api/tasks',{method:'POST',body:JSON.stringify({providerId:pid,modelId:mid,providerSnapshot:snapshotProviderForTask(provider),modelSnapshot:model,nodeType:'text',prompt,references:collectReferences(n.id),parameters:{operation:'script_breakdown',responseFormat:'json_object',schema}})});beginScriptTaskNode(n,created.task);const info=await waitTask(created.task.id,420,info=>updateScriptTaskNode(n,info));if(info?.status==='canceled'){finishScriptTaskNode(n,'canceled');showToast('已取消脚本生成');return}if(info?.status!=='succeeded')throw new Error(errorText(info?.error)||'脚本拆解失败');finishScriptTaskNode(n,'succeeded');const text=String(info.output?.value??info.output?.text??info.output?.url??'');applyScriptBreakdownText(n,text);closeFeatureModal();openScriptEditor(n,'shots');showToast('剧本、角色、场景、道具与镜头已结构化拆解');}catch(e){finishScriptTaskNode(n,'');n.taskError=errorText(e);saveState();render();showToast('拆解失败：'+errorText(e))}
   }
   function applyScriptBreakdownText(n,text){
     const d=ensureScriptData(n),parsed=extractStructuredJson(text);let obj=parsed;if(Array.isArray(parsed))obj={shots:parsed};if(!obj||!Array.isArray(obj.shots)){const lines=String(text||'').split(/\n+/).map(x=>x.trim()).filter(x=>x.length>4).slice(0,24);obj={assets:{characters:[],scenes:[],props:[]},shots:lines.map((x,i)=>({scene:'场景',characters:[],props:[],shotSize:['全景','中景','近景'][i%3],action:x,dialogue:'',duration:3,imagePrompt:'',videoPrompt:''}))};showToast('供应商没有返回合法 JSON，已使用安全降级拆分')}
