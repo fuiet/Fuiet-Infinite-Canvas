@@ -14,6 +14,25 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Stabilize workflow header patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/patch-script-editor-simplified.py')
+          s=p.read_text(encoding='utf-8')
+          start=s.index('# Keep only the three production steps in the workflow header.')
+          end=s.index('# Add compact visual-description helpers before the shots table renderer.')
+          replacement=r'''# Keep only the three production steps in the workflow header.
+          replace_once(app,
+          ''' + '"""' + r'''    return `<div class="script-workflow-head"><div class="script-workflow-steps">${steps.map(x=>`<button data-script-tab="${x.tab}" class="script-step ${tab===x.tab?'active':''} ${x.done?'done':''}"><i>${x.done?'✓':x.no}</i><span><b>${x.title}</b><small>${x.meta}</small></span></button>`).join('<em></em>')}</div><div class="script-workflow-progress">${s.promptsReady?'3/3 完成，可进入批量生产':s.assetsReady?'2/3 已完成':s.shotsConfirmed?'1/3 已完成':'请从确认镜头开始'}</div></div>`;
+''' + '"""' + r''',
+          ''' + '"""' + r'''    return `<div class="script-workflow-head simplified"><div class="script-workflow-steps">${steps.map(x=>`<button data-script-tab="${x.tab}" class="script-step ${tab===x.tab?'active':''} ${x.done?'done':''}"><i>${x.done?'✓':x.no}</i><span><b>${x.title}</b><small>${x.meta}</small></span></button>`).join('<em></em>')}</div></div>`;
+''' + '"""' + r''',
+          'workflow header simplification')
+
+'''
+          p.write_text(s[:start]+replacement+s[end:],encoding='utf-8')
+          PY
       - name: Apply patch
         run: python scripts/patch-script-editor-simplified.py
       - name: Syntax check
