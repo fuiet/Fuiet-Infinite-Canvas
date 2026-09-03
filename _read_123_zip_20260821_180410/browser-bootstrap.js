@@ -7,7 +7,7 @@
 'use strict';
 const manager=globalThis.CanvasBrowserStorageManager;
 if(!manager?.ready)throw new Error('Browser Storage Manager 未加载');
-const v='20260903-script-assets-reference-1';
+const v='20260903-script-assets-layout-2';
 const canvasScripts=[
   `./provider-auto-config-v1.js?v=${v}`,
   `./script-workflow-core.js?v=${v}`,
@@ -75,6 +75,7 @@ async function start(){
       loadStyle(`./styles/script-workflow-v2.css?v=${v}`),
       loadStyle(`./styles/script-editor-simplified-v1.css?v=${v}`),
       loadStyle(`./styles/script-assets-reference-v1.css?v=${v}`),
+      loadStyle(`./styles/script-assets-layout-fix-v2.css?v=${v}`),
       loadStyle(`./styles/script-node-progress-v1.css?v=${v}&scriptclick=toolbar-3&scriptbar=large-1`),
       loadStyle(`./styles/edge-reference-cards-v1.css?v=${v}&ui=generator-reference-strip-1`),
       loadStyle(`./styles/video-generator-reference-layout-fix-v1.css?v=${v}`),
