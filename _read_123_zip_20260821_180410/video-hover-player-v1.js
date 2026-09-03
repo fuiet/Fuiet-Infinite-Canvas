@@ -1,5 +1,6 @@
 /* Fuiet Infinite Canvas · hover video player
- * Canvas result videos autoplay muted on hover and pause on leave.
+ * Canvas result videos prefer sound on hover and pause on leave.
+ * If the browser blocks audible autoplay, preview falls back to muted playback.
  * Native browser controls are intentionally disabled to avoid the black side rail,
  * fullscreen/PiP affordances and inconsistent Chromium control layout.
  */
@@ -33,8 +34,10 @@ function decorate(stage){
   video.setAttribute('playsinline','');
   video.setAttribute('disablepictureinpicture','');
   video.setAttribute('disableremoteplayback','');
-  video.muted=true;
-  video.defaultMuted=true;
+  video.removeAttribute('muted');
+  video.muted=false;
+  video.defaultMuted=false;
+  if(video.volume===0)video.volume=1;
   video.preload='metadata';
 
   const controls=document.createElement('div');
@@ -45,7 +48,7 @@ function decorate(stage){
     <span class="video-hover-time" data-video-hover-current>0:00</span>
     <input class="video-hover-seek" data-video-hover-seek type="range" min="0" max="1000" step="1" value="0" aria-label="视频进度">
     <span class="video-hover-time" data-video-hover-duration>0:00</span>
-    <button type="button" class="video-hover-volume muted" data-video-hover-volume aria-label="打开声音">${MUTED_ICON}</button>`;
+    <button type="button" class="video-hover-volume" data-video-hover-volume aria-label="静音">${VOLUME_ICON}</button>`;
   stage.appendChild(controls);
 
   const playButton=controls.querySelector('[data-video-hover-play]');
@@ -53,7 +56,7 @@ function decorate(stage){
   const seek=controls.querySelector('[data-video-hover-seek]');
   const current=controls.querySelector('[data-video-hover-current]');
   const duration=controls.querySelector('[data-video-hover-duration]');
-  let seeking=false;
+  let seeking=false,userMuted=false,playRequested=false;
 
   const syncPlay=()=>{
     const playing=!video.paused&&!video.ended;
@@ -73,10 +76,23 @@ function decorate(stage){
     if(!seeking)seek.value=dur>0?String(Math.max(0,Math.min(1000,Math.round(cur/dur*1000)))):'0';
   };
   const start=()=>{
+    playRequested=true;
     if(video.ended){try{video.currentTime=0}catch{}}
-    const p=video.play();if(p&&typeof p.catch==='function')p.catch(()=>{});
+    video.defaultMuted=false;
+    video.removeAttribute('muted');
+    video.muted=userMuted;
+    if(!userMuted&&video.volume===0)video.volume=1;
+    syncVolume();
+    const p=video.play();
+    if(p&&typeof p.catch==='function')p.catch(()=>{
+      if(!playRequested||userMuted)return;
+      video.muted=true;
+      syncVolume();
+      const fallback=video.play();
+      if(fallback&&typeof fallback.catch==='function')fallback.catch(()=>{});
+    });
   };
-  const pause=()=>video.pause();
+  const pause=()=>{playRequested=false;video.pause()};
 
   // Desktop/fine-pointer behavior: hover previews automatically.
   stage.addEventListener('pointerenter',e=>{if(e.pointerType==='mouse'||e.pointerType==='pen'||!e.pointerType)start()});
@@ -85,7 +101,13 @@ function decorate(stage){
   // Tap/click remains a complete fallback for touch and accessibility.
   video.addEventListener('click',e=>{stopEvent(e);video.paused?start():pause()});
   playButton.addEventListener('click',e=>{stopEvent(e);video.paused?start():pause()});
-  volumeButton.addEventListener('click',e=>{stopEvent(e);video.muted=!video.muted;if(!video.muted&&video.volume===0)video.volume=1;syncVolume()});
+  volumeButton.addEventListener('click',e=>{
+    stopEvent(e);
+    userMuted=!video.muted;
+    video.muted=userMuted;
+    if(!userMuted&&video.volume===0)video.volume=1;
+    syncVolume();
+  });
   seek.addEventListener('pointerdown',stopEvent);
   seek.addEventListener('click',stopEvent);
   seek.addEventListener('input',e=>{stopEvent(e);seeking=true;const dur=Number(video.duration)||0;if(dur>0){const t=Number(seek.value)/1000*dur;current.textContent=fmt(t)}});
