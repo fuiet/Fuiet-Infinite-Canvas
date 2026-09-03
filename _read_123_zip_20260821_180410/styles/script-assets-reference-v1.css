@@ -1,0 +1,110 @@
+/* Script Studio · Prepare Assets reference layout (2026-09-03)
+   Reference-driven pass. Keeps the existing data model/handlers and changes only
+   the assets-stage presentation and interaction chrome. */
+
+.script-editor-shell.simplified:has(.script-assets-layout){background:#090a0b;color:#e8eaec}
+.script-editor-shell.simplified:has(.script-assets-layout) .script-editor-content{background:#090a0b}
+.script-editor-shell.simplified:has(.script-assets-layout) .script-stage-intro{display:none!important}
+
+/* Step header: keep the existing three-step workflow, but match the flatter reference. */
+.script-editor-shell.simplified:has(.script-assets-layout) .script-workflow-head.simplified{flex:0 0 54px;background:#0a0b0c;border-bottom:1px solid #1d2023;padding:0 56px}
+.script-editor-shell.simplified:has(.script-assets-layout) .script-workflow-head.simplified .script-workflow-steps{width:min(620px,62vw)}
+.script-editor-shell.simplified:has(.script-assets-layout) .script-workflow-head.simplified .script-step{min-height:42px;padding:5px 12px;border-radius:7px;justify-content:center}
+.script-editor-shell.simplified:has(.script-assets-layout) .script-workflow-head.simplified .script-step.active{background:#1b1e21}
+.script-editor-shell.simplified:has(.script-assets-layout) .script-workflow-head.simplified .script-step i{width:25px;height:25px;font-size:12px}
+.script-editor-shell.simplified:has(.script-assets-layout) .script-workflow-head.simplified .script-step b{font-size:13px;line-height:16px}
+.script-editor-shell.simplified:has(.script-assets-layout) .script-workflow-head.simplified .script-step small{font-size:10px;line-height:13px;color:#697078}
+
+/* Main assets stage. Drawer participates in layout instead of covering cards. */
+.script-assets-layout{display:grid!important;grid-template-columns:minmax(0,1fr)!important;gap:0!important;min-height:100%;background:#090a0b}
+.script-assets-layout:has(.script-asset-drawer){grid-template-columns:minmax(0,1fr) 505px!important}
+.script-assets-layout>main{min-width:0;padding:0 22px 76px;overflow:auto;background:#090a0b}
+
+/* Reference-style global style line. Provider controls stay alive for generation but are visually tucked away. */
+.script-assets-layout .script-asset-toolbar.v2{position:sticky;top:0;z-index:4;display:flex;align-items:center;gap:10px;min-height:54px;padding:10px 0 7px;background:#090a0b;border:0}
+.script-assets-layout .script-global-style{display:grid!important;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:10px;flex:1;min-width:0;color:#a7adb3}
+.script-assets-layout .script-global-style>span{display:inline-flex;align-items:center;justify-content:center;height:22px;padding:0 8px;border-radius:4px;background:#10282d;color:#51d3e7;font-size:11px;font-weight:600;white-space:nowrap}
+.script-assets-layout .script-global-style input{height:30px!important;padding:0!important;border:0!important;background:transparent!important;color:#aeb4ba!important;font-size:13px!important;text-align:left!important;box-shadow:none!important;outline:none!important;min-width:0}
+.script-assets-layout .asset-provider-pick,.script-assets-layout #openProjectConsistencyFromAssets{position:absolute!important;width:1px!important;height:1px!important;overflow:hidden!important;clip:rect(0 0 0 0)!important;clip-path:inset(50%)!important;white-space:nowrap!important}
+.script-assets-layout .script-asset-toolbar.v2>#generateAllAssets{display:none!important}
+
+/* Open sections, not nested panels. */
+.script-assets-layout .asset-block{margin:0 0 24px;padding:0;border:0!important;background:transparent!important}
+.script-assets-layout .asset-block-head{height:27px;display:flex;align-items:center;padding:0;margin:0 0 8px;border:0!important;background:transparent!important}
+.script-assets-layout .asset-block-head>b{font-size:13px;color:#e5e7e9;font-weight:600}
+.script-assets-layout .asset-block-head>small,.script-assets-layout .asset-block-head>[data-add-script-asset]{display:none!important}
+.script-assets-layout .script-asset-grid.cards{display:grid!important;grid-template-columns:repeat(auto-fill,minmax(220px,1fr))!important;gap:10px!important;align-items:start}
+
+/* Asset card anatomy: large media, then name + one-line description. */
+.script-assets-layout .script-asset-card{min-width:0;padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;color:#dfe2e4!important;text-align:left!important;overflow:visible!important;box-shadow:none!important}
+.script-assets-layout .script-asset-card:hover,.script-assets-layout .script-asset-card.active{background:transparent!important}
+.script-assets-layout .script-asset-card.active .asset-preview{border-color:#5e656c!important}
+.script-assets-layout .script-asset-card .asset-preview{height:145px!important;border:1px dashed #34383c!important;border-radius:7px!important;background:#0e1012 center/cover no-repeat!important;display:flex!important;align-items:center!important;justify-content:center!important;overflow:hidden!important;position:relative}
+.script-assets-layout .script-asset-card .asset-preview[style*="background-image"]{border-style:solid!important}
+.script-assets-layout .asset-missing{padding:0!important;background:transparent!important;color:#666d74!important;font-size:11px!important;font-weight:400!important}
+.script-assets-layout .asset-global-lock{position:absolute;left:8px;top:8px;padding:3px 6px;border-radius:4px;background:rgba(10,12,14,.82);color:#aeb5bb;font-size:9px}
+.script-assets-layout .asset-card-copy{padding:6px 0 0!important;text-align:left!important}
+.script-assets-layout .asset-card-copy b{display:block;margin:0 0 3px;font-size:13px!important;line-height:17px;color:#e2e5e7;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.script-assets-layout .asset-card-copy p{height:auto!important;margin:0!important;font-size:10px!important;line-height:15px!important;color:#737a81!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.script-assets-layout .asset-card-copy span{display:none!important}
+
+/* The + 新增 control is a real card at the end of each row, like the reference. */
+.script-asset-add-card{min-height:145px;border:1px dashed #34383c;border-radius:7px;background:#0e1012;color:#626970;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;font:inherit}
+.script-asset-add-card:hover{border-color:#525960;background:#111315;color:#9aa1a8}
+.script-asset-add-card>i{font-style:normal;font-size:28px;line-height:28px;font-weight:200}
+.script-asset-add-card>span{font-size:10px}
+
+/* Right inspector drawer. */
+.script-assets-layout .script-asset-drawer{position:sticky!important;right:0!important;top:0!important;width:505px!important;height:calc(100vh - 108px)!important;border-left:1px solid #2a2d30!important;background:#222324!important;box-shadow:-12px 0 28px rgba(0,0,0,.24)!important;z-index:8!important;overflow:hidden!important;border-radius:0!important}
+.script-assets-layout .script-asset-drawer>header{height:52px!important;padding:0 15px!important;border-bottom:0!important;display:flex!important;align-items:center!important;justify-content:space-between!important;background:#222324}
+.script-assets-layout .script-asset-drawer>header>div{display:block!important;text-align:left!important}
+.script-assets-layout .script-asset-drawer>header b{font-size:14px!important;color:#f0f1f2}
+.script-assets-layout .script-asset-drawer>header small{display:none!important}
+.script-assets-layout .script-asset-drawer>header button{width:30px!important;height:30px!important;border:0!important;background:transparent!important;color:#d4d7d9!important;font-size:22px!important}
+.script-assets-layout .script-asset-drawer-scroll{height:calc(100% - 52px)!important;padding:0 15px 24px!important;overflow:auto!important}
+.script-assets-layout .script-asset-drawer-scroll>label{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:7px!important;margin:0 0 15px!important;color:#e5e7e9!important;font-size:12px!important;text-align:left!important}
+.script-assets-layout .script-asset-drawer-scroll input,.script-assets-layout .script-asset-drawer-scroll textarea,.script-assets-layout .script-asset-drawer-scroll select{width:100%;box-sizing:border-box;border:0!important;border-radius:7px!important;background:#2c2d2e!important;color:#eceeef!important;font-size:12px!important;line-height:1.55!important;text-align:left!important;outline:none!important;box-shadow:none!important}
+.script-assets-layout .script-asset-drawer-scroll input{height:36px!important;padding:0 10px!important}
+.script-assets-layout .script-asset-drawer-scroll textarea{padding:10px!important;resize:vertical!important}
+
+.script-assets-layout .script-asset-hero{height:325px!important;margin:0 0 16px!important;border:1px dashed #505255!important;border-radius:7px!important;background:#2a2b2c center/cover no-repeat!important;position:relative!important;display:flex!important;align-items:center!important;justify-content:center!important;overflow:visible!important;color:#92979c!important}
+.script-assets-layout .script-asset-hero.has-media{border-style:solid!important}
+.script-asset-hero-trigger{position:absolute;inset:0;border:0;background:transparent;color:#969b9f;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;cursor:pointer;font:inherit}
+.script-asset-hero.has-media .script-asset-hero-trigger{background:transparent}
+.script-asset-hero.has-media .script-asset-hero-trigger>span{display:none}
+.script-asset-hero-trigger i{font-style:normal;font-size:30px;line-height:28px;font-weight:200;color:#a2a6aa}
+.script-asset-hero-trigger span{font-size:11px}
+.script-asset-hero-more{position:absolute;right:8px;top:8px;width:28px;height:26px;border:0;border-radius:5px;background:#0a0b0c;color:#d3d6d8;font-size:16px;line-height:20px;z-index:3;cursor:pointer}
+.script-asset-hero-menu{position:absolute;right:8px;top:39px;z-index:20;width:138px;padding:5px;border:1px solid #3c4044;border-radius:8px;background:#181a1c;box-shadow:0 12px 30px rgba(0,0,0,.45);display:flex;flex-direction:column;gap:3px}
+.script-asset-hero-menu.hidden{display:none}
+.script-asset-hero-menu button{height:34px;border:0;border-radius:6px;background:transparent;color:#d8dcdf;text-align:left!important;padding:0 10px;font-size:11px;cursor:pointer}
+.script-asset-hero-menu button:hover{background:#292c2f}
+.script-asset-canvas-picker{margin:-6px 0 16px;padding:9px;border:1px solid #3a3d40;border-radius:7px;background:#262829;display:grid;grid-template-columns:minmax(0,1fr) 82px;gap:7px}
+.script-asset-canvas-picker.hidden{display:none}
+.script-asset-canvas-picker select{height:34px!important;padding:0 8px!important}
+.script-asset-canvas-picker button{height:34px;border:0;border-radius:6px;background:#f0f1f1;color:#151617;font-size:11px;cursor:pointer}
+
+/* Keep native action controls as implementation hooks; visual actions live in hero menu. */
+.script-assets-layout .script-asset-ref-actions{display:none!important}
+.script-assets-layout .script-asset-drawer-meta{justify-content:flex-start!important;margin:2px 0 14px!important}
+.script-assets-layout .script-asset-drawer-meta span{font-size:9px!important;text-align:left!important}
+.script-assets-layout .script-asset-drawer-actions{justify-content:flex-end!important}
+.script-assets-layout .script-asset-drawer-actions button{font-size:11px!important}
+
+/* Sticky status bar from the reference. */
+.script-assets-layout .script-bottom-actions{position:fixed!important;left:0!important;right:0!important;bottom:0!important;z-index:14!important;height:62px!important;box-sizing:border-box!important;margin:0!important;padding:0 22px!important;border-top:1px solid #303234!important;background:#202122!important;display:flex!important;align-items:center!important;gap:14px!important;text-align:left!important}
+.script-assets-layout .script-bottom-actions .script-asset-warning{display:flex;align-items:center;gap:7px;color:#c8cccf!important;font-size:11px!important;text-align:left!important}
+.script-assets-layout .script-bottom-actions .script-asset-warning:before{content:'!';width:14px;height:14px;border:1px solid #f0a000;border-radius:50%;display:grid;place-items:center;color:#f0a000;font-size:9px;font-weight:700;flex:0 0 auto}
+.script-assets-layout .script-bottom-actions .script-asset-warning.assets-complete:before{content:'✓';border-color:#21c68b;color:#21c68b}
+.script-assets-layout .script-bottom-actions #confirmScriptAssets{display:none!important}
+.script-assets-layout .script-bottom-actions #generateAllAssets{display:inline-flex!important;align-items:center;justify-content:center;height:36px!important;padding:0 18px!important;border:0!important;border-radius:8px!important;background:#f5f5f3!important;color:#171819!important;font-size:12px!important;font-weight:600!important;white-space:nowrap!important;cursor:pointer}
+.script-assets-layout .script-bottom-actions #generateAllAssets[aria-busy="true"]{opacity:.72;cursor:wait}
+.script-assets-layout .script-bottom-actions .spacer{flex:1}
+
+.script-asset-inline-toast{position:fixed;left:50%;bottom:78px;transform:translateX(-50%);z-index:80;padding:8px 12px;border:1px solid #3e4246;border-radius:8px;background:#191b1d;color:#e0e3e5;font-size:11px;box-shadow:0 10px 30px rgba(0,0,0,.36)}
+
+@media(max-width:1200px){
+  .script-assets-layout:has(.script-asset-drawer){grid-template-columns:minmax(0,1fr) 420px!important}
+  .script-assets-layout .script-asset-drawer{width:420px!important}
+  .script-assets-layout .script-asset-grid.cards{grid-template-columns:repeat(auto-fill,minmax(190px,1fr))!important}
+}
