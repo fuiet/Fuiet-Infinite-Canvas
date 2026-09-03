@@ -1,6 +1,6 @@
 /* Script Studio · Prepare Assets layout correction (2026-09-03)
    Reference target: distinct 角色 / 场景 / 道具 rows, stable card widths,
-   a compact +新增 tile, and normal wrapping without cards being squeezed. */
+   a compact +新增 tile, and no preview/text overlap. */
 
 .script-assets-layout > main{
   display:block!important;
@@ -15,11 +15,22 @@
   width:100%!important;
   min-width:0!important;
   height:auto!important;
+  min-height:0!important;
   overflow:visible!important;
+  margin:0 0 34px!important;
+  padding:0!important;
 }
 
 .script-assets-layout .asset-block + .asset-block{
-  margin-top:26px!important;
+  margin-top:0!important;
+}
+
+.script-assets-layout .asset-block-head{
+  position:static!important;
+  min-height:27px!important;
+  height:auto!important;
+  margin:0 0 10px!important;
+  line-height:20px!important;
 }
 
 .script-assets-layout .script-asset-grid.cards{
@@ -28,10 +39,12 @@
   align-items:flex-start!important;
   align-content:flex-start!important;
   justify-content:flex-start!important;
-  gap:12px!important;
+  column-gap:12px!important;
+  row-gap:24px!important;
   width:100%!important;
   min-width:0!important;
   height:auto!important;
+  min-height:0!important;
   overflow:visible!important;
   grid-template-columns:none!important;
   grid-auto-columns:auto!important;
@@ -39,12 +52,66 @@
 }
 
 .script-assets-layout .script-asset-grid.cards > .script-asset-card{
+  display:flex!important;
+  flex-direction:column!important;
   flex:0 0 260px!important;
   width:260px!important;
   min-width:260px!important;
   max-width:260px!important;
+  height:auto!important;
+  min-height:190px!important;
+  max-height:none!important;
   margin:0!important;
+  padding:0!important;
   align-self:flex-start!important;
+  box-sizing:border-box!important;
+  overflow:visible!important;
+}
+
+.script-assets-layout .script-asset-card .asset-preview{
+  position:relative!important;
+  flex:0 0 145px!important;
+  width:100%!important;
+  height:145px!important;
+  min-height:145px!important;
+  max-height:145px!important;
+  margin:0!important;
+  box-sizing:border-box!important;
+  overflow:hidden!important;
+}
+
+.script-assets-layout .script-asset-card .asset-card-copy{
+  position:static!important;
+  display:block!important;
+  flex:0 0 auto!important;
+  width:100%!important;
+  min-height:40px!important;
+  height:auto!important;
+  margin:0!important;
+  padding:7px 0 0!important;
+  box-sizing:border-box!important;
+  overflow:hidden!important;
+}
+
+.script-assets-layout .script-asset-card .asset-card-copy b{
+  display:block!important;
+  height:18px!important;
+  margin:0 0 2px!important;
+  line-height:18px!important;
+  white-space:nowrap!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+}
+
+.script-assets-layout .script-asset-card .asset-card-copy p{
+  display:block!important;
+  height:16px!important;
+  min-height:16px!important;
+  margin:0!important;
+  line-height:16px!important;
+  white-space:nowrap!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
 }
 
 .script-assets-layout .script-asset-grid.cards > .script-asset-add-card{
@@ -54,11 +121,12 @@
   max-width:148px!important;
   height:145px!important;
   min-height:145px!important;
+  max-height:145px!important;
   margin:0!important;
   align-self:flex-start!important;
+  box-sizing:border-box!important;
 }
 
-/* The native empty state must occupy its own line instead of becoming a tiny flex cell. */
 .script-assets-layout .script-asset-grid.cards > .feature-empty{
   flex:1 0 100%!important;
   width:100%!important;
