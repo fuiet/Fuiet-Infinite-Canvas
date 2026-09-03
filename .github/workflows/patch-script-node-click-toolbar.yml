@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - '_read_123_zip_20260821_180410/scripts/patch-script-node-click-toolbar.py'
+      - '_read_123_zip_20260821_180410/scripts/patch-script-node-click-toolbar-v2.py'
       - '_read_123_zip_20260821_180410/tests/script-node-click-toolbar.test.mjs'
       - '.github/workflows/patch-script-node-click-toolbar.yml'
   workflow_dispatch:
@@ -24,7 +25,7 @@ jobs:
           node-version: '22'
       - name: Apply script node click-toolbar patch
         working-directory: _read_123_zip_20260821_180410
-        run: python scripts/patch-script-node-click-toolbar.py
+        run: python scripts/patch-script-node-click-toolbar-v2.py
       - name: Syntax check
         working-directory: _read_123_zip_20260821_180410
         run: npm run check
@@ -40,5 +41,5 @@ jobs:
             _read_123_zip_20260821_180410/styles/script-node-progress-v1.css \
             _read_123_zip_20260821_180410/browser-bootstrap.js
           git diff --cached --quiet && exit 0
-          git commit -m 'Make generated script node show toolbar on click'
+          git commit -m 'Center script toolbar and reopen generator on select'
           git push origin main
