@@ -11,7 +11,7 @@ const v='20260903-script-node-compact-2';
 const canvasScripts=[
   `./provider-auto-config-v1.js?v=${v}`,
   `./script-workflow-core.js?v=${v}`,
-  `./app.js?v=${v}&fix=generator-input-focus-1&ui=text-result-editor-1&wheel=text-editor-1&refs=generator-reference-strip-1&scriptclick=toolbar-3`,
+  `./app.js?v=${v}&fix=generator-input-focus-1&ui=text-result-editor-1&wheel=text-editor-1&refs=generator-reference-strip-1&scriptclick=toolbar-3&scriptgen=panel-4`,
   `./upstream-generation-inputs-v1.js?v=${v}`,
   `./reference-popover-portal-v1.js?v=${v}`,
   `./video-hover-player-v1.js?v=${v}&audio=default-on-1`,
