@@ -7,8 +7,13 @@
   justify-content:center;
   gap:6px;
   order:999;
+  position:relative!important;
+  z-index:3!important;
+  pointer-events:auto!important;
+  cursor:pointer!important;
 }
-#agentBtn .ui-icon{width:15px;height:15px}
+#agentBtn .ui-icon{width:15px;height:15px;pointer-events:none}
+#agentBtn span{pointer-events:none}
 .agent-left-rail{display:none!important}
 
 /* Keep the enhanced Agent surface, but open it from the right side. */
@@ -16,9 +21,10 @@
 #agentPanel{
   left:auto!important;
   right:0!important;
-  top:42px!important;
+  top:50px!important;
   bottom:0!important;
   width:404px!important;
+  z-index:79!important;
   border-left:1px solid #303236!important;
   border-right:0!important;
   background:#202123!important;
