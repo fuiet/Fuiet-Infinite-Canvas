@@ -14,6 +14,7 @@ if(!app||!panel||!agentButton)return;
 let panelObserver=null;
 let appObserver=null;
 let patchQueued=false;
+let clickStartedOpen=null;
 
 const typeIcon={
   text:'▤',script:'▥',image:'▧',video:'▶',audio:'♪',director:'◇'
@@ -112,11 +113,30 @@ function queuePatch(){
   queueMicrotask(patchPanel);
 }
 
+function applyVisualOpen(open){
+  app.classList.toggle('agent-open',Boolean(open));
+  agentButton.setAttribute('aria-expanded',open?'true':'false');
+  agentButton.classList.toggle('active',Boolean(open));
+  if(open){
+    panel.style.opacity='1';
+    panel.style.pointerEvents='auto';
+    queuePatch();
+    setTimeout(()=>panel.querySelector('#agentDraft')?.focus(),40);
+  }else{
+    panel.style.removeProperty('opacity');
+    panel.style.removeProperty('pointer-events');
+  }
+}
+
 function syncOpenState(){
   placeAgentButton();
   const open=app.classList.contains('agent-open');
   agentButton.setAttribute('aria-expanded',open?'true':'false');
   agentButton.classList.toggle('active',open);
+  if(!open){
+    panel.style.removeProperty('opacity');
+    panel.style.removeProperty('pointer-events');
+  }
   queuePatch();
 }
 
@@ -124,6 +144,23 @@ function refreshContextAfterCanvasChange(){
   if(!app.classList.contains('agent-open'))return;
   queuePatch();
 }
+
+/* app.js owns Agent state and normally toggles .agent-open during its click handler.
+ * Record state in capture phase, then verify it changed after the native handler ran.
+ * If a render-time exception prevents the class update, keep the top-level Agent
+ * control responsive and open the already-rendered panel as a safe UI fallback. */
+agentButton.addEventListener('click',()=>{
+  clickStartedOpen=app.classList.contains('agent-open');
+},{capture:true});
+agentButton.addEventListener('click',()=>{
+  const started=clickStartedOpen;
+  queueMicrotask(()=>{
+    if(started===null)return;
+    const current=app.classList.contains('agent-open');
+    if(current===started)applyVisualOpen(!started);
+    clickStartedOpen=null;
+  });
+});
 
 placeAgentButton();
 panelObserver=new MutationObserver(queuePatch);
