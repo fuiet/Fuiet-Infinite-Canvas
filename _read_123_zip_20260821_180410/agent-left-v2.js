@@ -34,6 +34,28 @@ function readStoredState(){
 function writeStoredState(patch){
   try{const next={...readStoredState(),...patch};globalThis.CanvasBrowserStorageManager?.setItem?.(AGENT_STATE_KEY,JSON.stringify(next));return next}catch{return patch||{}}
 }
+function forceViewportPanelStyles(){
+  const set=(name,value)=>panel.style.setProperty(name,value,'important');
+  set('position','fixed');
+  set('top','0');
+  set('right','0');
+  set('bottom','0');
+  set('left','auto');
+  set('width',window.innerWidth<=820?'min(404px, 92vw)':'404px');
+  set('height','100dvh');
+  set('max-height','none');
+  set('margin','0');
+  set('z-index','10000');
+  set('border-top','0');
+  if(app.classList.contains('agent-open')){
+    set('transform','translateX(0)');
+    set('opacity','1');
+    set('pointer-events','auto');
+  }else{
+    set('transform','translateX(100%)');
+    set('pointer-events','none');
+  }
+}
 function placeAgentButton(){
   document.querySelector('#agentLeftRail')?.remove();
   agentButton.removeAttribute('aria-hidden');agentButton.setAttribute('aria-label','Agent');agentButton.title='Agent';
@@ -72,7 +94,7 @@ function enhanceComposer(){
 }
 function patchPanel(){
   patchQueued=false;panelObserver?.disconnect();
-  try{panel.classList.add('agent-left-v2');if(panelMeaningful()){relabelNativePanel();enhanceComposer()}}
+  try{panel.classList.add('agent-left-v2');forceViewportPanelStyles();if(panelMeaningful()){relabelNativePanel();enhanceComposer()}}
   finally{panelObserver?.observe(panel,{childList:true,subtree:true})}
 }
 function queuePatch(){if(patchQueued)return;patchQueued=true;queueMicrotask(patchPanel)}
@@ -92,12 +114,13 @@ function renderRecoveryPanel(force=false){
     <div class="agent-skills"><div class="agent-skills-head"><b>一个 Skill，一部作品</b><button type="button" data-recovery-retry>↻ 重新连接</button></div><div class="agent-skill-grid">${recoverySkills.map(s=>`<button type="button" class="agent-skill-card ${selectedId===s.id?'active':''}" data-recovery-skill="${s.id}"><span class="agent-skill-icon">◇</span><span class="agent-skill-copy"><b>${escapeHtml(s.title)}</b><span>${escapeHtml(s.sub)}</span></span></button>`).join('')}</div></div></div>
     <div class="agent-composer"><div class="agent-context-strip-v2">${contextStripHtml()}</div><div class="agent-input"><textarea id="agentDraft" placeholder="给 Agent 一个任务，或用 @ 引用节点 / 资源…">${escapeHtml(stored.draft||'')}</textarea><div class="agent-input-footer"><div class="agent-input-actions"><button type="button" data-recovery-add title="添加节点">＋</button><button type="button" data-recovery-context title="引用上下文">◇</button><button type="button" data-recovery-tasks title="任务中心">◷</button></div><button type="button" class="agent-send" data-recovery-send aria-label="发送给 Agent">↑</button></div></div></div>
   </div>`;
-  bindRecoveryPanel();queuePatch();return true;
+  forceViewportPanelStyles();bindRecoveryPanel();queuePatch();return true;
 }
 function applyVisualOpen(open){
   app.classList.toggle('agent-open',Boolean(open));agentButton.setAttribute('aria-expanded',open?'true':'false');agentButton.classList.toggle('active',Boolean(open));
-  if(open){panel.style.opacity='1';panel.style.pointerEvents='auto';writeStoredState({open:true});ensurePanelReady();setTimeout(()=>panel.querySelector('#agentDraft')?.focus(),50)}
-  else{panel.style.removeProperty('opacity');panel.style.removeProperty('pointer-events');writeStoredState({open:false})}
+  forceViewportPanelStyles();
+  if(open){writeStoredState({open:true});ensurePanelReady();setTimeout(()=>panel.querySelector('#agentDraft')?.focus(),50)}
+  else{writeStoredState({open:false})}
 }
 async function reconnectNative(draftText=''){
   if(internalToggle)return false;internalToggle=true;
@@ -133,10 +156,11 @@ function bindRecoveryPanel(){
 }
 function ensurePanelReady(){
   if(ensuring||!app.classList.contains('agent-open'))return;ensuring=true;
-  panel.classList.add('agent-left-v2');panel.style.opacity='1';panel.style.pointerEvents='auto';
+  panel.classList.add('agent-left-v2');forceViewportPanelStyles();
   queueMicrotask(()=>{
     requestAnimationFrame(()=>{
       requestAnimationFrame(()=>{
+        forceViewportPanelStyles();
         if(app.classList.contains('agent-open')&&!panelMeaningful())renderRecoveryPanel(true);
         queuePatch();ensuring=false;
       });
@@ -144,9 +168,8 @@ function ensurePanelReady(){
   });
 }
 function syncOpenState(){
-  placeAgentButton();const open=app.classList.contains('agent-open');agentButton.setAttribute('aria-expanded',open?'true':'false');agentButton.classList.toggle('active',open);
-  if(open)ensurePanelReady();else{panel.style.removeProperty('opacity');panel.style.removeProperty('pointer-events')}
-  queuePatch();
+  placeAgentButton();const open=app.classList.contains('agent-open');agentButton.setAttribute('aria-expanded',open?'true':'false');agentButton.classList.toggle('active',open);forceViewportPanelStyles();
+  if(open)ensurePanelReady();queuePatch();
 }
 function refreshContextAfterCanvasChange(){if(!app.classList.contains('agent-open'))return;const strip=panel.querySelector('.agent-context-strip-v2');if(strip)strip.innerHTML=contextStripHtml()}
 
@@ -156,7 +179,8 @@ agentButton.addEventListener('click',()=>{
   queueMicrotask(()=>{const current=app.classList.contains('agent-open');if(started!==null&&current===started)applyVisualOpen(!started);else if(current)ensurePanelReady()});
 });
 
-placeAgentButton();
+window.addEventListener('resize',forceViewportPanelStyles,{passive:true});
+placeAgentButton();forceViewportPanelStyles();
 panelObserver=new MutationObserver(()=>{queuePatch();if(app.classList.contains('agent-open')&&!panelMeaningful())ensurePanelReady()});
 panelObserver.observe(panel,{childList:true,subtree:true});
 appObserver=new MutationObserver(syncOpenState);appObserver.observe(app,{attributes:true,attributeFilter:['class']});
