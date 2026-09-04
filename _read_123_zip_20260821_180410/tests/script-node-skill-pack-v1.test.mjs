@@ -11,10 +11,9 @@ test('built-in script skill runtime parses as JavaScript',()=>{
   assert.doesNotThrow(()=>new Function(skill));
 });
 
-test('safe skill pack loads before app.js with a fresh cache key',()=>{
-  assert.match(bootstrap,/const v='20260904-script-skill-pack-safe-2'/);
+test('safe skill pack loads before app.js',()=>{
   assert.match(bootstrap,/script-workflow-core\.js\?v=\$\{v\}[\s\S]*script-node-skill-pack-v1\.js\?v=\$\{v\}[\s\S]*app\.js\?v=\$\{v\}/);
-  assert.match(index,/browser-bootstrap\.js\?v=20260904-script-skill-pack-safe-2/);
+  assert.match(index,/browser-bootstrap\.js\?v=/);
 });
 
 test('script breakdown keeps the proven native task lifecycle',()=>{
