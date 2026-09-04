@@ -1,10 +1,40 @@
-/* Agent panel must cover the full right-side workspace from the very top,
-   matching the reference layout instead of starting below the 42px app bar. */
+/* Agent panel must be viewport-level, not positioned below the app toolbar.
+   The reference Agent surface covers the right side from y=0 to the bottom and
+   visually sits above the global toolbar in that 404px strip. */
 .agent-panel.agent-left-v2,
 #agentPanel{
+  position:fixed!important;
+  inset:0 0 0 auto!important;
   top:0!important;
+  right:0!important;
   bottom:0!important;
-  height:100vh!important;
-  z-index:160!important;
+  left:auto!important;
+  width:404px!important;
+  height:100dvh!important;
+  max-height:none!important;
+  margin:0!important;
+  z-index:10000!important;
   border-top:0!important;
+  transform:translateX(100%)!important;
+}
+
+.app-shell.agent-open #agentPanel{
+  position:fixed!important;
+  inset:0 0 0 auto!important;
+  transform:translateX(0)!important;
+  opacity:1!important;
+  pointer-events:auto!important;
+}
+
+/* Keep the toolbar visible on the canvas side, but always behind the Agent
+   where their rectangles overlap. */
+.app-shell.agent-open .topbar{
+  z-index:80!important;
+}
+
+@media(max-width:820px){
+  #agentPanel{
+    width:min(404px,92vw)!important;
+    height:100dvh!important;
+  }
 }
