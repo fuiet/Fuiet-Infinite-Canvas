@@ -32,22 +32,44 @@ test('picker exposes the four requested image sources',()=>{
   assert.ok(picker.includes('当前画布暂无节点'));
 });
 
-test('picker reuses existing asset handlers instead of duplicating asset persistence',()=>{
+test('AI tab has system prompt, user editing, model, quality, resolution and ratio controls',()=>{
+  assert.match(picker,/系统生成提示词/);
+  assert.match(picker,/重新生成提示词/);
+  assert.match(picker,/scriptAssetPickerPrompt/);
+  assert.match(picker,/scriptAssetPickerModel/);
+  assert.match(picker,/scriptAssetPickerQuality/);
+  assert.match(picker,/scriptAssetPickerResolution/);
+  assert.match(picker,/scriptAssetPickerRatio/);
+  assert.match(picker,/确认生成/);
+  assert.match(picker,/promptEdited=true/);
+  assert.match(picker,/CanvasModelImageCapabilities\?\.resolve/);
+});
+
+test('AI generation settings are applied to the one script asset node before generation',()=>{
+  assert.match(picker,/function applyOneShotNodeSettings/);
+  assert.match(picker,/item\.aspectRatio=settings\.aspectRatio/);
+  assert.match(picker,/item\.resolution=settings\.resolution/);
+  assert.match(picker,/item\.imageQuality=settings\.imageQuality/);
+  assert.match(picker,/item\.prompt=picker\.promptDraft/);
   assert.match(picker,/drawerAssetGenerate/);
+});
+
+test('picker reuses existing upload and canvas asset handlers',()=>{
   assert.match(picker,/drawerAssetUpload/);
   assert.match(picker,/drawerAssetCanvas/);
   assert.match(picker,/drawerAssetBindCanvas/);
 });
 
-test('picker hides the inspector while open and is styled as a centered modal',()=>{
-  assert.match(css,/body\.script-asset-picker-open .*\.script-asset-drawer\{display:none!important\}/);
-  assert.match(css,/position:fixed;inset:0;z-index:100000/);
-  assert.match(css,/width:min\(800px/);
+test('picker AI layout is styled as prompt plus bottom generation toolbar',()=>{
+  assert.match(css,/\.script-asset-picker-ai\{[^}]*grid-template-rows:auto minmax\(0,1fr\) auto/);
+  assert.match(css,/\.script-asset-picker-ai-footer/);
+  assert.match(css,/\.script-asset-picker-ai-settings/);
+  assert.match(css,/\.script-asset-picker-ai-generate/);
 });
 
 test('picker runtime is loaded and cache-busted from index through browser bootstrap',()=>{
   assert.match(bootstrap,/script-asset-picker-modal-v1\.js/);
   assert.match(bootstrap,/script-asset-picker-modal-v1\.css/);
-  assert.match(bootstrap,/20260904-script-asset-picker-modal-4/);
-  assert.match(index,/browser-bootstrap\.js\?v=20260904-script-asset-picker-modal-4/);
+  assert.match(bootstrap,/20260904-script-asset-picker-modal-5/);
+  assert.match(index,/browser-bootstrap\.js\?v=20260904-script-asset-picker-modal-5/);
 });
