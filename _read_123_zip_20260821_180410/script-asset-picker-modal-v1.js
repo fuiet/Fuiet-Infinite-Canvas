@@ -1,6 +1,7 @@
 /* Script Studio · Prepare Assets image picker modal
- * Empty asset previews open a four-source picker without replacing app.js asset logic.
- * Existing drawer handlers remain the source of truth for AI generation, upload, and canvas binding.
+ * Empty asset previews and the drawer hero trigger open a four-source picker
+ * without replacing app.js asset logic. Existing drawer handlers remain the
+ * source of truth for AI generation, upload, and canvas binding.
  */
 (()=>{
 'use strict';
@@ -15,6 +16,7 @@ const picker={root:null,assetId:'',assetName:'',kind:'资产',tab:'canvas',busy:
 function assetsLayout(){return featureModal.querySelector('.script-assets-layout')}
 function assetsView(){return Boolean(assetsLayout())}
 function assetCard(id){return featureModal.querySelector(`[data-open-script-asset="${CSS.escape(String(id||''))}"]`)}
+function activeAssetCard(){return featureModal.querySelector('[data-open-script-asset].active')}
 function assetId(card){return String(card?.dataset.openScriptAsset||'')}
 function cardName(card){return String(card?.querySelector('.asset-card-copy>b')?.textContent||'未命名资产').trim()||'未命名资产'}
 function cardKind(card){const label=String(card?.closest('.asset-block')?.querySelector('.asset-block-head>b')?.textContent||'资产').trim();return label||'资产'}
@@ -152,6 +154,7 @@ async function openPicker(card){
   const id=assetId(card);if(!id)return;
   closePicker();
   picker.assetId=id;picker.assetName=cardName(card);picker.kind=cardKind(card);picker.tab='canvas';picker.busy=false;
+  featureModal.querySelector('.script-asset-hero-menu')?.classList.add('hidden');
   document.body.classList.add('script-asset-picker-open');
   const root=document.createElement('div');root.className='script-asset-picker-overlay';root.innerHTML=`<section class="script-asset-picker-modal" role="dialog" aria-modal="true" aria-label="选择图片"><header><b>选择图片（${esc(picker.assetName)}）</b><button type="button" data-picker-close aria-label="关闭">×</button></header><nav><button type="button" data-picker-tab="ai">AI生成</button><button type="button" data-picker-tab="canvas" class="active">从当前画布选择</button><button type="button" data-picker-tab="upload">本地上传</button><button type="button" data-picker-tab="library">个人资产库</button></nav><div class="script-asset-picker-body">${emptyState('正在读取当前画布…')}</div></section>`;
   picker.root=root;document.body.appendChild(root);
@@ -166,9 +169,23 @@ async function openPicker(card){
 
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&picker.root)closePicker()});
 
-/* The empty media area is the direct entry point requested for Prepare Assets. */
+/* Both requested entry points open the same picker:
+ * 1) the empty preview on the Prepare Assets card;
+ * 2) the large “生成或上传角色/场景/道具图” hero inside the editor drawer.
+ */
 document.addEventListener('click',e=>{
   if(!assetsView()||picker.root)return;
+
+  const hero=e.target.closest?.('.script-asset-hero-trigger');
+  if(hero){
+    const card=activeAssetCard();if(!card)return;
+    e.preventDefault();
+    featureModal.querySelector('.script-asset-hero-menu')?.classList.add('hidden');
+    e.stopImmediatePropagation();
+    openPicker(card);
+    return;
+  }
+
   const preview=e.target.closest?.('.script-asset-card .asset-preview');if(!preview)return;
   const card=preview.closest('[data-open-script-asset]');if(!card||cardHasMedia(card))return;
   e.preventDefault();e.stopImmediatePropagation();openPicker(card);
