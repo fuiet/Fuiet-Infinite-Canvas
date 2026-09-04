@@ -9,8 +9,8 @@ const css=fs.readFileSync(new URL('../styles/agent-left-v2.css',import.meta.url)
 const topCss=fs.readFileSync(new URL('../styles/agent-panel-top-v1.css',import.meta.url),'utf8');
 
 test('Agent right surface is cache-busted and loaded after the native Agent engine',()=>{
-  assert.match(index,/browser-bootstrap\.js\?v=20260904-agent-top-fullheight-1/);
-  assert.match(bootstrap,/const v='20260904-agent-top-fullheight-1'/);
+  assert.match(index,/browser-bootstrap\.js\?v=20260904-agent-viewport-top-2/);
+  assert.match(bootstrap,/const v='20260904-agent-viewport-top-2'/);
   assert.match(bootstrap,/script-assets-reference-v1\.js\?v=\$\{v\}/);
   assert.match(bootstrap,/agent-left-v2\.js\?v=\$\{v\}/);
   assert.match(bootstrap,/agent-left-v2\.css\?v=\$\{v\}/);
@@ -24,10 +24,14 @@ test('Agent is immediately after Settings and docks from the right',()=>{
   assert.match(css,/\.app-shell\.agent-open \.canvas-viewport\{[\s\S]*right:404px!important/);
 });
 
-test('Agent panel reaches the very top and overlays the top toolbar area',()=>{
-  assert.match(topCss,/#agentPanel\{[\s\S]*top:0!important/);
-  assert.match(topCss,/height:100vh!important/);
-  assert.match(topCss,/z-index:160!important/);
+test('Agent panel is fixed to viewport top and overlays the toolbar area',()=>{
+  assert.match(topCss,/position:fixed!important/);
+  assert.match(topCss,/inset:0 0 0 auto!important/);
+  assert.match(topCss,/height:100dvh!important/);
+  assert.match(topCss,/z-index:10000!important/);
+  assert.match(js,/function forceViewportPanelStyles\(\)/);
+  assert.match(js,/set\('top','0'\)/);
+  assert.match(js,/set\('z-index','10000'\)/);
 });
 
 test('blank Agent panels are replaced by a visible recovery shell',()=>{
