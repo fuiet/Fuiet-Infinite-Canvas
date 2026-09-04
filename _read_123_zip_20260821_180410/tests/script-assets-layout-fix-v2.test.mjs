@@ -7,11 +7,11 @@ const bootstrap=fs.readFileSync(new URL('../browser-bootstrap.js',import.meta.ur
 const css=fs.readFileSync(new URL('../styles/script-assets-layout-fix-v2.css',import.meta.url),'utf8');
 
 test('asset layout bundle is loaded by browser bootstrap',()=>{
-  assert.match(bootstrap,/const v='20260903-script-assets-overlap-fix-1'/);
+  assert.match(bootstrap,/const v='20260904-script-skill-pack-1'/);
   assert.match(bootstrap,/script-assets-reference-v1\.css\?v=\$\{v\}/);
   assert.match(bootstrap,/script-assets-layout-fix-v2\.css\?v=\$\{v\}/);
   assert.match(bootstrap,/script-assets-reference-v1\.js\?v=\$\{v\}/);
-  assert.match(index,/browser-bootstrap\.js\?v=/);
+  assert.match(index,/browser-bootstrap\.js\?v=20260904-script-skill-pack-1/);
 });
 
 test('角色 场景 道具 remain independent block rows',()=>{
