@@ -21,10 +21,13 @@
 #agentPanel{
   left:auto!important;
   right:0!important;
-  top:50px!important;
+  top:42px!important;
   bottom:0!important;
   width:404px!important;
   z-index:79!important;
+  display:flex!important;
+  flex-direction:column!important;
+  color:#f3f4f6!important;
   border-left:1px solid #303236!important;
   border-right:0!important;
   background:#202123!important;
@@ -44,6 +47,20 @@
 }
 .app-shell.agent-open .bottom-left{left:14px!important}
 .app-shell.agent-open .minimap{left:14px!important}
+
+/* Recovery shell is a real full-height layout, not a loose block. */
+.agent-left-v2 .agent-recovery-shell{
+  width:100%;
+  height:100%;
+  min-height:0;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  background:#202123;
+  color:#f3f4f6;
+}
+.agent-left-v2 .agent-recovery-shell>.agent-body{flex:1 1 auto;min-height:0}
+.agent-left-v2 .agent-recovery-shell>.agent-composer{flex:0 0 auto}
 
 .agent-left-v2 .agent-head{
   height:50px;
