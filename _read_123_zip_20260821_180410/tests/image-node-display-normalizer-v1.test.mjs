@@ -24,7 +24,7 @@ test('storyboard frames keep their intentionally compact custom dimensions',()=>
 });
 
 test('server-loaded and saved project data are normalized too',()=>{
-  assert.match(normalizer,/\/api\\\/projects/);
+  assert.ok(normalizer.includes('api\\/projects'));
   assert.match(normalizer,/method==='GET'/);
   assert.match(normalizer,/method==='POST'\|\|method==='PUT'/);
   assert.match(normalizer,/body\.project\.data=normalized\.data/);
