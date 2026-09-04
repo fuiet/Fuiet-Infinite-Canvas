@@ -21,7 +21,7 @@ test('asset result sync runs for canvas result mutations and asset page rerender
 });
 
 test('result sync bundle remains loaded under the current cache version',()=>{
-  assert.match(bootstrap,/20260904-script-assets-media-visible-1/);
+  assert.match(bootstrap,/20260904-script-skill-pack-1/);
   assert.match(bootstrap,/script-assets-result-sync-v1\.js\?v=\$\{v\}/);
-  assert.match(index,/browser-bootstrap\.js\?v=20260904-script-assets-media-visible-1/);
+  assert.match(index,/browser-bootstrap\.js\?v=20260904-script-skill-pack-1/);
 });
