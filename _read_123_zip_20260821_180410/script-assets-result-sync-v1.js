@@ -14,6 +14,7 @@ const norm=v=>String(v||'').trim().toLowerCase().replace(/\.[a-z0-9]{2,5}$/,'').
 let timer=0;
 let syncing=false;
 let queued=false;
+let replaying=false;
 
 function assetsView(){return Boolean(featureModal.querySelector('.script-assets-layout'))}
 function cards(){return [...featureModal.querySelectorAll('.script-assets-layout [data-open-script-asset]')]}
@@ -23,7 +24,8 @@ function nodeTitle(node){return String(node?.querySelector('.node-title-stack b,
 function nodeResultUrl(node){
   const img=node?.querySelector('.node-result img[src],.image-result img[src],.result-shell img[src],img[src]');
   if(img?.src)return img.src;
-  const styled=[...node.querySelectorAll?.('[style*="background-image"]')||[]].find(el=>/url\(/.test(el.style.backgroundImage||''));
+  const list=node?.querySelectorAll?.('[style*="background-image"]')||[];
+  const styled=[...list].find(el=>/url\(/.test(el.style.backgroundImage||''));
   const bg=styled?.style?.backgroundImage||'';const m=bg.match(/url\(["']?(.*?)["']?\)/);return m?.[1]||'';
 }
 function candidateFor(name){
@@ -46,7 +48,8 @@ function matchingOption(select,name){
 }
 async function waitFor(fn,timeout=3500,step=70){const start=Date.now();while(Date.now()-start<timeout){const v=fn();if(v)return v;await sleep(step)}return null}
 async function bindCard(card){
-  if(!card||cardHasMedia(card))return true;
+  if(!card)return false;
+  if(cardHasMedia(card)&&card.dataset.generatedResultRecovered!=='1')return true;
   const name=cardName(card),candidate=candidateFor(name);if(!candidate)return false;
   paintImmediate(card,candidate);
   const id=String(card.dataset.openScriptAsset||'');if(!id)return false;
@@ -57,7 +60,7 @@ async function bindCard(card){
   const select=drawer.querySelector('#drawerAssetCanvas');const bind=drawer.querySelector('#drawerAssetBindCanvas');
   const option=matchingOption(select,name);if(!option||!bind)return false;
   select.value=option.value;select.dispatchEvent(new Event('change',{bubbles:true}));bind.click();
-  await waitFor(()=>{const c=fresh();return c&&cardHasMedia(c)?c:null},4500,90);
+  await waitFor(()=>{const c=fresh();return c&&cardHasMedia(c)&&c.dataset.generatedResultRecovered!=='1'?c:null},4500,90);
   return Boolean(fresh()&&cardHasMedia(fresh()));
 }
 async function reconcile(){
@@ -66,10 +69,9 @@ async function reconcile(){
   syncing=true;
   try{
     const originalActive=featureModal.querySelector('[data-open-script-asset].active')?.dataset.openScriptAsset||'';
-    const missing=cards().filter(card=>!cardHasMedia(card));
+    const missing=cards().filter(card=>!cardHasMedia(card)||card.dataset.generatedResultRecovered==='1');
     for(const card of missing){
-      const candidate=candidateFor(cardName(card));if(!candidate)continue;
-      paintImmediate(card,candidate);
+      if(!candidateFor(cardName(card)))continue;
       await bindCard(card);
       await sleep(40);
     }
@@ -88,12 +90,12 @@ new MutationObserver(()=>{if(assetsView())schedule(120)}).observe(featureModal,{
 /* Before the user confirms assets or enters Prompt synthesis, give recovered
    canvas results one final chance to persist through the native bind handler. */
 document.addEventListener('click',e=>{
-  if(!assetsView())return;
+  if(replaying||!assetsView())return;
   const target=e.target.closest?.('#confirmScriptAssets,[data-script-tab="prompts"]');if(!target||syncing)return;
-  const recoverable=cards().filter(c=>!cardHasMedia(c)&&candidateFor(cardName(c)));
+  const recoverable=cards().filter(c=>(!cardHasMedia(c)||c.dataset.generatedResultRecovered==='1')&&candidateFor(cardName(c)));
   if(!recoverable.length)return;
   e.preventDefault();e.stopImmediatePropagation();
-  (async()=>{await reconcile();setTimeout(()=>target.isConnected&&target.click(),30)})();
+  (async()=>{await reconcile();replaying=true;try{if(target.isConnected)target.click()}finally{replaying=false}})();
 },true);
 
 schedule(120);
