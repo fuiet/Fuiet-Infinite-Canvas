@@ -7,10 +7,11 @@
 'use strict';
 const manager=globalThis.CanvasBrowserStorageManager;
 if(!manager?.ready)throw new Error('Browser Storage Manager 未加载');
-const v='20260904-script-assets-media-visible-1';
+const v='20260904-script-skill-pack-1';
 const canvasScripts=[
   `./provider-auto-config-v1.js?v=${v}`,
   `./script-workflow-core.js?v=${v}`,
+  `./script-node-skill-pack-v1.js?v=${v}`,
   `./app.js?v=${v}&fix=generator-input-focus-1&ui=text-result-editor-1&wheel=text-editor-1&refs=generator-reference-strip-1&scriptclick=toolbar-3&scriptgen=panel-4`,
   `./upstream-generation-inputs-v1.js?v=${v}`,
   `./reference-popover-portal-v1.js?v=${v}`,
