@@ -9,8 +9,8 @@ const css=fs.readFileSync(new URL('../styles/agent-left-v2.css',import.meta.url)
 const topCss=fs.readFileSync(new URL('../styles/agent-panel-top-v1.css',import.meta.url),'utf8');
 
 test('Agent right surface is cache-busted and loaded after the native Agent engine',()=>{
-  assert.match(index,/browser-bootstrap\.js\?v=20260904-agent-viewport-top-2/);
-  assert.match(bootstrap,/const v='20260904-agent-viewport-top-2'/);
+  assert.match(index,/browser-bootstrap\.js\?v=20260904-script-assets-media-visible-1/);
+  assert.match(bootstrap,/const v='20260904-script-assets-media-visible-1'/);
   assert.match(bootstrap,/script-assets-reference-v1\.js\?v=\$\{v\}/);
   assert.match(bootstrap,/agent-left-v2\.js\?v=\$\{v\}/);
   assert.match(bootstrap,/agent-left-v2\.css\?v=\$\{v\}/);
