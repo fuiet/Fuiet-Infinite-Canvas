@@ -1,0 +1,10 @@
+/* Agent panel must cover the full right-side workspace from the very top,
+   matching the reference layout instead of starting below the 42px app bar. */
+.agent-panel.agent-left-v2,
+#agentPanel{
+  top:0!important;
+  bottom:0!important;
+  height:100vh!important;
+  z-index:160!important;
+  border-top:0!important;
+}
