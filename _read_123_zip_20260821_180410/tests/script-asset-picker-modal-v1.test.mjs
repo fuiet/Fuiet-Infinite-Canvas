@@ -17,12 +17,13 @@ test('prepare-assets empty preview and editor hero open the dedicated image pick
   assert.match(picker,/script-asset-picker-modal/);
 });
 
-test('legacy drawer hero no longer opens its three-item popover',()=>{
+test('asset picker capture listener loads before the legacy reference adapter',()=>{
+  const pickerPos=bootstrap.indexOf('./script-asset-picker-modal-v1.js');
+  const referencePos=bootstrap.indexOf('./script-assets-reference-v1.js');
+  assert.ok(pickerPos>=0);
+  assert.ok(referencePos>=0);
+  assert.ok(pickerPos<referencePos);
   assert.match(reference,/\.script-asset-hero-trigger,\.script-asset-hero-more/);
-  assert.match(reference,/heroEntry[\s\S]*stopImmediatePropagation\(\)/);
-  assert.match(reference,/\[data-open-script-asset\]\.active/);
-  assert.match(reference,/active\?\.querySelector\('\.asset-preview'\)/);
-  assert.match(reference,/if\(preview\)preview\.click\(\)/);
 });
 
 test('picker exposes the four requested image sources',()=>{
@@ -47,6 +48,6 @@ test('picker hides the inspector while open and is styled as a centered modal',(
 test('picker runtime is loaded and cache-busted from index through browser bootstrap',()=>{
   assert.match(bootstrap,/script-asset-picker-modal-v1\.js/);
   assert.match(bootstrap,/script-asset-picker-modal-v1\.css/);
-  assert.match(bootstrap,/20260904-script-asset-picker-modal-3/);
-  assert.match(index,/browser-bootstrap\.js\?v=20260904-script-asset-picker-modal-3/);
+  assert.match(bootstrap,/20260904-script-asset-picker-modal-4/);
+  assert.match(index,/browser-bootstrap\.js\?v=20260904-script-asset-picker-modal-4/);
 });
