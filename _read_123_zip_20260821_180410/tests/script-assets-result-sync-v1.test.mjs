@@ -20,8 +20,8 @@ test('asset result sync runs for canvas result mutations and asset page rerender
   assert.match(sync,/observe\(featureModal/);
 });
 
-test('result sync bundle is loaded with fresh cache version',()=>{
-  assert.match(bootstrap,/20260904-script-assets-result-sync-1/);
+test('result sync bundle remains loaded under the current cache version',()=>{
+  assert.match(bootstrap,/20260904-agent-visible-panel-2/);
   assert.match(bootstrap,/script-assets-result-sync-v1\.js\?v=\$\{v\}/);
-  assert.match(index,/browser-bootstrap\.js\?v=20260904-script-assets-result-sync-1/);
+  assert.match(index,/browser-bootstrap\.js\?v=20260904-agent-visible-panel-2/);
 });
