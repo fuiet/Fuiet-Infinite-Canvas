@@ -5,9 +5,12 @@ import fs from 'node:fs';
 const picker=fs.readFileSync(new URL('../script-asset-picker-modal-v1.js',import.meta.url),'utf8');
 const css=fs.readFileSync(new URL('../styles/script-asset-picker-modal-v1.css',import.meta.url),'utf8');
 const bootstrap=fs.readFileSync(new URL('../browser-bootstrap.js',import.meta.url),'utf8');
+const index=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
 
-test('prepare-assets empty preview opens the dedicated image picker modal',()=>{
+test('prepare-assets empty preview and editor hero open the dedicated image picker modal',()=>{
   assert.match(picker,/\.script-asset-card \.asset-preview/);
+  assert.match(picker,/\.script-asset-hero-trigger/);
+  assert.match(picker,/activeAssetCard\(\)/);
   assert.match(picker,/cardHasMedia\(card\)/);
   assert.match(picker,/stopImmediatePropagation\(\)/);
   assert.match(picker,/script-asset-picker-modal/);
@@ -32,7 +35,9 @@ test('picker hides the inspector while open and is styled as a centered modal',(
   assert.match(css,/width:min\(800px/);
 });
 
-test('picker script and stylesheet are loaded by browser bootstrap',()=>{
+test('picker runtime is loaded and cache-busted from index through browser bootstrap',()=>{
   assert.match(bootstrap,/script-asset-picker-modal-v1\.js/);
   assert.match(bootstrap,/script-asset-picker-modal-v1\.css/);
+  assert.match(bootstrap,/20260904-script-asset-picker-modal-2/);
+  assert.match(index,/browser-bootstrap\.js\?v=20260904-script-asset-picker-modal-2/);
 });
