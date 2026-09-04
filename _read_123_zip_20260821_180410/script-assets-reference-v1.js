@@ -202,8 +202,23 @@ document.addEventListener('click',e=>{
   if(bulkButton){e.preventDefault();e.stopImmediatePropagation();runBulkGeneration();return}
 
   const add=e.target.closest?.('.script-asset-add-card');if(add)return;
-  const heroTrigger=e.target.closest?.('.script-asset-hero-trigger,.script-asset-hero-more');
-  if(heroTrigger){e.preventDefault();e.stopPropagation();const menu=featureModal.querySelector('.script-asset-hero-menu');menu?.classList.toggle('hidden');return}
+
+  /* The legacy drawer used to open a compact three-item popover here. Route
+   * both hero entry points to the same four-source image picker instead. The
+   * picker script is loaded after this adapter, so dispatch a nested click on
+   * the active asset preview; that is the picker's canonical entry point. */
+  const heroEntry=e.target.closest?.('.script-asset-hero-trigger,.script-asset-hero-more');
+  if(heroEntry){
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    heroEntry.closest('.script-asset-hero')?.querySelector('.script-asset-hero-menu')?.classList.add('hidden');
+    const active=featureModal.querySelector('[data-open-script-asset].active');
+    const preview=active?.querySelector('.asset-preview');
+    if(preview)preview.click();
+    else showInlineToast('图片选择器初始化失败，请重新打开资产',2800);
+    return;
+  }
+
   const menuAction=e.target.closest?.('[data-asset-hero-action]');
   if(menuAction){e.preventDefault();e.stopPropagation();assetMenuAction(menuAction.dataset.assetHeroAction);return}
 
