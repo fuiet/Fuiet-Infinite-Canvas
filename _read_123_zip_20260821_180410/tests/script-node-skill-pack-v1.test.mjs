@@ -11,7 +11,8 @@ test('built-in script skill runtime parses as JavaScript',()=>{
   assert.doesNotThrow(()=>new Function(skill));
 });
 
-test('safe skill pack loads before app.js',()=>{
+test('safe skill pack loads before app.js with detailed asset cache key',()=>{
+  assert.match(bootstrap,/const v='20260904-script-detailed-asset-prompts-3'/);
   assert.match(bootstrap,/script-workflow-core\.js\?v=\$\{v\}[\s\S]*script-node-skill-pack-v1\.js\?v=\$\{v\}[\s\S]*app\.js\?v=\$\{v\}/);
   assert.match(index,/browser-bootstrap\.js\?v=/);
 });
@@ -31,6 +32,28 @@ test('built-in story asset storyboard review rules are still embedded',()=>{
   assert.ok(skill.includes('起点：……；主要动作：……；终点：……'));
   assert.ok(skill.includes('人物位置、朝向、视线、双手、持物、伤势和道具状态不能镜外瞬移'));
   assert.ok(skill.includes('匿名路人、顾客群、一次性服务员、背景人群默认不要建立角色资产'));
+});
+
+test('asset prompts are required to be production grade and separate from descriptions',()=>{
+  for(const name of ['character-visual-asset-prompt','scene-visual-asset-prompt','prop-visual-asset-prompt'])assert.ok(skill.includes(name));
+  assert.ok(skill.includes('description 和 prompt 职责完全不同'));
+  assert.ok(skill.includes('建议 350–700 个中文字符'));
+  assert.ok(skill.includes('正面头部特写 + 全身正面 + 全身侧面 + 全身背面'));
+  assert.ok(skill.includes('建议 280–600 个中文字符'));
+  assert.ok(skill.includes('建议 220–450 个中文字符'));
+  assert.ok(skill.includes('服装必须写清上装、下装或裙装、外套层次'));
+  assert.ok(skill.includes('空间尺度、建筑或室内结构'));
+  assert.ok(skill.includes('真实大小与人体/桌面比例'));
+});
+
+test('short asset prompts get a deterministic production-safe fallback',()=>{
+  assert.match(skill,/function detailedEnough\(kind,prompt\)/);
+  assert.match(skill,/function fallbackCharacterPrompt\(a,style=''/);
+  assert.match(skill,/function fallbackScenePrompt\(a,style=''/);
+  assert.match(skill,/function fallbackPropPrompt\(a,style=''/);
+  assert.match(skill,/function ensureDetailedAssetPrompts\(input\)/);
+  assert.match(skill,/trackedBreakdownTasks/);
+  assert.match(skill,/rewriteTaskOutput\(task\)/);
 });
 
 test('prompt synthesis stays constrained by image/video prompt owners',()=>{
