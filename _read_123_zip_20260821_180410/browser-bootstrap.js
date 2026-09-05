@@ -7,7 +7,7 @@
 'use strict';
 const manager=globalThis.CanvasBrowserStorageManager;
 if(!manager?.ready)throw new Error('Browser Storage Manager 未加载');
-const v='20260904-script-asset-picker-modal-5';
+const v='20260905-final-prompt-composer-1';
 const canvasScripts=[
   `./provider-auto-config-v1.js?v=${v}`,
   `./script-workflow-core.js?v=${v}`,
@@ -36,6 +36,7 @@ const canvasScripts=[
   `./script-assets-reference-v1.js?v=${v}`,
   `./script-assets-media-visibility-v1.js?v=${v}`,
   `./script-assets-result-sync-v1.js?v=${v}`,
+  `./script-final-prompt-composer-v1.js?v=${v}`,
   `./agent-left-v2.js?v=${v}`
 ];
 const modelScripts=[`./provider-auto-config-v1.js?v=${v}`,`./models.js?v=${v}`,`./ui-zh.js?v=${v}`];
@@ -83,6 +84,7 @@ async function start(){
       loadStyle(`./styles/edge-reference-cards-v1.css?v=${v}&ui=generator-reference-strip-1`),
       loadStyle(`./styles/video-generator-reference-layout-fix-v1.css?v=${v}`),
       loadStyle(`./styles/edge-cut-interaction-v1.css?v=${v}`),
+      loadStyle(`./styles/script-final-prompt-composer-v1.css?v=${v}`),
       loadStyle(`./styles/agent-left-v2.css?v=${v}`),
       loadStyle(`./styles/agent-panel-top-v1.css?v=${v}`)
     ]);
