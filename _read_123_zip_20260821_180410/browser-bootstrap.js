@@ -7,7 +7,7 @@
 'use strict';
 const manager=globalThis.CanvasBrowserStorageManager;
 if(!manager?.ready)throw new Error('Browser Storage Manager 未加载');
-const v='20260905-final-prompt-v2-1';
+const v='20260905-final-prompt-production-2';
 const canvasScripts=[
   `./provider-auto-config-v1.js?v=${v}`,
   `./script-workflow-core.js?v=${v}`,
@@ -16,6 +16,7 @@ const canvasScripts=[
   `./image-node-display-normalizer-v1.js?v=${v}`,
   `./app.js?v=${v}&fix=generator-input-focus-1&ui=text-result-editor-1&wheel=text-editor-1&refs=generator-reference-strip-1&scriptclick=toolbar-3&scriptgen=panel-4`,
   `./script-final-prompt-v2.js?v=${v}`,
+  `./script-final-prompt-rich-v1.js?v=${v}`,
   `./upstream-generation-inputs-v1.js?v=${v}`,
   `./reference-popover-portal-v1.js?v=${v}`,
   `./video-hover-player-v1.js?v=${v}&audio=default-on-1`,
