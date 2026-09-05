@@ -1,11 +1,11 @@
-/* Fuiet Script Workflow V2 · shared data contract */
+/* Fuiet Script Workflow V1 · shared data contract */
 (function(root,factory){
   const api=factory();
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.FuietScriptWorkflowCore=api;
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
-  const SCHEMA_VERSION=2;
+  const SCHEMA_VERSION=1;
   const arr=v=>Array.isArray(v)?v:[];
   const text=v=>String(v??'');
   const uniq=v=>[...new Set(arr(v).filter(Boolean))];
@@ -83,7 +83,7 @@
   function markShotError(shot,error='提示词合成失败'){if(!shot)return shot;shot.promptStatus='error';shot.promptDirty=true;shot.promptError=text(error);shot.dirtyReason='合成失败';shot.promptFailedAt=now();return shot}
 
   function markShotReady(shot,source){
-    if(!shot)return shot;const owner=shotOwners.get(shot);const resolved=source||owner?source||shotPromptSourceSnapshot(owner,shot):null;
+    if(!shot)return shot;const owner=shotOwners.get(shot);const resolved=(source||owner)?(source||shotPromptSourceSnapshot(owner,shot)):null;
     shot.promptDirty=false;shot.promptStatus='ready';shot.dirtyReason='';shot.promptError='';shot.promptRevision=nonNegative(shot.promptRevision)+1;shot.promptGeneratedAt=now();shot.promptUpdatedAt=shot.promptGeneratedAt;if(resolved)shot.promptSource=normalizePromptSource(resolved);return shot;
   }
 
