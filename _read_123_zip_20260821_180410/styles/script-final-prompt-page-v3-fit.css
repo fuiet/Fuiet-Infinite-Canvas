@@ -1,6 +1,6 @@
 /* Final Prompt Page V3 · viewport-fit overrides
- * The final-prompt stage owns one vertical scroll surface: the shot table.
- * Everything else stays visible, including progress, filters and the production footer.
+ * The prompt stage owns exactly one vertical scroll surface: the shot table.
+ * Progress, filters, close control and the production footer remain visible.
  */
 .fpv3-prompts-active .fpv3-page,
 .fpv3-prompts-active .fpv3-table th,
@@ -10,14 +10,20 @@
 .fpv3-prompts-active .fpv3-action-cell,
 .fpv3-prompts-active .fpv3-table th:nth-child(6){text-align:right!important}
 
-.fpv3-prompts-active .feature-head{flex:0 0 auto!important}
-.fpv3-prompts-active .script-workflow-head.simplified{flex:0 0 auto!important;min-height:50px!important;padding:4px 20px!important}
-.fpv3-prompts-active .script-workflow-steps{width:min(760px,100%)!important;max-width:760px!important;margin:0 auto!important}
-.fpv3-prompts-active .script-step{min-width:150px!important;padding:4px 8px!important;gap:7px!important}
+.fpv3-prompts-active .feature-dialog.full{height:100vh!important;height:100dvh!important;max-height:100vh!important;max-height:100dvh!important}
+.fpv3-prompts-active .feature-head{position:relative;z-index:8;flex:0 0 auto!important}
+.fpv3-prompts-active .feature-head .feature-close,
+.fpv3-prompts-active .feature-head [data-close],
+.fpv3-prompts-active .feature-head button:last-child{visibility:visible!important;opacity:1!important;pointer-events:auto!important}
+.fpv3-prompts-active .script-workflow-head.simplified{flex:0 0 auto!important;min-height:48px!important;padding:3px 20px!important}
+.fpv3-prompts-active .script-workflow-steps{width:min(720px,100%)!important;max-width:720px!important;margin:0 auto!important}
+.fpv3-prompts-active .script-step{min-width:145px!important;padding:3px 8px!important;gap:7px!important}
 .fpv3-prompts-active .script-step i{width:22px!important;height:22px!important;flex:0 0 22px!important}
 .fpv3-prompts-active .script-step b{font-size:11px!important}
-.fpv3-prompts-active .script-step small{max-width:140px!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important}
+.fpv3-prompts-active .script-step small{max-width:135px!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important}
 
+.fpv3-prompts-active .feature-body,
+.fpv3-prompts-active .script-editor-shell,
 .fpv3-prompts-active #scriptEditorContent,
 .fpv3-prompts-active .fpv3-content-active,
 .fpv3-prompts-active .fpv3-page{min-height:0!important;overflow:hidden!important}
@@ -29,67 +35,68 @@
 .fpv3-prompts-active .fpv3-footer{position:relative;z-index:4}
 
 @media (max-height:920px){
-  .fpv3-prompts-active .feature-head{height:38px!important;min-height:38px!important;padding-top:0!important;padding-bottom:0!important}
+  .fpv3-prompts-active .feature-head{height:36px!important;min-height:36px!important;padding-top:0!important;padding-bottom:0!important}
   .fpv3-prompts-active .feature-subtitle{display:none!important}
-  .fpv3-prompts-active .script-workflow-head.simplified{min-height:42px!important;padding:2px 18px!important}
-  .fpv3-prompts-active .script-step{min-height:32px!important;padding-top:2px!important;padding-bottom:2px!important}
+  .fpv3-prompts-active .script-workflow-head.simplified{min-height:40px!important;padding:1px 18px!important}
+  .fpv3-prompts-active .script-step{min-height:30px!important;padding-top:1px!important;padding-bottom:1px!important}
   .fpv3-prompts-active .script-step small{display:none!important}
 
-  .fpv3-prompts-active .fpv3-commandbar{flex-basis:44px!important;min-height:44px!important;padding:0 20px!important;gap:12px!important}
-  .fpv3-prompts-active .fpv3-command-title{min-width:150px!important}
-  .fpv3-prompts-active .fpv3-progress-track{width:135px!important}
-  .fpv3-prompts-active .fpv3-primary{height:30px!important;padding-left:13px!important;padding-right:13px!important}
+  .fpv3-prompts-active .fpv3-commandbar{flex-basis:42px!important;min-height:42px!important;padding:0 18px!important;gap:11px!important}
+  .fpv3-prompts-active .fpv3-command-title{min-width:142px!important}
+  .fpv3-prompts-active .fpv3-progress-track{flex-basis:125px!important}
+  .fpv3-prompts-active .fpv3-primary{height:29px!important;padding-left:12px!important;padding-right:12px!important}
 
-  .fpv3-prompts-active .fpv3-stylebar{flex-basis:42px!important;min-height:42px!important;grid-template-columns:145px minmax(0,1fr)!important;gap:10px!important;padding:0 20px!important}
+  .fpv3-prompts-active .fpv3-stylebar{flex-basis:40px!important;min-height:40px!important;grid-template-columns:135px minmax(0,1fr)!important;gap:9px!important;padding:0 18px!important}
   .fpv3-prompts-active .fpv3-stylebar label span{display:none!important}
-  .fpv3-prompts-active .fpv3-stylebar input{height:28px!important}
+  .fpv3-prompts-active .fpv3-stylebar input{height:27px!important}
 
-  .fpv3-prompts-active .fpv3-toolbar{flex-basis:36px!important;min-height:36px!important;padding:0 20px!important}
+  .fpv3-prompts-active .fpv3-toolbar{flex-basis:34px!important;min-height:34px!important;padding:0 18px!important}
   .fpv3-prompts-active .fpv3-filters{padding:2px!important}
-  .fpv3-prompts-active .fpv3-filters button{height:23px!important;padding:0 8px!important}
-  .fpv3-prompts-active .fpv3-toolbar-note{font-size:9px!important}
+  .fpv3-prompts-active .fpv3-filters button{height:22px!important;padding:0 8px!important}
+  .fpv3-prompts-active .fpv3-toolbar-note{font-size:8px!important}
 
-  .fpv3-prompts-active .fpv3-table th{height:29px!important;padding:0 11px!important}
-  .fpv3-prompts-active .fpv3-row td{height:48px!important;padding:5px 11px!important}
+  .fpv3-prompts-active .fpv3-table th{height:28px!important;padding:0 10px!important}
+  .fpv3-prompts-active .fpv3-row td{height:47px!important;padding:5px 10px!important}
   .fpv3-prompts-active .fpv3-shot-main{-webkit-line-clamp:1!important;line-height:1.35!important}
   .fpv3-prompts-active .fpv3-shot-meta{margin-top:2px!important}
-  .fpv3-prompts-active .fpv3-assets-wrap{max-height:22px!important;flex-wrap:nowrap!important}
+  .fpv3-prompts-active .fpv3-assets-wrap{max-height:21px!important;flex-wrap:nowrap!important}
   .fpv3-prompts-active .fpv3-asset-chip{height:19px!important;padding-left:6px!important;padding-right:6px!important}
-  .fpv3-prompts-active .fpv3-row-action{height:27px!important}
+  .fpv3-prompts-active .fpv3-row-action{height:26px!important}
 
-  .fpv3-prompts-active .fpv3-footer{flex-basis:46px!important;min-height:46px!important;padding:0 20px!important}
-  .fpv3-prompts-active .fpv3-next{height:30px!important}
+  .fpv3-prompts-active .fpv3-footer{flex-basis:44px!important;min-height:44px!important;padding:0 18px!important}
+  .fpv3-prompts-active .fpv3-next{height:29px!important}
 }
 
 @media (max-height:780px){
-  .fpv3-prompts-active .feature-head{height:34px!important;min-height:34px!important}
-  .fpv3-prompts-active .script-workflow-head.simplified{min-height:36px!important;padding:1px 16px!important}
+  .fpv3-prompts-active .feature-head{height:32px!important;min-height:32px!important}
+  .fpv3-prompts-active .script-workflow-head.simplified{min-height:34px!important;padding:0 14px!important}
   .fpv3-prompts-active .script-step i{width:18px!important;height:18px!important;flex-basis:18px!important}
 
-  .fpv3-prompts-active .fpv3-commandbar{flex-basis:38px!important;min-height:38px!important;padding:0 16px!important}
-  .fpv3-prompts-active .fpv3-command-title span{display:none!important}
-  .fpv3-prompts-active .fpv3-progress-track{width:110px!important}
-  .fpv3-prompts-active .fpv3-primary{height:28px!important}
+  .fpv3-prompts-active .fpv3-commandbar{flex-basis:36px!important;min-height:36px!important;padding:0 14px!important}
+  .fpv3-prompts-active .fpv3-command-title span,.fpv3-prompts-active .fpv3-command-state{display:none!important}
+  .fpv3-prompts-active .fpv3-progress-track{flex-basis:100px!important}
+  .fpv3-prompts-active .fpv3-primary{height:27px!important}
 
-  .fpv3-prompts-active .fpv3-stylebar{flex-basis:36px!important;min-height:36px!important;grid-template-columns:125px minmax(0,1fr)!important;padding:0 16px!important}
-  .fpv3-prompts-active .fpv3-stylebar input{height:26px!important}
-  .fpv3-prompts-active .fpv3-toolbar{flex-basis:32px!important;min-height:32px!important;padding:0 16px!important}
+  .fpv3-prompts-active .fpv3-stylebar{flex-basis:34px!important;min-height:34px!important;grid-template-columns:118px minmax(0,1fr)!important;padding:0 14px!important}
+  .fpv3-prompts-active .fpv3-stylebar input{height:25px!important}
+  .fpv3-prompts-active .fpv3-toolbar{flex-basis:30px!important;min-height:30px!important;padding:0 14px!important}
   .fpv3-prompts-active .fpv3-toolbar-note{display:none!important}
 
-  .fpv3-prompts-active .fpv3-table th{height:27px!important}
-  .fpv3-prompts-active .fpv3-row td{height:43px!important;padding:3px 10px!important}
+  .fpv3-prompts-active .fpv3-table th{height:26px!important}
+  .fpv3-prompts-active .fpv3-row td{height:41px!important;padding:3px 9px!important}
   .fpv3-prompts-active .fpv3-shot-meta{display:none!important}
-  .fpv3-prompts-active .fpv3-no strong{width:22px!important;height:22px!important}
-  .fpv3-prompts-active .fpv3-assets-wrap{max-height:20px!important}
+  .fpv3-prompts-active .fpv3-no strong{width:21px!important;height:21px!important}
+  .fpv3-prompts-active .fpv3-assets-wrap{max-height:19px!important}
+  .fpv3-prompts-active .fpv3-status{height:21px!important}
 
-  .fpv3-prompts-active .fpv3-footer{flex-basis:40px!important;min-height:40px!important;padding:0 16px!important}
+  .fpv3-prompts-active .fpv3-footer{flex-basis:38px!important;min-height:38px!important;padding:0 14px!important}
   .fpv3-prompts-active .fpv3-footer-summary small{display:none!important}
-  .fpv3-prompts-active .fpv3-next{height:28px!important}
+  .fpv3-prompts-active .fpv3-next{height:27px!important}
 }
 
 @media (max-width:1100px){
-  .fpv3-prompts-active .fpv3-table th:nth-child(4){width:220px!important}
-  .fpv3-prompts-active .fpv3-toolbar-note{display:none!important}
+  .fpv3-prompts-active .fpv3-table th:nth-child(4){width:205px!important}
+  .fpv3-prompts-active .fpv3-toolbar-note,.fpv3-prompts-active .fpv3-command-state{display:none!important}
 }
 
 @media (max-width:900px){
