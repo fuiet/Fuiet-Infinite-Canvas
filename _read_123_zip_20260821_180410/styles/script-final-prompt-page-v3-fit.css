@@ -1,0 +1,75 @@
+/* Final Prompt Page V3 · viewport-fit overrides
+ * Keeps the prompt workflow header, table and footer inside the visible viewport
+ * on common laptop resolutions while preserving one scroll surface: the shot table.
+ */
+.fpv3-prompts-active .fpv3-page,
+.fpv3-prompts-active .fpv3-table th,
+.fpv3-prompts-active .fpv3-table td,
+.fpv3-prompts-active .fpv3-stylebar input{text-align:left!important}
+.fpv3-prompts-active .fpv3-no{text-align:center!important}
+.fpv3-prompts-active .fpv3-action-cell,
+.fpv3-prompts-active .fpv3-table th:nth-child(6){text-align:right!important}
+
+.fpv3-prompts-active .feature-head{flex:0 0 auto!important}
+.fpv3-prompts-active .script-workflow-head.simplified{flex:0 0 auto!important;min-height:54px!important;padding:6px 20px!important}
+.fpv3-prompts-active .script-workflow-steps{width:min(760px,100%)!important;max-width:760px!important;margin:0 auto!important}
+.fpv3-prompts-active .script-step{min-width:150px!important;padding:5px 8px!important;gap:7px!important}
+.fpv3-prompts-active .script-step i{width:24px!important;height:24px!important;flex:0 0 24px!important}
+.fpv3-prompts-active .script-step b{font-size:11px!important}
+.fpv3-prompts-active .script-step small{max-width:140px!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important}
+
+.fpv3-prompts-active .fpv3-table-shell{overflow-y:auto!important;overflow-x:hidden!important;scrollbar-gutter:stable;overscroll-behavior:contain}
+.fpv3-prompts-active .fpv3-table-shell::-webkit-scrollbar{width:8px}
+.fpv3-prompts-active .fpv3-table-shell::-webkit-scrollbar-track{background:transparent}
+.fpv3-prompts-active .fpv3-table-shell::-webkit-scrollbar-thumb{background:#2c3133;border:2px solid #111313;border-radius:999px}
+.fpv3-prompts-active .fpv3-table thead{position:sticky!important;top:0!important;z-index:5!important}
+.fpv3-prompts-active .fpv3-footer{position:relative;z-index:4}
+
+@media (max-height:920px){
+  .fpv3-prompts-active .feature-head{height:42px!important;min-height:42px!important;padding-top:0!important;padding-bottom:0!important}
+  .fpv3-prompts-active .feature-subtitle{display:none!important}
+  .fpv3-prompts-active .script-workflow-head.simplified{min-height:46px!important;padding:4px 18px!important}
+  .fpv3-prompts-active .script-step{min-height:34px!important}
+  .fpv3-prompts-active .script-step small{display:none!important}
+
+  .fpv3-prompts-active .fpv3-hero{padding:10px 20px 9px!important;gap:18px!important}
+  .fpv3-prompts-active .fpv3-eyebrow{display:none!important}
+  .fpv3-prompts-active .fpv3-title-block h2{font-size:16px!important}
+  .fpv3-prompts-active .fpv3-title-block p{max-width:720px!important;margin-top:3px!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important}
+  .fpv3-prompts-active .fpv3-progress-card{width:145px!important}
+  .fpv3-prompts-active .fpv3-progress-card>div:first-child{margin-bottom:4px!important}
+  .fpv3-prompts-active .fpv3-progress-card strong{font-size:15px!important}
+  .fpv3-prompts-active .fpv3-primary{height:32px!important}
+
+  .fpv3-prompts-active .fpv3-stylebar{grid-template-columns:155px minmax(0,1fr)!important;gap:12px!important;padding:7px 20px!important}
+  .fpv3-prompts-active .fpv3-style-label small{display:none!important}
+  .fpv3-prompts-active .fpv3-stylebar input{height:30px!important}
+  .fpv3-prompts-active .fpv3-toolbar{padding:6px 20px!important}
+  .fpv3-prompts-active .fpv3-filters button{height:25px!important}
+
+  .fpv3-prompts-active .fpv3-table th{height:31px!important;padding:0 12px!important}
+  .fpv3-prompts-active .fpv3-row td{height:52px!important;padding:6px 12px!important}
+  .fpv3-prompts-active .fpv3-shot-main{-webkit-line-clamp:1!important;line-height:1.4!important}
+  .fpv3-prompts-active .fpv3-shot-meta{margin-top:2px!important}
+  .fpv3-prompts-active .fpv3-assets-wrap{max-height:24px!important;flex-wrap:nowrap!important}
+  .fpv3-prompts-active .fpv3-asset-chip{height:20px!important}
+  .fpv3-prompts-active .fpv3-row-action{height:28px!important}
+
+  .fpv3-prompts-active .fpv3-footer{min-height:50px!important;padding:6px 20px!important}
+  .fpv3-prompts-active .fpv3-next{height:32px!important}
+}
+
+@media (max-height:780px){
+  .fpv3-prompts-active .feature-head{height:36px!important;min-height:36px!important}
+  .fpv3-prompts-active .script-workflow-head.simplified{min-height:40px!important;padding:2px 16px!important}
+  .fpv3-prompts-active .script-step i{width:20px!important;height:20px!important;flex-basis:20px!important}
+  .fpv3-prompts-active .fpv3-title-block p{display:none!important}
+  .fpv3-prompts-active .fpv3-hero{padding:7px 18px!important}
+  .fpv3-prompts-active .fpv3-stylebar{padding:5px 18px!important}
+  .fpv3-prompts-active .fpv3-toolbar{padding:4px 18px!important}
+  .fpv3-prompts-active .fpv3-table th{height:28px!important}
+  .fpv3-prompts-active .fpv3-row td{height:46px!important;padding:4px 10px!important}
+  .fpv3-prompts-active .fpv3-shot-meta{display:none!important}
+  .fpv3-prompts-active .fpv3-footer{min-height:44px!important;padding:4px 18px!important}
+  .fpv3-prompts-active .fpv3-footer-summary small{display:none!important}
+}
