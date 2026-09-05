@@ -118,7 +118,8 @@ async function smartSynthesize(ctx,shot){
     const info=await waitTask(taskId);if(String(info?.status)!=='succeeded')throw new Error(info?.error||'提示词合成失败');
     const parsed=extractJson(info?.output?.value??info?.output?.text??info?.output??'');if(!text(parsed?.imagePrompt)||!text(parsed?.videoPrompt))throw new Error('模型没有返回完整 imagePrompt / videoPrompt');
     setNativeValue(shot.id,'image',parsed.imagePrompt);setNativeValue(shot.id,'video',parsed.videoPrompt);
-    setShotMeta(ctx,shot,{status:'ready',mode:'smart',fingerprint:sourceFingerprint(currentScriptContext()||ctx,shot),generatedAt:now(),error:''});
+    const latest=currentScriptContext()||ctx,latestShot=latest.data.shots.find(s=>String(s.id)===String(shot.id))||shot;
+    setShotMeta(latest,latestShot,{status:'ready',mode:'smart',fingerprint:sourceFingerprint(latest,latestShot),generatedAt:now(),error:''});
     return true;
   }catch(error){setShotMeta(ctx,shot,{status:'failed',error:String(error?.message||error),failedAt:now()});throw error}
   finally{refreshComposer();syncOpenModal()}
@@ -129,7 +130,6 @@ function autoCompose(ctx,shot){
   setTimeout(()=>{const fresh=currentScriptContext()||ctx,freshShot=fresh.data.shots.find(s=>String(s.id)===String(shot.id))||shot;setShotMeta(fresh,freshShot,{status:'ready',mode:'auto',fingerprint:sourceFingerprint(fresh,freshShot),generatedAt:now(),error:''});refreshComposer();syncOpenModal()},80);
 }
 
-function statusBadge(status){return `<span class="final-prompt-state ${status.key}">${esc(status.label)}</span>`}
 function renderTable(ctx){
   const shots=ctx.data.shots||[],done=completedCount(ctx),total=shots.length;
   return `<section id="${COMPOSER_ID}" class="final-prompt-composer-v1">
@@ -144,7 +144,8 @@ function enhanceStage(){
   featureModal.querySelector('.prompt-compose-head')?.classList.add('final-prompt-native-hidden');
   featureModal.querySelector('.final-prompt-list')?.classList.add('final-prompt-native-hidden');
   featureModal.querySelector('.script-bottom-actions')?.classList.add('final-prompt-native-hidden');
-  let root=featureModal.querySelector('#'+COMPOSER_ID);if(!root){const host=featureModal.querySelector('.final-prompt-list');host?.insertAdjacentHTML('beforebegin',renderTable(ctx));root=featureModal.querySelector('#'+COMPOSER_ID)}else root.outerHTML=renderTable(ctx);
+  let root=featureModal.querySelector('#'+COMPOSER_ID);
+  if(!root){const host=featureModal.querySelector('.final-prompt-list');host?.insertAdjacentHTML('beforebegin',renderTable(ctx));root=featureModal.querySelector('#'+COMPOSER_ID)}
   bindComposer();
 }
 function refreshComposer(){if(!isPromptStage())return;const ctx=currentScriptContext(),old=featureModal.querySelector('#'+COMPOSER_ID);if(!ctx||!old)return;old.outerHTML=renderTable(ctx);bindComposer()}
@@ -163,17 +164,19 @@ function modalHtml(ctx,shot){
     ${status.key==='outdated'?'<div class="final-prompt-warning">镜头、资产或整体风格已变化，当前提示词需要重新合成。</div>':''}${status.key==='failed'?`<div class="final-prompt-error">${esc(meta.error||'合成失败，请重试')}</div>`:''}
   </main><footer><div class="final-prompt-mode"><label><input type="radio" name="finalPromptMode" value="smart" checked> 智能合成</label><label><input type="radio" name="finalPromptMode" value="auto"> 自动拼接</label></div><button type="button" class="primary" data-final-prompt-run ${status.key==='generating'?'disabled':''}>${status.key==='generating'?'正在合成…':actionLabel}</button></footer></section></div>`;
 }
+function bindModal(root,ctx,shot,{debouncedSave=true}={}){
+  root.dataset.shotId=shot.id;root.querySelector('[data-final-prompt-close]').onclick=closePromptModal;root.addEventListener('mousedown',e=>{if(e.target===root)closePromptModal()});
+  let timer=0;const save=(type,el)=>{const commit=()=>{setNativeValue(shot.id,type,el.value);const fresh=currentScriptContext()||ctx,freshShot=fresh.data.shots.find(s=>String(s.id)===String(shot.id))||shot;setShotMeta(fresh,freshShot,{status:'ready',mode:'manual',fingerprint:sourceFingerprint(fresh,freshShot),generatedAt:shotMeta(fresh,freshShot).generatedAt||now(),manualEditedAt:now(),error:''});refreshComposer()};if(!debouncedSave)return commit();clearTimeout(timer);timer=setTimeout(commit,450)};
+  root.querySelector('[data-modal-image]').addEventListener(debouncedSave?'input':'change',e=>save('image',e.target));root.querySelector('[data-modal-video]').addEventListener(debouncedSave?'input':'change',e=>save('video',e.target));
+  root.querySelector('[data-final-prompt-run]').onclick=async()=>{const fresh=currentScriptContext()||ctx,current=fresh.data.shots.find(s=>String(s.id)===String(shot.id))||shot,mode=root.querySelector('input[name="finalPromptMode"]:checked')?.value||'smart';try{if(mode==='auto'){autoCompose(fresh,current);toast(`第 ${current.no} 镜已自动拼接提示词`)}else{await smartSynthesize(fresh,current);toast(`第 ${current.no} 镜最终提示词已合成`)}}catch(error){toast('提示词合成失败：'+String(error?.message||error))}};
+}
 function openPromptModal(shotId){
   closePromptModal();const ctx=currentScriptContext(),shot=ctx?.data?.shots?.find(s=>String(s.id)===String(shotId));if(!ctx||!shot)return;
-  document.body.insertAdjacentHTML('beforeend',modalHtml(ctx,shot));const root=document.querySelector('#'+MODAL_ID);root.dataset.shotId=shot.id;
-  root.querySelector('[data-final-prompt-close]').onclick=closePromptModal;root.addEventListener('mousedown',e=>{if(e.target===root)closePromptModal()});
-  let timer=0;const save=(type,el)=>{clearTimeout(timer);timer=setTimeout(()=>{setNativeValue(shot.id,type,el.value);const fresh=currentScriptContext()||ctx,freshShot=fresh.data.shots.find(s=>String(s.id)===String(shot.id))||shot;setShotMeta(fresh,freshShot,{status:'ready',mode:'manual',fingerprint:sourceFingerprint(fresh,freshShot),generatedAt:shotMeta(fresh,freshShot).generatedAt||now(),manualEditedAt:now(),error:''});refreshComposer()},450)};
-  root.querySelector('[data-modal-image]').addEventListener('input',e=>save('image',e.target));root.querySelector('[data-modal-video]').addEventListener('input',e=>save('video',e.target));
-  root.querySelector('[data-final-prompt-run]').onclick=async()=>{const fresh=currentScriptContext()||ctx,current=fresh.data.shots.find(s=>String(s.id)===String(shot.id))||shot,mode=root.querySelector('input[name="finalPromptMode"]:checked')?.value||'smart';try{if(mode==='auto'){autoCompose(fresh,current);toast(`第 ${current.no} 镜已自动拼接提示词`)}else{await smartSynthesize(fresh,current);toast(`第 ${current.no} 镜最终提示词已合成`)}}catch(error){toast('提示词合成失败：'+String(error?.message||error))}};
+  document.body.insertAdjacentHTML('beforeend',modalHtml(ctx,shot));bindModal(document.querySelector('#'+MODAL_ID),ctx,shot,{debouncedSave:true});
 }
 function closePromptModal(){document.querySelector('#'+MODAL_ID)?.remove()}
 function syncOpenModal(){
-  const old=document.querySelector('#'+MODAL_ID);if(!old)return;const shotId=old.dataset.shotId,mode=old.querySelector('input[name="finalPromptMode"]:checked')?.value||'smart',ctx=currentScriptContext(),shot=ctx?.data?.shots?.find(s=>String(s.id)===String(shotId));if(!ctx||!shot)return closePromptModal();old.outerHTML=modalHtml(ctx,shot);const root=document.querySelector('#'+MODAL_ID);root.dataset.shotId=shotId;const radio=root.querySelector(`input[name="finalPromptMode"][value="${CSS.escape(mode)}"]`);if(radio)radio.checked=true;root.querySelector('[data-final-prompt-close]').onclick=closePromptModal;root.addEventListener('mousedown',e=>{if(e.target===root)closePromptModal()});root.querySelector('[data-modal-image]').addEventListener('change',e=>setNativeValue(shotId,'image',e.target.value));root.querySelector('[data-modal-video]').addEventListener('change',e=>setNativeValue(shotId,'video',e.target.value));root.querySelector('[data-final-prompt-run]').onclick=async()=>{const fresh=currentScriptContext()||ctx,current=fresh.data.shots.find(s=>String(s.id)===String(shotId))||shot,selected=root.querySelector('input[name="finalPromptMode"]:checked')?.value||'smart';try{selected==='auto'?autoCompose(fresh,current):await smartSynthesize(fresh,current)}catch(error){toast('提示词合成失败：'+String(error?.message||error))}};
+  const old=document.querySelector('#'+MODAL_ID);if(!old)return;const shotId=old.dataset.shotId,mode=old.querySelector('input[name="finalPromptMode"]:checked')?.value||'smart',ctx=currentScriptContext(),shot=ctx?.data?.shots?.find(s=>String(s.id)===String(shotId));if(!ctx||!shot)return closePromptModal();old.outerHTML=modalHtml(ctx,shot);const root=document.querySelector('#'+MODAL_ID),radio=root.querySelector(`input[name="finalPromptMode"][value="${CSS.escape(mode)}"]`);if(radio)radio.checked=true;bindModal(root,ctx,shot,{debouncedSave:false});
 }
 
 async function batchSmart(onlyDirty){
@@ -184,7 +187,7 @@ async function batchSmart(onlyDirty){
   await Promise.all(Array.from({length:Math.min(2,shots.length)},worker));refreshComposer();toast(failed?`已合成 ${done} 个镜头，${failed} 个失败，可单独重试`:`${done} 个镜头最终提示词已全部合成`);
 }
 
-let scheduled=0;const observer=new MutationObserver(()=>{clearTimeout(scheduled);scheduled=setTimeout(()=>{if(isPromptStage())enhanceStage();else{closePromptModal()}},60)});observer.observe(featureModal,{subtree:true,childList:true});
+let scheduled=0;const observer=new MutationObserver(()=>{clearTimeout(scheduled);scheduled=setTimeout(()=>{if(isPromptStage())enhanceStage();else closePromptModal()},60)});observer.observe(featureModal,{subtree:true,childList:true});
 if(isPromptStage())enhanceStage();
 window.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.querySelector('#'+MODAL_ID))closePromptModal()});
 })();
