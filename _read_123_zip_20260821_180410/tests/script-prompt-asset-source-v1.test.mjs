@@ -87,5 +87,5 @@ test('browser loads the asset source guard after app state exists and before fin
   const guardIndex=bootstrap.indexOf('./script-prompt-asset-source-v1.js');
   const finalIndex=bootstrap.indexOf('./script-final-prompt-v2.js');
   assert.ok(appIndex>=0&&guardIndex>appIndex&&finalIndex>guardIndex);
-  assert.match(bootstrap,/20260907-final-prompt-asset-source-4/);
+  assert.match(bootstrap,/20260907-final-prompt-asset-source-5/);
 });
