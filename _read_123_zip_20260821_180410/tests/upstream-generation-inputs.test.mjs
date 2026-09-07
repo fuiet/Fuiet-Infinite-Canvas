@@ -38,7 +38,7 @@ test('video task restores all connected upstream refs and uses upstream text as 
   assert.equal(task.parameters.videoMode,'image2video');
   assert.equal(task.parameters.generationMode,'image2video');
   assert.equal(task.parameters.operation,'image2video');
-  assert.deepEqual(task.parameters.upstreamInputContract,{version:3,connected:true,textCount:1,mediaCount:1,scriptAssetCount:0,scriptStyleCount:0,localPromptOptional:true});
+  assert.deepEqual(task.parameters.upstreamInputContract,{version:4,connected:true,textCount:1,mediaCount:1,scriptAssetCount:0,scriptStyleCount:0,promptProvenance:false,localPromptOptional:true});
 });
 
 test('script batch task inherits uploaded character scene and prop media without canvas image nodes',()=>{
