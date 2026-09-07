@@ -13,7 +13,7 @@
 const clean=value=>String(value??'').trim();
 const list=value=>Array.isArray(value)?value:[];
 const clone=value=>{try{return JSON.parse(JSON.stringify(value??null))}catch{return null}};
-const esc=value=>clean(value).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[ch]));
+const esc=value=>clean(value).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const now=()=>new Date().toISOString();
 
 function readState(){
