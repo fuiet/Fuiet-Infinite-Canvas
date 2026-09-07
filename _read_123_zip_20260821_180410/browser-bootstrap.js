@@ -11,7 +11,7 @@ if(!manager?.ready)throw new Error('Browser Storage Manager 未加载');
 // invalidate unrelated provider/media/runtime assets.
 const v='20260904-script-asset-picker-modal-5';
 const promptV='20260907-final-prompt-asset-source-4';
-const batchInputV='20260907-script-asset-media-ref-1';
+const batchInputV='20260907-script-asset-media-ref-2';
 const canvasScripts=[
   `./provider-auto-config-v1.js?v=${v}`,
   `./script-workflow-core.js?v=${promptV}`,
