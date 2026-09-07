@@ -92,7 +92,7 @@ test('known image video audio text and script generation buttons use the unified
     assert.ok(icon.includes(token),token);
   }
   assert.match(icon,/node-send-arrow/);
-  assert.match(icon,/data\.sendIcon='up-v2'/);
+  assert.match(icon,/btn\.dataset\.sendIcon='up-v2'/);
 });
 
 test('legacy next glyph is only normalized when button semantics indicate generation',()=>{
