@@ -8,11 +8,12 @@ const bootstrap=fs.readFileSync(new URL('../browser-bootstrap.js',import.meta.ur
 
 function runtimeFor(data){
   const Core={
-    markShotReady(shot,source){shot.promptSource=source||null;shot.promptStatus='ready';return shot},
-    setPromptResult(data,shot,payload={}){shot.imagePrompt=payload.imagePrompt||shot.imagePrompt;shot.videoPrompt=payload.videoPrompt||shot.videoPrompt;shot.promptSource=this.shotPromptSourceSnapshot(data,shot,payload.assetRefs);return shot},
+    normalizeScriptData(value){return value},
+    markShotReady(shot,source){shot.promptSource=source||null;shot.promptStatus='ready';shot.promptDirty=false;shot.dirtyReason='';return shot},
+    setPromptResult(data,shot,payload={}){shot.imagePrompt=payload.imagePrompt||shot.imagePrompt;shot.videoPrompt=payload.videoPrompt||shot.videoPrompt;shot.promptDirty=false;shot.promptStatus='ready';shot.promptSource=this.shotPromptSourceSnapshot(data,shot,payload.assetRefs);return shot},
     shotPromptSourceSnapshot(data,shot,refs=[]){return{assetRevisions:Object.fromEntries(refs.map(id=>[id,(data.assets.characters||[]).concat(data.assets.scenes||[],data.assets.props||[]).find(a=>String(a.id)===String(id))?.revision||0])),fingerprint:JSON.stringify(refs)}},
     isPromptSourceCurrent(data,shot,refs=[]){return{refs:[...refs],source:shot.promptSource}},
-    invalidateShotsForAsset(data,assetId){return(data.shots||[]).filter(shot=>(shot.assetRefs||[]).some(id=>String(id)===String(assetId))).length}
+    invalidateShotsForAsset(data,assetId){let count=0;for(const shot of data.shots||[]){if((shot.assetRefs||[]).some(id=>String(id)===String(assetId))){shot.promptDirty=true;shot.promptStatus='dirty';count++}}return count}
   };
   const root={
     FuietScriptWorkflowCore:Core,
@@ -23,8 +24,10 @@ function runtimeFor(data){
 }
 
 function fixture(){
-  const shot={id:'shot-1',characters:'小林',scene:'客厅',props:'红色钥匙',action:'小林在客厅拿起红色钥匙',dialogue:'',assetRefs:['char-1']};
+  const shot={id:'shot-1',characters:'小林',scene:'客厅',props:'红色钥匙',action:'小林在客厅拿起红色钥匙',dialogue:'',assetRefs:['char-1'],imagePrompt:'',videoPrompt:'',promptDirty:true};
   const data={
+    finalized:false,
+    workflow:{stage:'prompts',promptsReady:false},
     globalStyle:{revision:3},
     assets:{
       characters:[{id:'char-1',name:'小林',revision:2}],
@@ -48,9 +51,35 @@ test('prompt result and asset invalidation share the same effective asset refs',
   const {Core}=runtimeFor(data);
   Core.setPromptResult(data,shot,{imagePrompt:'frame',videoPrompt:'motion'});
   assert.deepEqual([...shot.assetRefs].sort(),['char-1','prop-1','scene-1']);
+  assert.equal(data.finalized,true);
   shot.assetRefs=[];
   assert.equal(Core.invalidateShotsForAsset(data,'prop-1','道具已修改'),1);
   assert.ok(shot.assetRefs.includes('prop-1'));
+  assert.equal(data.finalized,false);
+});
+
+test('confirmed AI or manual prompts set live scriptData finalized before batch creation',()=>{
+  const {data,shot}=fixture(),{Core,api}=runtimeFor(data);
+  Core.normalizeScriptData(data);
+  shot.imagePrompt='AI final frame prompt';
+  shot.videoPrompt='AI final motion prompt';
+  Core.markShotReady(shot);
+  assert.equal(api.version,2);
+  assert.equal(data.workflow.promptsReady,true);
+  assert.equal(data.workflow.stage,'ready');
+  assert.equal(data.finalized,true);
+  assert.ok(data.finalizedAt);
+});
+
+test('incomplete prompt pair cannot leave script finalized',()=>{
+  const {data,shot}=fixture(),{Core}=runtimeFor(data);
+  Core.normalizeScriptData(data);
+  data.finalized=true;
+  shot.imagePrompt='frame only';
+  shot.videoPrompt='';
+  Core.markShotReady(shot);
+  assert.equal(data.workflow.promptsReady,false);
+  assert.equal(data.finalized,false);
 });
 
 test('browser loads the asset source guard after app state exists and before final prompt modules',()=>{
