@@ -15,7 +15,7 @@
   font:inherit;
   font-size:14px;
   line-height:1.65;
-  text-align:center;
+  text-align:left;
   white-space:pre-wrap;
   overflow-wrap:anywhere;
   pointer-events:none;
@@ -28,6 +28,7 @@
   -webkit-text-fill-color:transparent!important;
   caret-color:#eef0f2!important;
   text-shadow:none!important;
+  text-align:left!important;
 }
 .script-editor-shell.simplified .shot-description-field textarea[data-shot-description-text]::selection{
   background:rgba(92,126,255,.32);
