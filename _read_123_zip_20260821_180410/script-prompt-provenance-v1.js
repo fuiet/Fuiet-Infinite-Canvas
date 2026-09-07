@@ -29,11 +29,16 @@ function scriptContextFromTask(task={},state=readState()){
   const shot=list(data?.shots).find(item=>String(item?.id)===shotId);if(!data||!shot)return null;
   return{state,nodes,params,scriptNodeId,shotId,type,scriptNode,data,shot};
 }
+function productionNodeHint(ctx,task={}){
+  const params=task.parameters||ctx?.params||{};
+  return clean(params.productionNodeId||params.nodeId||params.creativeContext?.nodeId||task.nodeId);
+}
 function selectedProductionNode(ctx,task={}){
   if(!ctx)return null;
   const key=ctx.type==='video'?'selectedVideoNodeId':'selectedImageNodeId',selectedId=clean(ctx.shot?.outputs?.[key]);
   const matches=node=>node&&clean(node.type).toLowerCase()===ctx.type&&clean(node.toolParams?.scriptNodeId)===ctx.scriptNodeId&&clean(node.toolParams?.shotId)===ctx.shotId;
   const candidates=ctx.nodes.filter(matches);if(!candidates.length)return null;
+  const hintedId=productionNodeHint(ctx,task),hinted=hintedId?candidates.find(node=>String(node?.id)===hintedId):null;if(hinted)return hinted;
   const prompt=clean(task.prompt),activeStatuses=new Set(['queued','fallback','retrying','running','polling','provider_succeeded','result_pending']);
   const activeExact=[...candidates].reverse().find(node=>activeStatuses.has(clean(node.taskStatus).toLowerCase())&&clean(node.prompt)===prompt);if(activeExact)return activeExact;
   const exact=[...candidates].reverse().find(node=>clean(node.prompt)===prompt);if(exact)return exact;
@@ -92,7 +97,7 @@ function taskLikeForNode(state={},nodeId=''){
   const nodes=list(state.nodes),node=nodes.find(item=>String(item?.id)===String(nodeId));if(!node)return null;
   const scriptNodeId=clean(node.toolParams?.scriptNodeId),shotId=clean(node.toolParams?.shotId),type=clean(node.type).toLowerCase();
   if(!scriptNodeId||!shotId||!['image','video'].includes(type))return null;
-  return{nodeType:type,prompt:node.prompt||'',parameters:{scriptNodeId,shotId}};
+  return{nodeId:node.id,nodeType:type,prompt:node.prompt||'',parameters:{scriptNodeId,shotId,productionNodeId:node.id}};
 }
 function shortPrompt(value,max=220){const text=clean(value);return text.length>max?text.slice(0,max)+'…':text}
 function provenanceHtml(provenance){
@@ -126,7 +131,7 @@ function install(){
   schedule();
 }
 
-const api=Object.freeze({readState,scriptContextFromTask,selectedProductionNode,sourceRecord,buildTaskProvenance,taskLikeForNode,provenanceHtml,renderGeneratorAudit,install});
+const api=Object.freeze({readState,scriptContextFromTask,productionNodeHint,selectedProductionNode,sourceRecord,buildTaskProvenance,taskLikeForNode,provenanceHtml,renderGeneratorAudit,install});
 if(typeof document!=='undefined'){if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install()}
 return api;
 });
