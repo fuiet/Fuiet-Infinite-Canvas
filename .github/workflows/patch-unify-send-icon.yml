@@ -1,5 +1,6 @@
 name: Patch unified send icon
 
+# rerun after focused assertion fix
 on:
   push:
     paths:
