@@ -9,7 +9,7 @@ const manager=globalThis.CanvasBrowserStorageManager;
 if(!manager?.ready)throw new Error('Browser Storage Manager 未加载');
 // Keep the shared runtime cache key stable. Feature-only revisions must not
 // invalidate unrelated provider/media/runtime assets.
-const v='20260904-script-asset-picker-modal-5';
+const v='20260907-script-asset-node-layout-1';
 const promptV='20260907-final-prompt-asset-source-5';
 const batchInputV='20260907-universal-upstream-inputs-1';
 const canvasScripts=[
@@ -18,6 +18,7 @@ const canvasScripts=[
   `./script-node-skill-pack-v1.js?v=${v}`,
   `./script-inline-asset-refs-v1.js?v=${v}`,
   `./image-node-display-normalizer-v1.js?v=${v}`,
+  `./script-asset-node-layout-v1.js?v=${v}`,
   `./app.js?v=${v}&fix=generator-input-focus-1&ui=text-result-editor-1&wheel=text-editor-1&refs=generator-reference-strip-1&scriptclick=toolbar-3&scriptgen=panel-4`,
   `./script-prompt-asset-source-v1.js?v=${promptV}`,
   `./script-final-prompt-v2.js?v=${promptV}`,
