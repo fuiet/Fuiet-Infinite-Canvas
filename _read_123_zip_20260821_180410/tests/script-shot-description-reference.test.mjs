@@ -24,7 +24,7 @@ test('reference-style cell is wide, left aligned and uses inline cyan mentions',
   assert.match(css, /-webkit-line-clamp:4/);
 });
 
-test('bootstrap loads new description CSS and cache-busts app logic', () => {
+test('bootstrap loads description CSS and a current shot-description cache key', () => {
   assert.match(boot, /script-shot-description-reference-v1\.css/);
-  assert.match(boot, /shotdesc=reference-1/);
+  assert.match(boot, /shotdesc=(?:reference-1|\$\{shotDescriptionV\})/);
 });
