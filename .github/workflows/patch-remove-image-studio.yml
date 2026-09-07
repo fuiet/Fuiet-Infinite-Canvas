@@ -1,0 +1,49 @@
+name: Patch remove Image Studio
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/patch-remove-image-studio.py'
+      - '.github/workflows/patch-remove-image-studio.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply Image Studio removal
+        run: python scripts/patch-remove-image-studio.py
+      - name: Syntax check
+        working-directory: _read_123_zip_20260821_180410
+        run: |
+          node --check app.js
+          node --check browser-bootstrap.js
+      - name: Focused regression tests
+        run: |
+          node --test _read_123_zip_20260821_180410/tests/remove-image-studio.test.mjs
+          if [ -f _read_123_zip_20260821_180410/tests/image-result-generator-on-click.test.mjs ]; then
+            node --test _read_123_zip_20260821_180410/tests/image-result-generator-on-click.test.mjs
+          fi
+      - name: Commit runtime change
+        run: |
+          git config user.name 'Codex'
+          git config user.email 'codex@openai.local'
+          git add _read_123_zip_20260821_180410/app.js \
+                  _read_123_zip_20260821_180410/browser-bootstrap.js \
+                  _read_123_zip_20260821_180410/tests/remove-image-studio.test.mjs
+          if git diff --cached --quiet; then
+            echo 'No runtime changes to commit.'
+            exit 0
+          fi
+          git commit -m 'Remove Image Studio and keep image model switching inline'
+          git push origin main
