@@ -6,6 +6,7 @@ on:
     paths:
       - 'scripts/patch-script-shot-description-structured-v2.py'
       - '.github/workflows/patch-script-shot-description-structured-v2.yml'
+      - '_read_123_zip_20260821_180410/tests/script-shot-description-reference.test.mjs'
 
 permissions:
   contents: write
