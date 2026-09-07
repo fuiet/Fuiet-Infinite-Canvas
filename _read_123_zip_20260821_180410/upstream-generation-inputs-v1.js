@@ -2,6 +2,8 @@
  * Connected upstream nodes are generation inputs, not decorative graph metadata.
  * - text/script upstream nodes become the effective prompt
  * - media upstream nodes remain real provider references
+ * - script batch nodes also inherit confirmed script-asset media URLs, including
+ *   uploaded assets that do not have a dedicated canvas image node
  * - a local generator prompt is optional and only supplements upstream text
  * - connected media promotes a default text-to-video task to reference generation
  *
@@ -16,6 +18,7 @@
 const TEXT_TYPES=new Set(['text','script','markdown']);
 const MEDIA_TYPES=new Set(['image','video','audio']);
 const clean=value=>String(value??'').trim();
+const list=value=>Array.isArray(value)?value:[];
 
 function refKey(ref={}){
   const id=clean(ref.sourceNodeId||ref.id);
@@ -38,17 +41,58 @@ function normalizeReference(ref={}){
     title:ref.title||''
   };
 }
+function browserState(){
+  try{
+    const raw=globalThis.CanvasBrowserStorageManager?.getItem?.('libtv-clone-state');
+    return raw?JSON.parse(raw):null;
+  }catch{return null}
+}
+function scriptAssetRole(asset={}){
+  const type=clean(asset.assetType||asset.type).toLowerCase();
+  if(type.includes('char'))return'character_reference';
+  if(type.includes('scene'))return'scene_reference';
+  return'image_reference';
+}
+function scriptAssetReferences(task={}){
+  const params=task.parameters||{},scriptNodeId=clean(params.scriptNodeId),shotId=clean(params.shotId);
+  if(!scriptNodeId||!shotId)return[];
+  const state=browserState(),scriptNode=list(state?.nodes).find(node=>String(node?.id)===scriptNodeId&&node?.type==='script');
+  const data=scriptNode?.scriptData,shot=list(data?.shots).find(item=>String(item?.id)===shotId);
+  if(!data||!shot)return[];
+  const catalog=[
+    ...list(data.assets?.characters).map(asset=>({...asset,assetType:'character'})),
+    ...list(data.assets?.scenes).map(asset=>({...asset,assetType:'scene'})),
+    ...list(data.assets?.props).map(asset=>({...asset,assetType:'prop'}))
+  ];
+  const byId=new Map(catalog.filter(asset=>asset?.id).map(asset=>[String(asset.id),asset])),ids=new Set();
+  for(const id of list(shot.assetRefs))if(byId.has(String(id)))ids.add(String(id));
+  const blob=[shot.characters,shot.scene,shot.props,shot.action,shot.dialogue].filter(Boolean).join(' ');
+  for(const asset of catalog){const name=clean(asset?.name);if(asset?.id&&name&&blob.includes(name))ids.add(String(asset.id))}
+  return [...ids].map(id=>byId.get(id)).filter(asset=>clean(asset?.mediaUrl)).map(asset=>({
+    id:`scriptasset:${scriptNodeId}:${asset.id}`,
+    sourceNodeId:'',
+    type:'image',kind:'script_asset',title:asset.name||'脚本资产',url:asset.mediaUrl,
+    text:asset.prompt||asset.description||'',role:scriptAssetRole(asset),semanticRole:scriptAssetRole(asset),usage:'creative_context',
+    scriptNodeId,assetId:asset.id
+  }));
+}
 function linkedReferences(task={}){
   const direct=Array.isArray(task.references)?task.references:[];
   const context=task.parameters?.creativeContext;
   const linked=Array.isArray(context?.linkedReferences)?context.linkedReferences:[];
-  const out=[],seen=new Map();
-  for(const raw of [...direct,...linked]){
+  const fallback=scriptAssetReferences(task),out=[],seen=new Map(),mediaSeen=new Set();
+  for(const raw of [...direct,...linked,...fallback]){
     if(!raw)continue;
-    const ref=normalizeReference(raw),key=refKey(ref);
-    if(!seen.has(key)){seen.set(key,out.length);out.push(ref);continue}
+    const ref=normalizeReference(raw),role=clean(ref.role||ref.semanticRole).toLowerCase(),type=clean(ref.type||ref.kind).toLowerCase(),url=clean(ref.url);
+    const mediaKey=url?`${type}|${role}|${url}`:'';
+    if(mediaKey&&mediaSeen.has(mediaKey))continue;
+    const key=refKey(ref);
+    if(!seen.has(key)){
+      seen.set(key,out.length);out.push(ref);if(mediaKey)mediaSeen.add(mediaKey);continue;
+    }
     const index=seen.get(key),old=out[index];
     out[index]={...old,...ref,url:ref.url||old.url||'',text:ref.text||old.text||'',title:ref.title||old.title||''};
+    const merged=out[index],mergedUrl=clean(merged.url);if(mergedUrl)mediaSeen.add(`${clean(merged.type||merged.kind).toLowerCase()}|${clean(merged.role||merged.semanticRole).toLowerCase()}|${mergedUrl}`);
   }
   return out.filter(ref=>clean(ref.url)||clean(ref.text));
 }
@@ -106,7 +150,7 @@ function normalizeTask(task={}){
     references:refs,
     parameters:{
       ...parameters,
-      upstreamInputContract:{version:1,connected:refs.length>0,textCount,mediaCount,localPromptOptional:refs.length>0}
+      upstreamInputContract:{version:2,connected:refs.length>0,textCount,mediaCount,scriptAssetCount:refs.filter(ref=>clean(ref.kind)==='script_asset').length,localPromptOptional:refs.length>0}
     }
   };
 }
@@ -163,7 +207,7 @@ function installUiHint(){
   syncGeneratorHint();
 }
 
-const api=Object.freeze({linkedReferences,upstreamTextParts,mediaReferences,effectivePrompt,referenceVideoParameters,normalizeTask});
+const api=Object.freeze({linkedReferences,scriptAssetReferences,upstreamTextParts,mediaReferences,effectivePrompt,referenceVideoParameters,normalizeTask});
 globalThis.CanvasUpstreamGenerationInputs=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 installFetchBridge();
