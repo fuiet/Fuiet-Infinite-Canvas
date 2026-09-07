@@ -2842,8 +2842,31 @@
     }
     return html||'<span class="shot-description-empty">点击填写画面描述</span>';
   }
+  function autoMentionAssetNames(text,catalog){
+    let value=String(text||'');
+    const assets=(catalog||[]).filter(a=>a?.name).sort((a,b)=>String(b.name).length-String(a.name).length);
+    for(const asset of assets){
+      const name=String(asset.name||'').trim();if(!name)continue;
+      let cursor=0;
+      while(cursor<value.length){
+        const index=value.indexOf(name,cursor);if(index<0)break;
+        if(value[index-1]!=='@'){value=value.slice(0,index)+'@'+value.slice(index);cursor=index+name.length+1}else cursor=index+name.length;
+      }
+    }
+    return value;
+  }
+  function scriptShotDialogueText(d,shot){
+    return autoMentionAssetNames(String(shot?.dialogue||'').trim(),scriptAssetCatalog(d));
+  }
+  function scriptShotDialogueHtml(d,shot){
+    let html=escapeHtml(scriptShotDialogueText(d,shot));
+    for(const a of scriptAssetCatalog(d).filter(a=>a.name).sort((a,b)=>String(b.name).length-String(a.name).length)){
+      const token=escapeHtml('@'+a.name);html=html.split(token).join(`<span class="shot-mention-token">${token}</span>`);
+    }
+    return html||'<span class="shot-description-empty">点击填写对白 / 旁白</span>';
+  }
   function syncShotMentionsFromDescription(d,shot,text){
-    const cat=scriptAssetCatalog(d),mentioned=cat.filter(a=>a.name&&String(text||'').includes('@'+a.name));
+    const cat=scriptAssetCatalog(d),corpus=[String(text||''),String(shot?.dialogue||'')].join('\n'),mentioned=cat.filter(a=>a.name&&(corpus.includes('@'+a.name)||corpus.includes(a.name)));
     shot.assetRefs=mentioned.map(a=>a.id);
     shot.characters=mentioned.filter(a=>a.assetType==='character').map(a=>a.name).join('、');
     const scenes=mentioned.filter(a=>a.assetType==='scene').map(a=>a.name);shot.scene=scenes[0]||'';
@@ -2877,7 +2900,28 @@
     $('[data-shot-desc-save]',overlay).onclick=()=>{const value=ta.value.trim();shot.action=value;syncShotMentionsFromDescription(d,shot,value);markScriptShotDirty(shot,'画面描述已修改');scriptWorkflowInvalidate(d,'shots');saveState();close();rerender()};
     overlay.addEventListener('pointerdown',e=>{if(e.target===overlay)close()});setTimeout(()=>ta.focus(),0);
   }
-  function scriptShotsHtml(n,d){const stats=scriptWorkflowStats(d);return `<div class="script-table-wrap simplified"><table class="script-editor-table simplified"><thead><tr><th>镜号</th><th>时长</th><th>画面描述</th><th>景别</th><th>光影氛围</th><th>对白 / 旁白</th><th>音效</th><th>运镜</th><th>最终提示词</th><th>操作</th></tr></thead><tbody>${d.shots.map((s,i)=>`<tr data-shot-row="${s.id}"><td class="shot-number">${i+1}</td><td><input class="shot-duration" data-shot="duration" type="number" min=".5" step=".5" value="${Number(s.duration||3)}"><span class="shot-duration-unit">s</span></td><td class="shot-description-column"><button type="button" class="shot-description-cell" data-edit-shot-description="${s.id}">${scriptShotDescriptionHtml(d,s)}</button></td><td><select data-shot="shotSize">${['大全景','全景','中景','近景','特写','极特写'].map(x=>`<option ${x===s.shotSize?'selected':''}>${x}</option>`).join('')}</select></td><td><textarea data-shot="lighting">${escapeHtml(s.lighting||'')}</textarea></td><td><textarea data-shot="dialogue">${escapeHtml(s.dialogue||'')}</textarea></td><td><textarea data-shot="sound">${escapeHtml(s.sound||'')}</textarea></td><td><textarea data-shot="cameraMovement">${escapeHtml(s.cameraMovement||'')}</textarea></td><td class="shot-final-prompt-column">${scriptFinalPromptHtml(s)}</td><td class="shot-actions-column"><button type="button" class="shot-more-btn" data-shot-menu="${s.id}" aria-label="镜头操作">•••</button><div class="shot-row-menu hidden" data-shot-row-menu="${s.id}"><button data-move-shot="up" data-shot-id="${s.id}" ${i===0?'disabled':''}>上移</button><button data-move-shot="down" data-shot-id="${s.id}" ${i===d.shots.length-1?'disabled':''}>下移</button><button class="danger" data-delete-shot="${s.id}">删除镜头</button></div></td></tr>`).join('')}</tbody></table></div><div class="script-bottom-actions simplified"><button id="addShot">＋ 添加镜头</button><span class="spacer"></span><button id="confirmScriptShots" class="primary">${stats.shotsConfirmed?'下一步：准备资产':'确认镜头 → 准备资产'}</button></div>`}
+  function openShotDialogueEditor(n,d,shot,rerender){
+    $('.shot-dialogue-editor',featureModal)?.remove();
+    const current=scriptShotDialogueText(d,shot),catalog=scriptAssetCatalog(d).filter(a=>a.name),overlay=document.createElement('div');
+    overlay.className='shot-description-editor shot-dialogue-editor';
+    overlay.innerHTML=`<div class="shot-description-dialog"><header><div><b>镜头 ${shot.no} · 对白 / 旁白</b><span>直接修改对白或旁白；输入 @ 可引用角色、场景和道具资产</span></div><button type="button" data-shot-dialogue-close>×</button></header><div class="shot-description-field"><textarea data-shot-dialogue-text rows="8">${escapeHtml(current)}</textarea><div class="shot-mention-menu hidden" data-shot-dialogue-mention-menu></div></div><footer><span>输入 @ 选择资产，引用会同步到该镜头</span><div><button type="button" data-shot-dialogue-cancel>取消</button><button type="button" class="primary" data-shot-dialogue-save>保存</button></div></footer></div>`;
+    featureModal.appendChild(overlay);
+    const ta=$('[data-shot-dialogue-text]',overlay),menu=$('[data-shot-dialogue-mention-menu]',overlay);
+    const close=()=>overlay.remove();
+    const renderMentions=()=>{
+      const pos=ta.selectionStart??ta.value.length,before=ta.value.slice(0,pos),at=before.lastIndexOf('@');
+      if(at<0||/\s/.test(before.slice(at+1))){menu.classList.add('hidden');return}
+      const query=before.slice(at+1).toLowerCase(),matches=catalog.filter(a=>!query||String(a.name||'').toLowerCase().includes(query)).slice(0,12);
+      if(!matches.length){menu.classList.add('hidden');return}
+      menu.innerHTML=matches.map(a=>`<button type="button" data-dialogue-mention-id="${escapeAttr(a.id)}"><i>${a.assetType==='character'?'角色':a.assetType==='scene'?'场景':'道具'}</i><span>${escapeHtml(a.name)}</span>${a.mediaUrl?'<em>已有参考</em>':''}</button>`).join('');menu.classList.remove('hidden');
+      $$('[data-dialogue-mention-id]',menu).forEach(btn=>btn.onclick=()=>{const asset=catalog.find(a=>a.id===btn.dataset.dialogueMentionId);if(!asset)return;const end=ta.selectionStart??ta.value.length,start=ta.value.slice(0,end).lastIndexOf('@');ta.setRangeText('@'+asset.name,start,end,'end');menu.classList.add('hidden');ta.dispatchEvent(new Event('input',{bubbles:true}));ta.focus()});
+    };
+    ta.addEventListener('input',renderMentions);ta.addEventListener('keyup',renderMentions);ta.addEventListener('click',renderMentions);
+    $('[data-shot-dialogue-close]',overlay).onclick=close;$('[data-shot-dialogue-cancel]',overlay).onclick=close;
+    $('[data-shot-dialogue-save]',overlay).onclick=()=>{const value=autoMentionAssetNames(ta.value.trim(),catalog);shot.dialogue=value;syncShotMentionsFromDescription(d,shot,shot.action||'');markScriptShotDirty(shot,'对白 / 旁白已修改');scriptWorkflowInvalidate(d,'shots');saveState();close();rerender()};
+    overlay.addEventListener('pointerdown',e=>{if(e.target===overlay)close()});setTimeout(()=>ta.focus(),0);
+  }
+  function scriptShotsHtml(n,d){const stats=scriptWorkflowStats(d);return `<div class="script-table-wrap simplified"><table class="script-editor-table simplified"><thead><tr><th>镜号</th><th>时长</th><th>画面描述</th><th>景别</th><th>光影氛围</th><th>对白 / 旁白</th><th>音效</th><th>运镜</th><th>最终提示词</th><th>操作</th></tr></thead><tbody>${d.shots.map((s,i)=>`<tr data-shot-row="${s.id}"><td class="shot-number">${i+1}</td><td><input class="shot-duration" data-shot="duration" type="number" min=".5" step=".5" value="${Number(s.duration||3)}"><span class="shot-duration-unit">s</span></td><td class="shot-description-column"><button type="button" class="shot-description-cell" data-edit-shot-description="${s.id}">${scriptShotDescriptionHtml(d,s)}</button></td><td><select data-shot="shotSize">${['大全景','全景','中景','近景','特写','极特写'].map(x=>`<option ${x===s.shotSize?'selected':''}>${x}</option>`).join('')}</select></td><td><textarea data-shot="lighting">${escapeHtml(s.lighting||'')}</textarea></td><td class="shot-dialogue-column"><textarea data-shot="dialogue" class="shot-dialogue-source" aria-hidden="true">${escapeHtml(s.dialogue||'')}</textarea><button type="button" class="shot-dialogue-cell" data-edit-shot-dialogue="${s.id}">${scriptShotDialogueHtml(d,s)}</button></td><td><textarea data-shot="sound">${escapeHtml(s.sound||'')}</textarea></td><td><textarea data-shot="cameraMovement">${escapeHtml(s.cameraMovement||'')}</textarea></td><td class="shot-final-prompt-column">${scriptFinalPromptHtml(s)}</td><td class="shot-actions-column"><button type="button" class="shot-more-btn" data-shot-menu="${s.id}" aria-label="镜头操作">•••</button><div class="shot-row-menu hidden" data-shot-row-menu="${s.id}"><button data-move-shot="up" data-shot-id="${s.id}" ${i===0?'disabled':''}>上移</button><button data-move-shot="down" data-shot-id="${s.id}" ${i===d.shots.length-1?'disabled':''}>下移</button><button class="danger" data-delete-shot="${s.id}">删除镜头</button></div></td></tr>`).join('')}</tbody></table></div><div class="script-bottom-actions simplified"><button id="addShot">＋ 添加镜头</button><span class="spacer"></span><button id="confirmScriptShots" class="primary">${stats.shotsConfirmed?'下一步：准备资产':'确认镜头 → 准备资产'}</button></div>`}
 
   function scriptNodeReadyHtml(n,d){
     const s=scriptWorkflowStats(d),steps=[['确认镜头',1,s.shotsConfirmed],['准备资产',2,s.assetsReady],['合成提示词',3,s.promptsReady]];
@@ -2940,6 +2984,7 @@
       const saveRows=()=>{$$('[data-shot-row]',featureModal).forEach(r=>{const s=d.shots.find(x=>x.id===r.dataset.shotRow);if(!s)return;$$('[data-shot]',r).forEach(x=>{const k=x.dataset.shot;s[k]=k==='duration'?Number(x.value):x.value})});const source=$('#scriptSource');if(source)n.sourceText=source.value;saveState()};
       $$('[data-shot-row] [data-shot]',featureModal).forEach(x=>x.onchange=()=>{const row=x.closest('[data-shot-row]'),shot=d.shots.find(s=>s.id===row?.dataset.shotRow);markScriptShotDirty(shot,'镜头信息已修改');scriptWorkflowInvalidate(d,'shots');saveRows()});
       $$('[data-edit-shot-description]',featureModal).forEach(btn=>btn.onclick=()=>{const shot=d.shots.find(s=>s.id===btn.dataset.editShotDescription);if(shot)openShotDescriptionEditor(n,d,shot,rerender)});
+      $$('[data-edit-shot-dialogue]',featureModal).forEach(btn=>btn.onclick=()=>{const shot=d.shots.find(s=>s.id===btn.dataset.editShotDialogue);if(shot)openShotDialogueEditor(n,d,shot,rerender)});
       $$('[data-shot-menu]',featureModal).forEach(btn=>btn.onclick=e=>{e.stopPropagation();const menu=$(`[data-shot-row-menu="${btn.dataset.shotMenu}"]`,featureModal);$$('.shot-row-menu',featureModal).forEach(x=>{if(x!==menu)x.classList.add('hidden')});menu?.classList.toggle('hidden')});
       $$('[data-shot-row]',featureModal).forEach(row=>{const shot=d.shots.find(x=>x.id===row.dataset.shotRow);if(!shot)return;$('[data-add-shot-asset]',row)?.addEventListener('click',()=>{const id=$('[data-shot-asset-select]',row)?.value;if(!id)return showToast('请选择要引用的资产');shot.assetRefs=[...new Set([...(shot.assetRefs||[]),id])];markScriptShotDirty(shot,'资产引用已修改');scriptWorkflowInvalidate(d,'shots');saveState();rerender()});$$('[data-remove-shot-asset]',row).forEach(btn=>btn.addEventListener('click',()=>{shot.assetRefs=(shot.assetRefs||[]).filter(id=>id!==btn.dataset.removeShotAsset);markScriptShotDirty(shot,'资产引用已修改');scriptWorkflowInvalidate(d,'shots');saveState();rerender()}))});
       $('#addShot').onclick=()=>{saveRows();scriptWorkflowInvalidate(d,'shots');d.shots.push({id:uid('shot'),no:d.shots.length+1,color:'#4e6570',scene:'',characters:'',props:'',shotSize:'中景',lighting:'',action:'',dialogue:'',sound:'',cameraMovement:'',duration:3,assetRefs:[],baseImagePrompt:'',baseVideoPrompt:'',imagePrompt:'',videoPrompt:'',promptStatus:'empty',promptDirty:false,outputs:{imageNodeIds:[],videoNodeIds:[],selectedImageNodeId:'',selectedVideoNodeId:''}});rerender()};

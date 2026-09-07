@@ -1,0 +1,18 @@
+/* Reference-style dialogue / voiceover column: same visual language as shot description. */
+.script-editor-table.simplified th:nth-child(6),
+.script-editor-table.simplified td:nth-child(6){width:320px!important}
+.script-editor-shell.simplified .script-editor-table.simplified th:nth-child(6){text-align:left!important;padding-left:14px!important}
+.script-editor-shell.simplified .script-editor-table.simplified td.shot-dialogue-column{padding:0!important;vertical-align:middle!important;text-align:left!important;position:relative}
+.script-editor-shell.simplified .shot-dialogue-source{display:none!important}
+.script-editor-shell.simplified .shot-dialogue-cell{
+  width:100%;min-height:76px;height:auto;max-height:92px;padding:10px 14px!important;
+  border:0!important;background:transparent!important;color:#e8ebed!important;
+  font-size:13px!important;font-weight:400;line-height:1.62!important;letter-spacing:0;
+  text-align:left!important;white-space:pre-wrap;word-break:break-word;overflow:hidden;cursor:text;
+  display:-webkit-box!important;-webkit-box-orient:vertical;-webkit-line-clamp:4;
+}
+.script-editor-shell.simplified .shot-dialogue-cell:hover{background:#191c1f!important}
+.script-editor-shell.simplified .shot-dialogue-cell .shot-mention-token{color:#21c7df!important;font-weight:500;background:transparent!important;border:0!important;border-radius:0!important;padding:0!important;white-space:nowrap}
+.script-editor-shell.simplified .shot-dialogue-editor .shot-description-field textarea[data-shot-dialogue-text]{font-size:14px!important;line-height:1.65!important;text-align:left!important}
+.script-editor-shell.simplified .shot-dialogue-editor .shot-description-highlight-layer{text-align:left!important}
+@media(max-width:1200px){.script-editor-table.simplified th:nth-child(6),.script-editor-table.simplified td:nth-child(6){width:280px!important}}

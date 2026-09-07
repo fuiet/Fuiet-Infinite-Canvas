@@ -6,8 +6,8 @@
 'use strict';
 const ROOT_SELECTOR='.shot-description-editor';
 const FIELD_SELECTOR='.shot-description-field';
-const TEXTAREA_SELECTOR='textarea[data-shot-description-text]';
-const MARK='data-shot-description-highlight-ready';
+const TEXTAREA_SELECTOR='textarea[data-shot-description-text],textarea[data-shot-dialogue-text]';
+const MARK='data-shot-editor-highlight-ready';
 
 function escapeHtml(value){
   return String(value??'').replace(/[&<>"']/g,ch=>({

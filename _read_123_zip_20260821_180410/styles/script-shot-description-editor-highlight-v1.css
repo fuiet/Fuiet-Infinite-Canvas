@@ -20,7 +20,8 @@
   overflow-wrap:anywhere;
   pointer-events:none;
 }
-.script-editor-shell.simplified .shot-description-field textarea[data-shot-description-text]{
+.script-editor-shell.simplified .shot-description-field textarea[data-shot-description-text],
+.script-editor-shell.simplified .shot-description-field textarea[data-shot-dialogue-text]{
   position:relative;
   z-index:1;
   background:transparent!important;
@@ -30,7 +31,8 @@
   text-shadow:none!important;
   text-align:left!important;
 }
-.script-editor-shell.simplified .shot-description-field textarea[data-shot-description-text]::selection{
+.script-editor-shell.simplified .shot-description-field textarea[data-shot-description-text]::selection,
+.script-editor-shell.simplified .shot-description-field textarea[data-shot-dialogue-text]::selection{
   background:rgba(92,126,255,.32);
   color:transparent;
 }

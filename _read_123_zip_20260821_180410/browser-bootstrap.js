@@ -13,7 +13,8 @@ const v='20260907-script-asset-node-layout-1';
 const promptV='20260907-final-prompt-asset-source-5';
 const batchInputV='20260907-universal-upstream-inputs-1';
 const durationV='20260907-shot-duration-compact-1';
-const shotEditorV='20260907-shot-editor-inline-mentions-2';
+const shotEditorV='20260907-shot-editor-inline-mentions-3';
+const dialogueV='20260907-shot-dialogue-reference-1';
 const canvasScripts=[
   `./provider-auto-config-v1.js?v=${v}`,
   `./script-workflow-core.js?v=${promptV}`,
@@ -92,6 +93,7 @@ async function start(){
       loadStyle(`./styles/script-editor-simplified-v1.css?v=${v}`),
       loadStyle(`./styles/script-shot-description-reference-v1.css?v=${v}`),
       loadStyle(`./styles/script-shot-description-editor-highlight-v1.css?v=${shotEditorV}`),
+      loadStyle(`./styles/script-shot-dialogue-reference-v1.css?v=${dialogueV}`),
       loadStyle(`./styles/script-shot-duration-compact-v1.css?v=${durationV}`),
       loadStyle(`./styles/script-assets-reference-v1.css?v=${v}`),
       loadStyle(`./styles/script-asset-picker-modal-v1.css?v=${v}`),
