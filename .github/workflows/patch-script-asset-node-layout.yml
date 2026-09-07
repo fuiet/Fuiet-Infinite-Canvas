@@ -1,0 +1,42 @@
+name: Patch script asset node layout
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/patch-script-asset-node-layout.py'
+      - '.github/workflows/patch-script-asset-node-layout.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply script asset layout repair
+        run: python scripts/patch-script-asset-node-layout.py
+      - name: Syntax check
+        working-directory: _read_123_zip_20260821_180410
+        run: npm run check
+      - name: Focused regression test
+        working-directory: _read_123_zip_20260821_180410
+        run: node --test tests/script-asset-node-layout.test.mjs
+      - name: Commit repair
+        run: |
+          git config user.name 'Codex'
+          git config user.email 'codex@openai.local'
+          git add \
+            _read_123_zip_20260821_180410/app.js \
+            _read_123_zip_20260821_180410/browser-bootstrap.js \
+            _read_123_zip_20260821_180410/script-asset-node-layout-v1.js \
+            _read_123_zip_20260821_180410/tests/script-asset-node-layout.test.mjs
+          git diff --cached --quiet && exit 0
+          git commit -m 'Arrange script asset nodes without overlap'
+          git push origin main
