@@ -1,0 +1,46 @@
+name: Patch script dialogue reference layout
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/patch-script-dialogue-reference.py'
+      - '.github/workflows/patch-script-dialogue-reference.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply dialogue reference repair
+        run: python scripts/patch-script-dialogue-reference.py
+      - name: Syntax check
+        working-directory: _read_123_zip_20260821_180410
+        run: |
+          npm run check
+          node --check script-shot-description-editor-highlight-v1.js
+      - name: Focused regression test
+        working-directory: _read_123_zip_20260821_180410
+        run: node --test tests/script-shot-dialogue-reference.test.mjs
+      - name: Commit repair
+        run: |
+          git config user.name 'Codex'
+          git config user.email 'codex@openai.local'
+          git add \
+            _read_123_zip_20260821_180410/app.js \
+            _read_123_zip_20260821_180410/browser-bootstrap.js \
+            _read_123_zip_20260821_180410/script-shot-description-editor-highlight-v1.js \
+            _read_123_zip_20260821_180410/styles/script-shot-description-editor-highlight-v1.css \
+            _read_123_zip_20260821_180410/styles/script-shot-dialogue-reference-v1.css \
+            _read_123_zip_20260821_180410/tests/script-shot-dialogue-reference.test.mjs
+          git diff --cached --quiet && exit 0
+          git commit -m 'Match dialogue editor to inline asset reference design'
+          git push origin main
