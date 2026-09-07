@@ -14,12 +14,28 @@ function escapeHtml(value){
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
   }[ch]));
 }
+function escapeRegExp(value){return String(value??'').replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}
 
-function highlightedHtml(value){
+function collectAssetTokens(field){
+  const tokens=new Set();
+  document.querySelectorAll('.shot-mention-token').forEach(el=>{
+    const text=String(el.textContent||'').trim();
+    if(text.startsWith('@')&&text.length>1)tokens.add(text);
+  });
+  field?.querySelectorAll?.('.shot-mention-menu [data-mention-id] span').forEach(el=>{
+    const name=String(el.textContent||'').trim();
+    if(name)tokens.add('@'+name.replace(/^@/,''));
+  });
+  return [...tokens].sort((a,b)=>b.length-a.length);
+}
+
+function highlightedHtml(value,tokens=[]){
   const text=String(value??'');
-  const mention=/@[^@\s，。；、,.!?！？：:（）()\[\]{}"'“”‘’<>《》]+/gu;
+  const exact=[...new Set((tokens||[]).filter(Boolean))].sort((a,b)=>b.length-a.length);
+  if(!exact.length)return escapeHtml(text)||'&nbsp;';
+  const matcher=new RegExp(exact.map(escapeRegExp).join('|'),'g');
   let out='',last=0;
-  for(const match of text.matchAll(mention)){
+  for(const match of text.matchAll(matcher)){
     const index=match.index??0;
     out+=escapeHtml(text.slice(last,index));
     out+=`<span class="shot-description-editor-mention">${escapeHtml(match[0])}</span>`;
@@ -45,7 +61,7 @@ function enhance(root){
     layer.style.width=`${textarea.clientWidth}px`;
   };
   const render=()=>{
-    layer.innerHTML=highlightedHtml(textarea.value);
+    layer.innerHTML=highlightedHtml(textarea.value,collectAssetTokens(field));
     layer.scrollTop=textarea.scrollTop;
     layer.scrollLeft=textarea.scrollLeft;
     syncGeometry();
@@ -59,6 +75,8 @@ function enhance(root){
     layer.scrollLeft=textarea.scrollLeft;
   });
   field.addEventListener('click',()=>queueMicrotask(render));
+  const menu=field.querySelector('.shot-mention-menu');
+  if(menu)new MutationObserver(render).observe(menu,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});
 
   if(typeof ResizeObserver==='function'){
     const observer=new ResizeObserver(syncGeometry);
@@ -82,5 +100,5 @@ const observer=new MutationObserver(records=>{
 });
 observer.observe(document.documentElement,{childList:true,subtree:true});
 
-globalThis.FuietShotDescriptionEditorHighlight=Object.freeze({highlightedHtml,scan});
+globalThis.FuietShotDescriptionEditorHighlight=Object.freeze({highlightedHtml,collectAssetTokens,scan});
 })();
