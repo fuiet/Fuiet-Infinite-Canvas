@@ -1,0 +1,38 @@
+name: Patch universal upstream generation inputs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/patch-universal-upstream-inputs.py'
+      - '.github/workflows/patch-universal-upstream-inputs.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply universal upstream input contract
+        run: python scripts/patch-universal-upstream-inputs.py
+      - name: Syntax check
+        working-directory: _read_123_zip_20260821_180410
+        run: npm run check
+      - name: Focused regression tests
+        working-directory: _read_123_zip_20260821_180410
+        run: node --test tests/upstream-generation-inputs.test.mjs tests/universal-upstream-inputs.test.mjs
+      - name: Commit repair
+        run: |
+          git config user.name 'Codex'
+          git config user.email 'codex@openai.local'
+          git add _read_123_zip_20260821_180410
+          git diff --cached --quiet && exit 0
+          git commit -m 'Use every upstream connection as generation input'
+          git push origin main
