@@ -10,7 +10,7 @@ if(!manager?.ready)throw new Error('Browser Storage Manager 未加载');
 // Keep the shared runtime cache key stable. Feature-only revisions must not
 // invalidate unrelated provider/media/runtime assets.
 const v='20260904-script-asset-picker-modal-5';
-const promptV='20260905-final-prompt-page-v3-stable-3';
+const promptV='20260907-final-prompt-asset-source-4';
 const canvasScripts=[
   `./provider-auto-config-v1.js?v=${v}`,
   `./script-workflow-core.js?v=${promptV}`,
@@ -18,6 +18,7 @@ const canvasScripts=[
   `./script-inline-asset-refs-v1.js?v=${v}`,
   `./image-node-display-normalizer-v1.js?v=${v}`,
   `./app.js?v=${v}&fix=generator-input-focus-1&ui=text-result-editor-1&wheel=text-editor-1&refs=generator-reference-strip-1&scriptclick=toolbar-3&scriptgen=panel-4`,
+  `./script-prompt-asset-source-v1.js?v=${promptV}`,
   `./script-final-prompt-v2.js?v=${promptV}`,
   `./script-final-prompt-rich-v1.js?v=${promptV}`,
   `./script-final-prompt-page-v3.js?v=${promptV}`,
