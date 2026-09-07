@@ -12,7 +12,7 @@ if(!manager?.ready)throw new Error('Browser Storage Manager 未加载');
 const v='20260907-script-asset-node-layout-1';
 const promptV='20260907-final-prompt-asset-source-5';
 const batchInputV='20260907-universal-upstream-inputs-1';
-const shotDescriptionV='20260907-shot-description-structured-v2-1';
+const shotDescriptionV='20260907-shot-description-structured-v2-2';
 const canvasScripts=[
   `./provider-auto-config-v1.js?v=${v}`,
   `./script-workflow-core.js?v=${promptV}`,
