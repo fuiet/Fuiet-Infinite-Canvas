@@ -1,0 +1,45 @@
+/* Inline @asset highlight for the shot-description modal editor. */
+.shot-description-field{position:relative}
+.shot-description-highlight-layer{
+  position:absolute;
+  z-index:0;
+  left:14px;
+  top:14px;
+  box-sizing:border-box;
+  overflow:hidden;
+  padding:12px;
+  border:1px solid transparent;
+  border-radius:8px;
+  background:#121416;
+  color:#eef0f2;
+  font:inherit;
+  font-size:14px;
+  line-height:1.65;
+  text-align:center;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+  pointer-events:none;
+}
+.script-editor-shell.simplified .shot-description-field textarea[data-shot-description-text]{
+  position:relative;
+  z-index:1;
+  background:transparent!important;
+  color:transparent!important;
+  -webkit-text-fill-color:transparent!important;
+  caret-color:#eef0f2!important;
+  text-shadow:none!important;
+}
+.script-editor-shell.simplified .shot-description-field textarea[data-shot-description-text]::selection{
+  background:rgba(92,126,255,.32);
+  color:transparent;
+}
+.shot-description-editor-mention{
+  color:#21c7df;
+  font-weight:500;
+  background:transparent;
+  border:0;
+  border-radius:0;
+  padding:0;
+  margin:0;
+  white-space:inherit;
+}
