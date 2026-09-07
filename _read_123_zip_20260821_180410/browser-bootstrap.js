@@ -15,6 +15,7 @@ const batchInputV='20260907-universal-upstream-inputs-1';
 const durationV='20260907-shot-duration-compact-1';
 const shotEditorV='20260907-shot-editor-inline-mentions-3';
 const dialogueV='20260907-shot-dialogue-reference-1';
+const promptWorkbenchV='20260907-final-prompt-workbench-v4-1';
 const canvasScripts=[
   `./provider-auto-config-v1.js?v=${v}`,
   `./script-workflow-core.js?v=${promptV}`,
@@ -28,6 +29,7 @@ const canvasScripts=[
   `./script-final-prompt-v2.js?v=${promptV}`,
   `./script-final-prompt-rich-v1.js?v=${promptV}`,
   `./script-final-prompt-page-v3.js?v=${promptV}`,
+  `./script-final-prompt-workbench-v4.js?v=${promptWorkbenchV}`,
   `./script-prompt-provenance-v1.js?v=${batchInputV}`,
   `./upstream-generation-inputs-v1.js?v=${batchInputV}`,
   `./script-generator-reference-preview-v1.js?v=${batchInputV}`,
@@ -101,6 +103,7 @@ async function start(){
       loadStyle(`./styles/script-final-prompt-v2.css?v=${promptV}`),
       loadStyle(`./styles/script-final-prompt-page-v3.css?v=${promptV}`),
       loadStyle(`./styles/script-final-prompt-page-v3-fit.css?v=${promptV}`),
+      loadStyle(`./styles/script-final-prompt-workbench-v4.css?v=${promptWorkbenchV}`),
       loadStyle(`./styles/script-prompt-provenance-v1.css?v=${batchInputV}`),
       loadStyle(`./styles/script-generator-reference-preview-v1.css?v=${batchInputV}`),
       loadStyle(`./styles/script-node-progress-v1.css?v=${v}&scriptclick=toolbar-3&scriptbar=large-1`),

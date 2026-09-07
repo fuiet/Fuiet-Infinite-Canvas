@@ -136,6 +136,7 @@ async function selectedTextRuntime(node){
 }
 function singleAiPrompt(ctx){
   const payload={
+    scriptSource:text(ctx.node?.sourceText||''),
     globalStyle:ctx.style,
     currentShot:{
       id:ctx.shot.id,no:ctx.shot.no,duration:ctx.shot.duration,shotSize:ctx.shot.shotSize,
@@ -146,7 +147,7 @@ function singleAiPrompt(ctx){
     associatedAssets:ctx.assets.map(a=>({id:a.id,type:a.assetType||a.type,name:a.name,description:a.description,prompt:a.prompt,revision:a.revision})),
     continuityContext:{previousShot:ctx.previous,nextShot:ctx.next}
   };
-  return `你是专业 AI 影视最终提示词编译器。请只为 currentShot 生成两份彼此职责明确的最终提示词，并严格依据输入，不得改写剧情事实、人物身份、资产外观或凭空增加主体。\n\nimagePrompt 用于分镜图/首帧生成，回答“这一帧长什么样”：重点写可见主体、外观与资产一致性、动作瞬间、场景和道具、构图、景别、摄影机位置、光影氛围、材质和整体视觉风格。不要把对白、音效、连续运动过程当成主要内容。\n\nvideoPrompt 用于视频运动生成，回答“这一帧接下来怎么动”：重点写时长、主体动作的时间顺序、摄影机运动、环境动态、动作节奏、连续性和稳定性约束。对白/音效只能作为节奏参考，不要重复堆砌静态画面形容词。\n\n资产名称需要时使用 @资产名。previousShot / nextShot 只用于理解上下文与指代，最终只描述 currentShot。\n\n必须只返回合法 JSON，不要 Markdown，不要解释：{"imagePrompt":"...","videoPrompt":"..."}\n\n输入：${JSON.stringify(payload)}`;
+  return `你是专业 AI 影视最终提示词编译器。请只为 currentShot 生成两份彼此职责明确的最终提示词，并严格依据输入，不得改写剧情事实、人物身份、资产外观或凭空增加主体。\n\nimagePrompt 用于分镜图/首帧生成，回答“这一帧长什么样”：重点写可见主体、外观与资产一致性、动作瞬间、场景和道具、构图、景别、摄影机位置、光影氛围、材质和整体视觉风格。不要把对白、音效、连续运动过程当成主要内容。\n\nvideoPrompt 用于视频运动生成，回答“这一帧接下来怎么动”：重点写时长、主体动作的时间顺序、摄影机运动、环境动态、动作节奏、连续性和稳定性约束。对白/音效只能作为节奏参考，不要重复堆砌静态画面形容词。\n\n资产名称需要时使用 @资产名。scriptSource 是完整剧本原文，必须用于理解人物关系、事件因果、情绪和当前镜头在整段剧情中的作用；previousShot / nextShot 只用于理解上下文与指代，最终只描述 currentShot。\n\n必须只返回合法 JSON，不要 Markdown，不要解释：{"imagePrompt":"...","videoPrompt":"..."}\n\n输入：${JSON.stringify(payload)}`;
 }
 async function aiComposeSingle(ctx,onProgress){
   const runtime=await selectedTextRuntime(ctx.node),prompt=singleAiPrompt(ctx);
@@ -171,8 +172,8 @@ function batchAiPrompt(node,data){
       previousShot:shotSummary(data.shots[index-1]),nextShot:shotSummary(data.shots[index+1])
     };
   });
-  const payload={globalStyle:text(data.globalStyle?.text||data.style),assets:cat.map(a=>({id:a.id,type:a.assetType||a.type,name:a.name,description:a.description,prompt:a.prompt,revision:a.revision})),shots};
-  return `你是专业 AI 影视最终提示词编译器。为输入中的每个 shot 分别生成 imagePrompt 和 videoPrompt。\nimagePrompt 只负责“这一帧长什么样”：主体外观与资产一致性、动作瞬间、场景道具、构图景别、机位、光影和整体风格。\nvideoPrompt 只负责“接下来怎么动”：时长、动作时间顺序、运镜、环境运动、节奏、连续性和稳定性。\n不得改变剧本事实，不得新增人物/道具；前后镜头只用于上下文理解；引用资产时使用 @资产名。\n必须只返回合法 JSON，不要 Markdown：{"shots":[{"id":"原 shot id","imagePrompt":"...","videoPrompt":"..."}]}\n输入：${JSON.stringify(payload)}`;
+  const payload={scriptSource:text(node?.sourceText||''),globalStyle:text(data.globalStyle?.text||data.style),assets:cat.map(a=>({id:a.id,type:a.assetType||a.type,name:a.name,description:a.description,prompt:a.prompt,revision:a.revision})),shots};
+  return `你是专业 AI 影视最终提示词编译器。为输入中的每个 shot 分别生成 imagePrompt 和 videoPrompt。\nimagePrompt 只负责“这一帧长什么样”：主体外观与资产一致性、动作瞬间、场景道具、构图景别、机位、光影和整体风格。\nvideoPrompt 只负责“接下来怎么动”：时长、动作时间顺序、运镜、环境运动、节奏、连续性和稳定性。\n必须结合 scriptSource 完整剧本理解人物关系、事件因果、情绪和指代；不得改变剧本事实，不得新增人物/道具；前后镜头只用于上下文理解；引用资产时使用 @资产名。\n必须只返回合法 JSON，不要 Markdown：{"shots":[{"id":"原 shot id","imagePrompt":"...","videoPrompt":"..."}]}\n输入：${JSON.stringify(payload)}`;
 }
 async function aiComposeAll(context,onProgress){
   const runtime=await selectedTextRuntime(context.node),prompt=batchAiPrompt(context.node,context.data);
