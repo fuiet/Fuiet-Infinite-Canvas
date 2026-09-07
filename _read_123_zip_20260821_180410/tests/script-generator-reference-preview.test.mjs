@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import {createRequire} from 'node:module';
 
 const require=createRequire(import.meta.url);
 const Preview=require('../script-generator-reference-preview-v1.js');
+const bootstrap=fs.readFileSync(new URL('../browser-bootstrap.js',import.meta.url),'utf8');
 
 function fixture(){
   return{
@@ -57,4 +59,12 @@ test('preview html labels references as automatically supplied at execution time
   assert.match(html,/脚本参考 1/);
   assert.match(html,/执行时自动带入/);
   assert.match(html,/data-script-reference-role="style_reference"/);
+});
+
+test('browser loads the implicit reference preview after task reference normalization and loads its stylesheet',()=>{
+  const upstream=bootstrap.indexOf('./upstream-generation-inputs-v1.js');
+  const preview=bootstrap.indexOf('./script-generator-reference-preview-v1.js');
+  assert.ok(upstream>=0&&preview>upstream);
+  assert.match(bootstrap,/script-generator-reference-preview-v1\.css\?v=\$\{batchInputV\}/);
+  assert.match(bootstrap,/20260907-script-asset-media-ref-2/);
 });
