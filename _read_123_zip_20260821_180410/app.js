@@ -2835,12 +2835,24 @@
     }
     return action;
   }
+  function scriptShotDescriptionParts(d,shot){
+    const catalog=scriptAssetCatalog(d),ids=new Set([...(shot.assetRefs||[]),...matchShotAssets(shot,d)]),refs=catalog.filter(a=>ids.has(a.id));
+    let description=String(scriptShotVisualDescription(d,shot)||'');
+    for(const a of catalog.filter(a=>a.name).sort((a,b)=>String(b.name).length-String(a.name).length))description=description.split('@'+a.name).join(String(a.name));
+    description=description.replace(/\s+/g,' ').replace(/\s*([，。！？；：、,.!?;:])\s*/g,'$1').replace(/([\u4e00-\u9fff])\s+([\u4e00-\u9fff])/g,'$1$2').replace(/([\u4e00-\u9fff])\s+([\u4e00-\u9fff])/g,'$1$2').trim();
+    const split=value=>String(value||'').split(/[、,，/|]/).map(x=>x.trim()).filter(Boolean),uniq=values=>[...new Set(values.filter(Boolean))];
+    const typeOf=a=>{const type=String(a.assetType||a.type||'').toLowerCase();return type.includes('char')?'character':type.includes('scene')?'scene':'prop'};
+    return{
+      description,
+      characters:uniq([...refs.filter(a=>typeOf(a)==='character').map(a=>a.name),...split(shot.characters)]),
+      scenes:uniq([...refs.filter(a=>typeOf(a)==='scene').map(a=>a.name),...split(shot.scene)]),
+      props:uniq([...refs.filter(a=>typeOf(a)==='prop').map(a=>a.name),...split(shot.props)])
+    };
+  }
   function scriptShotDescriptionHtml(d,shot){
-    let html=escapeHtml(scriptShotVisualDescription(d,shot));
-    for(const a of scriptAssetCatalog(d).filter(a=>a.name).sort((a,b)=>String(b.name).length-String(a.name).length)){
-      const token=escapeHtml('@'+a.name);html=html.split(token).join(`<span class="shot-mention-token">${token}</span>`);
-    }
-    return html||'<span class="shot-description-empty">点击填写画面描述</span>';
+    const view=scriptShotDescriptionParts(d,shot),chip=(kind,name)=>`<span class="shot-desc-ref-chip ${kind}">${escapeHtml(name)}</span>`,group=(label,kind,values)=>values.length?`<span class="shot-desc-ref-row"><span class="shot-desc-ref-label">${label}</span><span class="shot-desc-ref-chips">${values.map(name=>chip(kind,name)).join('')}</span></span>`:'';
+    const refs=[group('人物','character',view.characters),group('场景','scene',view.scenes),group('道具','prop',view.props)].filter(Boolean).join('');
+    return `<span class="shot-desc-card"><span class="shot-desc-main">${view.description?escapeHtml(view.description):'<span class="shot-description-empty">点击填写画面描述</span>'}</span>${refs?`<span class="shot-desc-ref-list">${refs}</span>`:''}</span>`;
   }
   function syncShotMentionsFromDescription(d,shot,text){
     const cat=scriptAssetCatalog(d),mentioned=cat.filter(a=>a.name&&String(text||'').includes('@'+a.name));

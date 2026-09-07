@@ -1,0 +1,27 @@
+/* Structured shot description v2: readable prose first, asset references second. */
+.script-editor-table.simplified{min-width:1640px}
+.script-editor-table.simplified th:nth-child(3),
+.script-editor-table.simplified td:nth-child(3){width:540px!important}
+.script-editor-table.simplified tbody tr{height:118px}
+.script-editor-table.simplified td{height:118px}
+.script-editor-shell.simplified .script-editor-table.simplified td.shot-description-column{padding:8px 10px!important;vertical-align:middle!important;text-align:left!important}
+.script-editor-shell.simplified .shot-description-cell{
+  width:100%;height:auto!important;min-height:96px;max-height:none!important;
+  padding:10px 12px!important;border:0!important;border-radius:8px;
+  background:transparent!important;color:#e8ebed!important;
+  display:block!important;-webkit-line-clamp:unset!important;-webkit-box-orient:initial!important;
+  text-align:left!important;overflow:visible!important;white-space:normal;cursor:text;
+}
+.script-editor-shell.simplified .shot-description-cell:hover{background:#1a1d20!important}
+.shot-desc-card{display:flex;flex-direction:column;gap:9px;width:100%;text-align:left}
+.shot-desc-main{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;color:#eceff1;font-size:13px;line-height:1.62;font-weight:400;word-break:break-word;text-align:left}
+.shot-desc-ref-list{display:flex;flex-direction:column;gap:5px;padding-top:7px;border-top:1px solid #282d31;text-align:left}
+.shot-desc-ref-row{display:flex;align-items:flex-start;gap:8px;min-width:0;text-align:left}
+.shot-desc-ref-label{flex:0 0 32px;padding-top:2px;color:#747d85;font-size:10px;line-height:20px;text-align:left}
+.shot-desc-ref-chips{display:flex;flex-wrap:wrap;gap:5px;min-width:0;text-align:left}
+.shot-desc-ref-chip{display:inline-flex;align-items:center;min-height:20px;padding:1px 7px;border:1px solid #30363b;border-radius:5px;background:#202428;color:#bfc6cc;font-size:10px;line-height:16px;white-space:nowrap}
+.shot-desc-ref-chip.character{border-color:#315058;background:#1b292d;color:#8ed4df}
+.shot-desc-ref-chip.scene{border-color:#3a4657;background:#1e252f;color:#9db9dc}
+.shot-desc-ref-chip.prop{border-color:#4a4436;background:#29261f;color:#d0bd8e}
+.script-editor-shell.simplified .shot-description-empty{color:#69727a!important;font-size:12px}
+@media(max-width:1200px){.script-editor-table.simplified th:nth-child(3),.script-editor-table.simplified td:nth-child(3){width:480px!important}}
