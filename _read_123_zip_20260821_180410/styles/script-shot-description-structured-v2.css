@@ -24,4 +24,44 @@
 .shot-desc-ref-chip.scene{border-color:#3a4657;background:#1e252f;color:#9db9dc}
 .shot-desc-ref-chip.prop{border-color:#4a4436;background:#29261f;color:#d0bd8e}
 .script-editor-shell.simplified .shot-description-empty{color:#69727a!important;font-size:12px}
+
+/* Reference-style duration column: render 6s / 7s as compact table text while keeping the number editable. */
+.script-editor-table.simplified th:nth-child(2),
+.script-editor-table.simplified td:nth-child(2){width:64px!important;text-align:center!important;white-space:nowrap!important}
+.script-editor-shell.simplified .script-editor-table.simplified td:nth-child(2){padding-left:4px!important;padding-right:4px!important;vertical-align:middle!important}
+.script-editor-shell.simplified .shot-duration{
+  display:inline-block!important;
+  width:30px!important;
+  min-width:0!important;
+  height:auto!important;
+  margin:0!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:0!important;
+  outline:0!important;
+  box-shadow:none!important;
+  background:transparent!important;
+  color:#f0f2f3!important;
+  font-size:13px!important;
+  line-height:18px!important;
+  font-weight:600!important;
+  text-align:right!important;
+  vertical-align:baseline!important;
+  appearance:textfield!important;
+  -moz-appearance:textfield!important;
+}
+.script-editor-shell.simplified .shot-duration::-webkit-outer-spin-button,
+.script-editor-shell.simplified .shot-duration::-webkit-inner-spin-button{-webkit-appearance:none!important;margin:0!important}
+.script-editor-shell.simplified .shot-duration:focus,
+.script-editor-shell.simplified .shot-duration:hover{border:0!important;outline:0!important;box-shadow:none!important;background:transparent!important}
+.script-editor-shell.simplified .shot-duration-unit{
+  display:inline!important;
+  margin-left:1px!important;
+  color:#f0f2f3!important;
+  font-size:13px!important;
+  line-height:18px!important;
+  font-weight:600!important;
+  vertical-align:baseline!important;
+}
+
 @media(max-width:1200px){.script-editor-table.simplified th:nth-child(3),.script-editor-table.simplified td:nth-child(3){width:480px!important}}
