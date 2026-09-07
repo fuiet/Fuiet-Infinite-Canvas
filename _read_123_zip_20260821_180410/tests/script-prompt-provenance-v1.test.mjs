@@ -159,5 +159,5 @@ test('browser loads provenance before upstream task normalization and includes a
   assert.ok(provenance>=0&&upstream>provenance);
   assert.match(bootstrap,/script-prompt-provenance-v1\.css\?v=\$\{batchInputV\}/);
   assert.match(bootstrap,/20260907-final-prompt-asset-source-5/);
-  assert.match(bootstrap,/20260907-script-prompt-provenance-1/);
+  assert.match(bootstrap,/20260907-script-prompt-provenance-2/);
 });
