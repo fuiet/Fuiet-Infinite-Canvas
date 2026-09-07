@@ -1,0 +1,44 @@
+.script-virtual-reference-strip{
+  position:relative;
+  padding-top:22px;
+  border:1px dashed rgba(127,127,127,.28);
+  border-radius:12px;
+}
+.script-virtual-ref-caption{
+  position:absolute;
+  top:4px;
+  left:9px;
+  font-size:10px;
+  line-height:14px;
+  letter-spacing:.02em;
+  opacity:.62;
+  pointer-events:none;
+}
+.script-virtual-reference-chip::after{
+  content:'自动';
+  position:absolute;
+  right:3px;
+  bottom:3px;
+  padding:1px 4px;
+  border-radius:999px;
+  font-size:8px;
+  line-height:11px;
+  background:rgba(18,18,18,.72);
+  color:#fff;
+  pointer-events:none;
+}
+.script-virtual-reference-chip .generator-reference-thumb img,
+.script-virtual-reference-chip .generator-reference-thumb video,
+.script-virtual-reference-chip .generator-reference-preview img,
+.script-virtual-reference-chip .generator-reference-preview video{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+.script-virtual-ref-audio{
+  display:grid;
+  width:100%;
+  height:100%;
+  place-items:center;
+  font-size:18px;
+}
