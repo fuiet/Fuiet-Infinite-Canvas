@@ -1,0 +1,44 @@
+name: Patch final prompt workbench v4
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/patch-final-prompt-workbench-v4.py'
+      - '.github/workflows/patch-final-prompt-workbench-v4.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply workbench repair
+        run: python scripts/patch-final-prompt-workbench-v4.py
+      - name: Syntax check
+        working-directory: _read_123_zip_20260821_180410
+        run: |
+          node --check script-final-prompt-v2.js
+          node --check script-final-prompt-rich-v1.js
+          node --check script-final-prompt-workbench-v4.js
+          node --check browser-bootstrap.js
+      - name: Focused regression test
+        run: node --test _read_123_zip_20260821_180410/tests/script-final-prompt-workbench-v4.test.mjs
+      - name: Commit repair
+        run: |
+          git config user.name 'Codex'
+          git config user.email 'codex@openai.local'
+          git add \
+            _read_123_zip_20260821_180410/script-final-prompt-v2.js \
+            _read_123_zip_20260821_180410/script-final-prompt-rich-v1.js \
+            _read_123_zip_20260821_180410/script-final-prompt-workbench-v4.js \
+            _read_123_zip_20260821_180410/styles/script-final-prompt-workbench-v4.css \
+            _read_123_zip_20260821_180410/browser-bootstrap.js \
+            _read_123_zip_20260821_180410/tests/script-final-prompt-workbench-v4.test.mjs
+          git diff --cached --quiet && exit 0
+          git commit -m 'Redesign final prompt synthesis as shot workbench'
+          git push origin main
