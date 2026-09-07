@@ -4,6 +4,7 @@
  * - media upstream nodes remain real provider references
  * - script batch nodes inherit confirmed shot assets and global style references
  * - semantic references (character/scene/prop/style) never become an accidental first frame
+ * - script batch tasks preserve source prompt + generator-confirmed prompt + provider prompt
  * - a local generator prompt is optional and only supplements upstream text
  *
  * app.js already includes every incoming connection in parameters.creativeContext.
@@ -171,19 +172,26 @@ function referenceVideoParameters(task={},refs=[]){
   else mode=hasFirst&&hasLast?'frame2video':singleImageStartsVideo?'image2video':'omni_reference';
   return{...current,operation,videoMode:mode,generationMode:mode};
 }
+function scriptPromptProvenance(task={},options={}){
+  const api=globalThis.FuietScriptPromptProvenanceV1;
+  if(typeof api?.buildTaskProvenance!=='function')return null;
+  try{return api.buildTaskProvenance(task,options)}catch{return null}
+}
 function normalizeTask(task={}){
   const type=clean(task.nodeType).toLowerCase();
   if(!['image','video'].includes(type))return task;
-  const refs=linkedReferences(task),prompt=effectivePrompt(task,refs);
+  const refs=linkedReferences(task),generatorPrompt=clean(task.prompt),prompt=effectivePrompt(task,refs);
   const textCount=upstreamTextParts(refs).length,mediaCount=mediaReferences(refs).length;
   const parameters=type==='video'?referenceVideoParameters(task,refs):{...(task.parameters||{})};
+  const promptProvenance=scriptPromptProvenance({...task,parameters},{generatorPrompt,providerPrompt:prompt});
   return{
     ...task,
     prompt,
     references:refs,
     parameters:{
       ...parameters,
-      upstreamInputContract:{version:3,connected:refs.length>0,textCount,mediaCount,scriptAssetCount:refs.filter(ref=>clean(ref.kind)==='script_asset').length,scriptStyleCount:refs.filter(ref=>clean(ref.kind)==='script_style').length,localPromptOptional:refs.length>0}
+      ...(promptProvenance?{promptProvenance}:{}),
+      upstreamInputContract:{version:4,connected:refs.length>0,textCount,mediaCount,scriptAssetCount:refs.filter(ref=>clean(ref.kind)==='script_asset').length,scriptStyleCount:refs.filter(ref=>clean(ref.kind)==='script_style').length,promptProvenance:Boolean(promptProvenance),localPromptOptional:refs.length>0}
     }
   };
 }
@@ -240,7 +248,7 @@ function installUiHint(){
   syncGeneratorHint();
 }
 
-const api=Object.freeze({linkedReferences,scriptAssetReferences,scriptStyleReferences,upstreamTextParts,mediaReferences,effectivePrompt,isSemanticReference,referenceVideoParameters,normalizeTask});
+const api=Object.freeze({linkedReferences,scriptAssetReferences,scriptStyleReferences,upstreamTextParts,mediaReferences,effectivePrompt,isSemanticReference,referenceVideoParameters,scriptPromptProvenance,normalizeTask});
 globalThis.CanvasUpstreamGenerationInputs=api;
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 installFetchBridge();
