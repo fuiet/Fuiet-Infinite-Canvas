@@ -13,6 +13,7 @@ const v='20260907-script-asset-node-layout-1';
 const promptV='20260907-final-prompt-asset-source-5';
 const batchInputV='20260907-universal-upstream-inputs-1';
 const durationV='20260907-shot-duration-compact-1';
+const shotEditorV='20260907-shot-editor-inline-mentions-1';
 const canvasScripts=[
   `./provider-auto-config-v1.js?v=${v}`,
   `./script-workflow-core.js?v=${promptV}`,
@@ -21,6 +22,7 @@ const canvasScripts=[
   `./image-node-display-normalizer-v1.js?v=${v}`,
   `./script-asset-node-layout-v1.js?v=${v}`,
   `./app.js?v=${v}&fix=generator-input-focus-1&ui=text-result-editor-1&wheel=text-editor-1&refs=generator-reference-strip-1&scriptclick=toolbar-3&scriptgen=panel-4&shotdesc=reference-1`,
+  `./script-shot-description-editor-highlight-v1.js?v=${shotEditorV}`,
   `./script-prompt-asset-source-v1.js?v=${promptV}`,
   `./script-final-prompt-v2.js?v=${promptV}`,
   `./script-final-prompt-rich-v1.js?v=${promptV}`,
@@ -89,6 +91,7 @@ async function start(){
       loadStyle(`./styles/script-workflow-v2.css?v=${v}`),
       loadStyle(`./styles/script-editor-simplified-v1.css?v=${v}`),
       loadStyle(`./styles/script-shot-description-reference-v1.css?v=${v}`),
+      loadStyle(`./styles/script-shot-description-editor-highlight-v1.css?v=${shotEditorV}`),
       loadStyle(`./styles/script-shot-duration-compact-v1.css?v=${durationV}`),
       loadStyle(`./styles/script-assets-reference-v1.css?v=${v}`),
       loadStyle(`./styles/script-asset-picker-modal-v1.css?v=${v}`),
