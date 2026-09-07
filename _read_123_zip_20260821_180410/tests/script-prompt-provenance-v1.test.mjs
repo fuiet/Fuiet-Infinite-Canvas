@@ -8,6 +8,9 @@ const Core=require('../script-workflow-core.js');
 const Provenance=require('../script-prompt-provenance-v1.js');
 const Upstream=require('../upstream-generation-inputs-v1.js');
 const bootstrap=fs.readFileSync(new URL('../browser-bootstrap.js',import.meta.url),'utf8');
+const serverSource=fs.readFileSync(new URL('../server.js',import.meta.url),'utf8');
+const storeSource=fs.readFileSync(new URL('../store.js',import.meta.url),'utf8');
+const browserRuntimeSource=fs.readFileSync(new URL('../browser-runtime-preview.js',import.meta.url),'utf8');
 
 function fixture(){
   const shot={
@@ -32,6 +35,12 @@ function withState(state,run){
     if(previous===undefined)delete globalThis.CanvasBrowserStorageManager;
     else globalThis.CanvasBrowserStorageManager=previous;
   }
+}
+function sourceSnapshot(prompt,revision){
+  return{
+    createdAt:`2026-09-07T0${revision}:00:00.000Z`,prompt,sourcePrompt:prompt,promptRevision:revision,promptGeneratedAt:`2026-09-07T0${revision}:00:00.000Z`,
+    promptSource:{fingerprint:`fp-${revision}`},promptProvenance:{version:1,source:{kind:'script_final_prompt',prompt,promptRevision:revision,promptGeneratedAt:`2026-09-07T0${revision}:00:00.000Z`,promptSource:{fingerprint:`fp-${revision}`},capturedAt:`2026-09-07T0${revision}:00:00.000Z`,type:'image'}}
+  };
 }
 
 test('generation snapshot explicitly preserves the script-final source prompt',()=>{
@@ -89,6 +98,33 @@ test('unchanged generator prompt is explicitly recorded as not manually edited',
   });
 });
 
+test('same Shot with multiple generators binds provenance to the generator actually being submitted',()=>{
+  const {state,shot}=fixture();
+  const old={id:'prod-old',type:'image',prompt:'OLD MANUAL PROMPT',taskStatus:'queued',generationSnapshot:sourceSnapshot('OLD AI SOURCE',4),toolParams:{scriptNodeId:'script-1',shotId:'shot-1'}};
+  const newer={id:'prod-new',type:'image',prompt:'NEW MANUAL PROMPT',generationSnapshot:sourceSnapshot('NEW AI SOURCE',9),toolParams:{scriptNodeId:'script-1',shotId:'shot-1'}};
+  state.nodes=state.nodes.filter(node=>node.id!=='prod-1');
+  state.nodes.push(old,newer);
+  shot.outputs={imageNodeIds:['prod-old','prod-new'],videoNodeIds:[],selectedImageNodeId:'prod-new',selectedVideoNodeId:''};
+  const audit=Provenance.buildTaskProvenance({nodeType:'image',prompt:'OLD MANUAL PROMPT',parameters:{scriptNodeId:'script-1',shotId:'shot-1'}},{state,generatorPrompt:'OLD MANUAL PROMPT',providerPrompt:'OLD MANUAL PROMPT',submittedAt:'2026-09-07T10:00:00.000Z'});
+  assert.equal(audit.source.productionNodeId,'prod-old');
+  assert.equal(audit.source.prompt,'OLD AI SOURCE');
+  assert.equal(audit.source.promptRevision,4);
+  assert.equal(audit.execution.generatorPrompt,'OLD MANUAL PROMPT');
+});
+
+test('active generator wins when two versions temporarily share the same execution prompt',()=>{
+  const {state,shot}=fixture();
+  state.nodes=state.nodes.filter(node=>node.id!=='prod-1');
+  state.nodes.push(
+    {id:'prod-running',type:'image',prompt:'SAME EXECUTION',taskStatus:'running',generationSnapshot:sourceSnapshot('RUNNING SOURCE',5),toolParams:{scriptNodeId:'script-1',shotId:'shot-1'}},
+    {id:'prod-selected',type:'image',prompt:'SAME EXECUTION',generationSnapshot:sourceSnapshot('SELECTED SOURCE',10),toolParams:{scriptNodeId:'script-1',shotId:'shot-1'}}
+  );
+  shot.outputs={imageNodeIds:['prod-running','prod-selected'],videoNodeIds:[],selectedImageNodeId:'prod-selected',selectedVideoNodeId:''};
+  const audit=Provenance.buildTaskProvenance({nodeType:'image',prompt:'SAME EXECUTION',parameters:{scriptNodeId:'script-1',shotId:'shot-1'}},{state,generatorPrompt:'SAME EXECUTION',providerPrompt:'SAME EXECUTION'});
+  assert.equal(audit.source.productionNodeId,'prod-running');
+  assert.equal(audit.source.prompt,'RUNNING SOURCE');
+});
+
 test('ordinary non-script generators do not receive fake prompt provenance',()=>{
   const audit=Provenance.buildTaskProvenance({nodeType:'image',prompt:'普通图片提示词',parameters:{}},{state:{nodes:[]}});
   assert.equal(audit,null);
@@ -97,15 +133,24 @@ test('ordinary non-script generators do not receive fake prompt provenance',()=>
   assert.equal(task.parameters.upstreamInputContract.promptProvenance,false);
 });
 
-test('generator preflight UI exposes source and execution prompt status',()=>{
+test('generator preflight UI exposes source and execution prompt status and escapes source text',()=>{
   const {state}=fixture();
+  state.nodes.find(node=>node.id==='prod-1').generationSnapshot.promptProvenance.source.prompt='AI <source> "quoted"';
   const audit=Provenance.buildTaskProvenance({nodeType:'image',prompt:'MANUAL EXECUTION PROMPT',parameters:{scriptNodeId:'script-1',shotId:'shot-1'}},{state,generatorPrompt:'MANUAL EXECUTION PROMPT',providerPrompt:'MANUAL EXECUTION PROMPT',submittedAt:'preview'});
   const html=Provenance.provenanceHtml(audit);
   assert.match(html,/提示词来源/);
   assert.match(html,/脚本最终提示词/);
   assert.match(html,/已人工调整/);
-  assert.match(html,/AI ORIGINAL FINAL PROMPT/);
+  assert.match(html,/AI &lt;source&gt; &quot;quoted&quot;/);
   assert.match(html,/MANUAL EXECUTION PROMPT/);
+  assert.doesNotMatch(html,/AI <source>/);
+});
+
+test('desktop and browser task persistence preserve arbitrary prompt provenance parameters',()=>{
+  assert.match(serverSource,/const body=await readJson\(req\),taskPayload=\{\.\.\.body\};delete taskPayload\._upstream/);
+  assert.match(serverSource,/payload:taskPayload/);
+  assert.match(storeSource,/JSON\.stringify\(payload\)/);
+  assert.match(browserRuntimeSource,/parameters:clone\(body\.parameters\|\|\{\}\)/);
 });
 
 test('browser loads provenance before upstream task normalization and includes audit styles',()=>{
