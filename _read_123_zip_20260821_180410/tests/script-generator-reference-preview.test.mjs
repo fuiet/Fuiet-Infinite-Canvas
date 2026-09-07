@@ -61,10 +61,12 @@ test('preview html labels references as automatically supplied at execution time
   assert.match(html,/data-script-reference-role="style_reference"/);
 });
 
-test('browser loads the implicit reference preview after task reference normalization and loads its stylesheet',()=>{
+test('browser loads provenance before task normalization and reference preview after it',()=>{
+  const provenance=bootstrap.indexOf('./script-prompt-provenance-v1.js');
   const upstream=bootstrap.indexOf('./upstream-generation-inputs-v1.js');
   const preview=bootstrap.indexOf('./script-generator-reference-preview-v1.js');
-  assert.ok(upstream>=0&&preview>upstream);
+  assert.ok(provenance>=0&&upstream>provenance&&preview>upstream);
+  assert.match(bootstrap,/script-prompt-provenance-v1\.css\?v=\$\{batchInputV\}/);
   assert.match(bootstrap,/script-generator-reference-preview-v1\.css\?v=\$\{batchInputV\}/);
-  assert.match(bootstrap,/20260907-script-asset-media-ref-2/);
+  assert.match(bootstrap,/20260907-script-prompt-provenance-1/);
 });
