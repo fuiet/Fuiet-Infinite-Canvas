@@ -5,79 +5,36 @@ rich=ROOT/'script-final-prompt-rich-v1.js'
 v2=ROOT/'script-final-prompt-v2.js'
 boot=ROOT/'browser-bootstrap.js'
 
+def rep(s,a,b,label):
+    if a not in s: raise SystemExit(f'missing pattern: {label}')
+    return s.replace(a,b,1)
 
-def replace_once(text, old, new, label):
-    if old not in text:
-        raise SystemExit(f'missing pattern: {label}')
-    return text.replace(old,new,1)
-
-# Production-grade rich composer: include full script source and expose per-shot compose.
+# Production composer: full script context + per-shot compose.
 s=rich.read_text()
-s=replace_once(
-    s,
-    "只返回合法 JSON，不要 Markdown，不要解释。结构：",
-    "9. scriptSource 是完整剧本原文，必须用于理解人物关系、事件因果、情绪、指代和当前镜头在剧情中的真实作用；不得只根据单镜头局部字段猜剧情。\\\n\\\n只返回合法 JSON，不要 Markdown，不要解释。结构：",
-    'rich instruction scriptSource'
-)
-s=replace_once(s,
-    "payload={globalStyle:ctx.style,currentShot:ctx.shot,associatedAssets:",
-    "payload={scriptSource:text(ctx.node?.sourceText||''),globalStyle:ctx.style,currentShot:ctx.shot,associatedAssets:",
-    'rich single payload')
-s=replace_once(s,
-    "payload={globalStyle:text(data.globalStyle?.text||data.style),shots:",
-    "payload={scriptSource:text(hit.node?.sourceText||''),globalStyle:text(data.globalStyle?.text||data.style),shots:",
-    'rich batch payload')
-s=replace_once(s,
-    "aiInstruction({shots:payload.shots,globalStyle:payload.globalStyle},'每个 shot 自己的 duration')",
-    "aiInstruction({scriptSource:payload.scriptSource,shots:payload.shots,globalStyle:payload.globalStyle},'每个 shot 自己的 duration')",
-    'rich batch prompt payload')
-s=replace_once(s,
-    "async function bulk(){if(bulkRunning)return;",
-    "async function composeOne(shotId,onProgress){const ctx=base.shotContext(shotId);if(!ctx)throw new Error('找不到当前镜头');const result=await aiOne(ctx,onProgress);await commit([{id:String(shotId),...result}]);return result}\n\nasync function bulk(){if(bulkRunning)return;",
-    'rich composeOne')
-s=replace_once(s,
-    "globalThis.FuietFinalPromptProduction=Object.freeze({version:1,compileImage,compileVideo,ruleCompose,openRich,bulk});",
-    "globalThis.FuietFinalPromptProduction=Object.freeze({version:2,compileImage,compileVideo,ruleCompose,openRich,composeOne,bulk});",
-    'rich export')
+s=rep(s,"只返回合法 JSON，不要 Markdown，不要解释。结构：","9. scriptSource 是完整剧本原文，必须用于理解人物关系、事件因果、情绪、指代和当前镜头在剧情中的真实作用；不得只根据单镜头局部字段猜剧情。\\\n\\\n只返回合法 JSON，不要 Markdown，不要解释。结构：",'rich instruction')
+s=rep(s,"payload={globalStyle:ctx.style,currentShot:ctx.shot,associatedAssets:","payload={scriptSource:text(ctx.node?.sourceText||''),globalStyle:ctx.style,currentShot:ctx.shot,associatedAssets:",'rich single payload')
+s=rep(s,"payload={globalStyle:text(data.globalStyle?.text||data.style),shots:","payload={scriptSource:text(hit.node?.sourceText||''),globalStyle:text(data.globalStyle?.text||data.style),shots:",'rich batch payload')
+s=rep(s,"aiInstruction({shots:payload.shots,globalStyle:payload.globalStyle},'每个 shot 自己的 duration')","aiInstruction({scriptSource:payload.scriptSource,shots:payload.shots,globalStyle:payload.globalStyle},'每个 shot 自己的 duration')",'rich batch instruction payload')
+s=rep(s,"async function bulk(){if(bulkRunning)return;","async function composeOne(shotId,onProgress){const ctx=base.shotContext(shotId);if(!ctx)throw new Error('找不到当前镜头');const result=await aiOne(ctx,onProgress);await commit([{id:String(shotId),...result}]);return result}\n\nasync function bulk(){if(bulkRunning)return;",'rich composeOne')
+s=rep(s,"globalThis.FuietFinalPromptProduction=Object.freeze({version:1,compileImage,compileVideo,ruleCompose,openRich,bulk});","globalThis.FuietFinalPromptProduction=Object.freeze({version:2,compileImage,compileVideo,ruleCompose,openRich,composeOne,bulk});",'rich export')
 rich.write_text(s)
 
-# V2 fallback composer: carry the same full-script context so legacy calls behave consistently.
+# V2 fallback: same full script context.
 s=v2.read_text()
-s=replace_once(s,
-    "const payload={\n    globalStyle:ctx.style,",
-    "const payload={\n    scriptSource:text(ctx.node?.sourceText||''),\n    globalStyle:ctx.style,",
-    'v2 single payload')
-s=replace_once(s,
-    "const payload={globalStyle:text(data.globalStyle?.text||data.style),assets:",
-    "const payload={scriptSource:text(node?.sourceText||''),globalStyle:text(data.globalStyle?.text||data.style),assets:",
-    'v2 batch payload')
-s=replace_once(s,
-    "资产名称需要时使用 @资产名。previousShot / nextShot 只用于理解上下文与指代，最终只描述 currentShot。",
-    "资产名称需要时使用 @资产名。scriptSource 是完整剧本原文，必须用于理解人物关系、事件因果、情绪和当前镜头在整段剧情中的作用；previousShot / nextShot 只用于理解上下文与指代，最终只描述 currentShot。",
-    'v2 single instruction')
-s=replace_once(s,
-    "不得改变剧本事实，不得新增人物/道具；前后镜头只用于上下文理解；引用资产时使用 @资产名。",
-    "必须结合 scriptSource 完整剧本理解人物关系、事件因果、情绪和指代；不得改变剧本事实，不得新增人物/道具；前后镜头只用于上下文理解；引用资产时使用 @资产名。",
-    'v2 batch instruction')
+s=rep(s,"const payload={\n    globalStyle:ctx.style,","const payload={\n    scriptSource:text(ctx.node?.sourceText||''),\n    globalStyle:ctx.style,",'v2 single payload')
+s=rep(s,"const payload={globalStyle:text(data.globalStyle?.text||data.style),assets:","const payload={scriptSource:text(node?.sourceText||''),globalStyle:text(data.globalStyle?.text||data.style),assets:",'v2 batch payload')
+s=rep(s,"资产名称需要时使用 @资产名。previousShot / nextShot 只用于理解上下文与指代，最终只描述 currentShot。","资产名称需要时使用 @资产名。scriptSource 是完整剧本原文，必须用于理解人物关系、事件因果、情绪和当前镜头在整段剧情中的作用；previousShot / nextShot 只用于理解上下文与指代，最终只描述 currentShot。",'v2 single instruction')
+s=rep(s,"不得改变剧本事实，不得新增人物/道具；前后镜头只用于上下文理解；引用资产时使用 @资产名。","必须结合 scriptSource 完整剧本理解人物关系、事件因果、情绪和指代；不得改变剧本事实，不得新增人物/道具；前后镜头只用于上下文理解；引用资产时使用 @资产名。",'v2 batch instruction')
 v2.write_text(s)
 
-# Browser bootstrap: load V4 after V3 and its CSS last so it intentionally replaces the table.
+# Bootstrap: do not depend on other feature cache revisions.
 s=boot.read_text()
-s=replace_once(s,
-    "const shotEditorV='20260907-shot-editor-inline-mentions-2';",
-    "const shotEditorV='20260907-shot-editor-inline-mentions-2';\nconst promptWorkbenchV='20260907-final-prompt-workbench-v4-1';",
-    'bootstrap version')
-s=replace_once(s,
-    "`./script-final-prompt-page-v3.js?v=${promptV}`,",
-    "`./script-final-prompt-page-v3.js?v=${promptV}`,\n  `./script-final-prompt-workbench-v4.js?v=${promptWorkbenchV}`,",
-    'bootstrap script')
-s=replace_once(s,
-    "loadStyle(`./styles/script-final-prompt-page-v3-fit.css?v=${promptV}`),",
-    "loadStyle(`./styles/script-final-prompt-page-v3-fit.css?v=${promptV}`),\n      loadStyle(`./styles/script-final-prompt-workbench-v4.css?v=${promptWorkbenchV}`),",
-    'bootstrap css')
+s=rep(s,"const canvasScripts=[","const promptWorkbenchV='20260907-final-prompt-workbench-v4-1';\nconst canvasScripts=[",'bootstrap cache key')
+s=rep(s,"`./script-final-prompt-page-v3.js?v=${promptV}`,","`./script-final-prompt-page-v3.js?v=${promptV}`,\n  `./script-final-prompt-workbench-v4.js?v=${promptWorkbenchV}`,",'bootstrap script')
+s=rep(s,"loadStyle(`./styles/script-final-prompt-page-v3-fit.css?v=${promptV}`),","loadStyle(`./styles/script-final-prompt-page-v3-fit.css?v=${promptV}`),\n      loadStyle(`./styles/script-final-prompt-workbench-v4.css?v=${promptWorkbenchV}`),",'bootstrap css')
 boot.write_text(s)
 
-# Focused source-level regression tests.
+# Focused regression tests.
 t=ROOT/'tests'/'script-final-prompt-workbench-v4.test.mjs'
 t.write_text(r'''import test from 'node:test';
 import assert from 'node:assert/strict';
