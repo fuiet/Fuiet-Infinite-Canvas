@@ -2825,9 +2825,15 @@
     return `<div class="shot-asset-ref-cell"><div class="shot-asset-chips">${selected.map(a=>`<button type="button" class="shot-asset-chip" data-remove-shot-asset="${a.id}" title="移除引用">@${escapeHtml(a.name||'未命名资产')} ×</button>`).join('')||'<span class="shot-asset-empty">未显式引用</span>'}</div><div class="shot-asset-add"><select data-shot-asset-select><option value="">＋ 引用资产</option>${remaining.map(a=>`<option value="${a.id}">@${escapeHtml(a.name||'未命名资产')} · ${a.assetType==='character'?'角色':a.assetType==='scene'?'场景':'道具'}</option>`).join('')}</select><button type="button" data-add-shot-asset>添加</button></div></div>`;
   }
   function scriptShotVisualDescription(d,shot){
-    const action=String(shot?.action||'').trim(),cat=scriptAssetCatalog(d),refs=matchShotAssets(shot,d).map(id=>cat.find(a=>a.id===id)).filter(Boolean),tokens=[];
-    for(const a of refs){const tag='@'+String(a.name||'').trim();if(tag!=='@'&&!action.includes(tag)&&!tokens.includes(tag))tokens.push(tag)}
-    return [tokens.join(' '),action].filter(Boolean).join(tokens.length&&action?'，':'');
+    let action=String(shot?.action||'').replace(/\s+/g,' ').trim();
+    const cat=scriptAssetCatalog(d),refs=matchShotAssets(shot,d).map(id=>cat.find(a=>a.id===id)).filter(Boolean).sort((a,b)=>String(b?.name||'').length-String(a?.name||'').length);
+    if(!action)return refs.map(a=>'@'+String(a.name||'').trim()).filter(x=>x!=='@').join('、');
+    for(const a of refs){
+      const name=String(a?.name||'').trim();if(!name)continue;
+      const tag='@'+name;if(action.includes(tag))continue;
+      const index=action.indexOf(name);if(index>=0)action=action.slice(0,index)+'@'+action.slice(index);
+    }
+    return action;
   }
   function scriptShotDescriptionHtml(d,shot){
     let html=escapeHtml(scriptShotVisualDescription(d,shot));

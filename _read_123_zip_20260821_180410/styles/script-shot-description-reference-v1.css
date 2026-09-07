@@ -1,0 +1,40 @@
+/* Reference-style script shot description: concise prose with inline @assets. */
+.script-editor-table.simplified th:nth-child(3),
+.script-editor-table.simplified td:nth-child(3){width:470px}
+.script-editor-shell.simplified .script-editor-table.simplified th:nth-child(3){text-align:left!important;padding-left:14px!important}
+.script-editor-shell.simplified .script-editor-table.simplified td.shot-description-column{padding:0!important;vertical-align:middle!important;text-align:left!important}
+.script-editor-shell.simplified .shot-description-cell{
+  width:100%;
+  min-height:76px;
+  height:auto;
+  max-height:92px;
+  padding:10px 14px!important;
+  border:0!important;
+  background:transparent!important;
+  color:#e8ebed!important;
+  font-size:13px!important;
+  font-weight:400;
+  line-height:1.62!important;
+  letter-spacing:0;
+  text-align:left!important;
+  white-space:normal;
+  word-break:break-word;
+  overflow:hidden;
+  cursor:text;
+  display:-webkit-box!important;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:4;
+  align-items:initial!important;
+  justify-content:initial!important;
+}
+.script-editor-shell.simplified .shot-description-cell:hover{background:#191c1f!important}
+.script-editor-shell.simplified .shot-description-cell .shot-mention-token{
+  color:#21c7df!important;
+  font-weight:500;
+  white-space:nowrap;
+}
+.script-editor-shell.simplified .shot-description-empty{color:#69727a!important}
+@media(max-width:1200px){
+  .script-editor-table.simplified th:nth-child(3),
+  .script-editor-table.simplified td:nth-child(3){width:420px}
+}
