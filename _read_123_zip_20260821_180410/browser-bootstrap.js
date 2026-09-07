@@ -10,8 +10,8 @@ if(!manager?.ready)throw new Error('Browser Storage Manager 未加载');
 // Keep the shared runtime cache key stable. Feature-only revisions must not
 // invalidate unrelated provider/media/runtime assets.
 const v='20260904-script-asset-picker-modal-5';
-const promptV='20260907-final-prompt-asset-source-4';
-const batchInputV='20260907-script-asset-media-ref-2';
+const promptV='20260907-final-prompt-asset-source-5';
+const batchInputV='20260907-script-prompt-provenance-1';
 const canvasScripts=[
   `./provider-auto-config-v1.js?v=${v}`,
   `./script-workflow-core.js?v=${promptV}`,
@@ -23,6 +23,7 @@ const canvasScripts=[
   `./script-final-prompt-v2.js?v=${promptV}`,
   `./script-final-prompt-rich-v1.js?v=${promptV}`,
   `./script-final-prompt-page-v3.js?v=${promptV}`,
+  `./script-prompt-provenance-v1.js?v=${batchInputV}`,
   `./upstream-generation-inputs-v1.js?v=${batchInputV}`,
   `./script-generator-reference-preview-v1.js?v=${batchInputV}`,
   `./reference-popover-portal-v1.js?v=${v}`,
@@ -91,6 +92,7 @@ async function start(){
       loadStyle(`./styles/script-final-prompt-v2.css?v=${promptV}`),
       loadStyle(`./styles/script-final-prompt-page-v3.css?v=${promptV}`),
       loadStyle(`./styles/script-final-prompt-page-v3-fit.css?v=${promptV}`),
+      loadStyle(`./styles/script-prompt-provenance-v1.css?v=${batchInputV}`),
       loadStyle(`./styles/script-generator-reference-preview-v1.css?v=${batchInputV}`),
       loadStyle(`./styles/script-node-progress-v1.css?v=${v}&scriptclick=toolbar-3&scriptbar=large-1`),
       loadStyle(`./styles/edge-reference-cards-v1.css?v=${v}&ui=generator-reference-strip-1`),
