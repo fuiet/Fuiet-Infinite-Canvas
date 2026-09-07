@@ -13,10 +13,12 @@ def replace_once(text, old, new, label):
 
 # Production-grade rich composer: include full script source and expose per-shot compose.
 s=rich.read_text()
-s=replace_once(s,
-    "6. previousShot / nextShot 只用于连续性和指代理解，不得把相邻镜头内容混入当前镜头。\\\n7. 输入里只要出现手机屏幕、手部交互、餐具、门窗、说话口型、人物朝向等容易出错关系，就必须写成明确约束。\\\n8. 不要拿“电影感、高清、细节丰富”充数；系统会单独追加全局视觉风格。",
-    "6. previousShot / nextShot 只用于连续性和指代理解，不得把相邻镜头内容混入当前镜头。\\\n7. scriptSource 是完整剧本原文，必须用于理解人物关系、事件因果、情绪、指代和当前镜头在剧情中的真实作用；不得只根据单镜头局部字段猜剧情。\\\n8. 输入里只要出现手机屏幕、手部交互、餐具、门窗、说话口型、人物朝向等容易出错关系，就必须写成明确约束。\\\n9. 不要拿“电影感、高清、细节丰富”充数；系统会单独追加全局视觉风格。",
-    'rich instruction scriptSource')
+s=replace_once(
+    s,
+    "只返回合法 JSON，不要 Markdown，不要解释。结构：",
+    "9. scriptSource 是完整剧本原文，必须用于理解人物关系、事件因果、情绪、指代和当前镜头在剧情中的真实作用；不得只根据单镜头局部字段猜剧情。\\\n\\\n只返回合法 JSON，不要 Markdown，不要解释。结构：",
+    'rich instruction scriptSource'
+)
 s=replace_once(s,
     "payload={globalStyle:ctx.style,currentShot:ctx.shot,associatedAssets:",
     "payload={scriptSource:text(ctx.node?.sourceText||''),globalStyle:ctx.style,currentShot:ctx.shot,associatedAssets:",
@@ -59,7 +61,7 @@ s=replace_once(s,
     'v2 batch instruction')
 v2.write_text(s)
 
-# Browser bootstrap: load V4 after V3 and its CSS last so it can intentionally replace the table.
+# Browser bootstrap: load V4 after V3 and its CSS last so it intentionally replaces the table.
 s=boot.read_text()
 s=replace_once(s,
     "const shotEditorV='20260907-shot-editor-inline-mentions-2';",
@@ -88,7 +90,7 @@ const v2=fs.readFileSync(`${root}/script-final-prompt-v2.js`,'utf8');
 const boot=fs.readFileSync(`${root}/browser-bootstrap.js`,'utf8');
 
 test('V4 replaces dense V3 table with shot workbench cards',()=>{
-  assert.match(workbench,/class=\\"fpv4-card/);
+  assert.match(workbench,/class=\"fpv4-card/);
   assert.match(workbench,/镜头输入/);
   assert.match(workbench,/分镜图提示词/);
   assert.match(workbench,/视频提示词/);
