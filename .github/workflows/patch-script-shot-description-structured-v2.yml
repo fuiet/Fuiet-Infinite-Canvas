@@ -1,0 +1,44 @@
+name: Patch structured script shot descriptions v2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/patch-script-shot-description-structured-v2.py'
+      - '.github/workflows/patch-script-shot-description-structured-v2.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply structured shot description layout
+        run: python scripts/patch-script-shot-description-structured-v2.py
+      - name: Syntax check
+        working-directory: _read_123_zip_20260821_180410
+        run: |
+          node --check app.js
+          node --check browser-bootstrap.js
+      - name: Focused regression test
+        working-directory: _read_123_zip_20260821_180410
+        run: node --test tests/script-shot-description-structured-v2.test.mjs tests/script-shot-description-reference.test.mjs
+      - name: Commit repair
+        run: |
+          git config user.name 'Codex'
+          git config user.email 'codex@openai.local'
+          git add \
+            _read_123_zip_20260821_180410/app.js \
+            _read_123_zip_20260821_180410/browser-bootstrap.js \
+            _read_123_zip_20260821_180410/styles/script-shot-description-structured-v2.css \
+            _read_123_zip_20260821_180410/tests/script-shot-description-structured-v2.test.mjs
+          git diff --cached --quiet && exit 0
+          git commit -m 'Structure script shot descriptions for readability'
+          git push origin main
