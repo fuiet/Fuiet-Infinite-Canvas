@@ -16,6 +16,11 @@ function withStoredCanvasState(state,run){
     else globalThis.CanvasBrowserStorageManager=previous;
   }
 }
+function videoRegistry(){
+  const src=fs.readFileSync(new URL('../video-protocol-registry.js',import.meta.url),'utf8');
+  const ctx={globalThis:{},URL};vm.createContext(ctx);vm.runInContext(src,ctx);
+  return ctx.globalThis.CanvasVideoProtocolRegistry;
+}
 
 test('video task restores all connected upstream refs and uses upstream text as prompt',()=>{
   const task=Upstream.normalizeTask({
@@ -33,7 +38,7 @@ test('video task restores all connected upstream refs and uses upstream text as 
   assert.equal(task.parameters.videoMode,'image2video');
   assert.equal(task.parameters.generationMode,'image2video');
   assert.equal(task.parameters.operation,'image2video');
-  assert.deepEqual(task.parameters.upstreamInputContract,{version:2,connected:true,textCount:1,mediaCount:1,scriptAssetCount:0,localPromptOptional:true});
+  assert.deepEqual(task.parameters.upstreamInputContract,{version:3,connected:true,textCount:1,mediaCount:1,scriptAssetCount:0,scriptStyleCount:0,localPromptOptional:true});
 });
 
 test('script batch task inherits uploaded character scene and prop media without canvas image nodes',()=>{
@@ -60,6 +65,7 @@ test('script batch task inherits uploaded character scene and prop media without
     ]);
     assert.deepEqual(task.references.map(ref=>ref.role).sort(),['character_reference','image_reference','scene_reference']);
     assert.equal(task.parameters.upstreamInputContract.scriptAssetCount,3);
+    assert.equal(task.parameters.upstreamInputContract.scriptStyleCount,0);
     assert.equal(task.parameters.upstreamInputContract.mediaCount,3);
   });
 });
@@ -98,6 +104,67 @@ test('script asset fallback also recovers a named asset when legacy assetRefs is
   });
 });
 
+test('global script style media URLs and canvas nodes become style references',()=>{
+  withStoredCanvasState({nodes:[
+    {id:'style-node-1',type:'image',title:'胶片风格',outputUrl:'https://cdn.example.com/style-node.png'},
+    {id:'script-1',type:'script',scriptData:{
+      globalStyle:{text:'90 年代胶片电影质感',referenceMediaUrls:['https://cdn.example.com/style-upload.png'],referenceNodeIds:['style-node-1']},
+      assets:{characters:[],scenes:[],props:[]},
+      shots:[{id:'shot-1',characters:'',scene:'街道',props:'',action:'人物走过街道',dialogue:'',assetRefs:[]}]
+    }}
+  ]},()=>{
+    const task=Upstream.normalizeTask({nodeType:'image',prompt:'最终画面提示词',references:[],parameters:{scriptNodeId:'script-1',shotId:'shot-1'}});
+    const styleRefs=task.references.filter(ref=>ref.kind==='script_style');
+    assert.equal(styleRefs.length,2);
+    assert.deepEqual(styleRefs.map(ref=>ref.url).sort(),['https://cdn.example.com/style-node.png','https://cdn.example.com/style-upload.png']);
+    assert.ok(styleRefs.every(ref=>ref.role==='style_reference'));
+    assert.equal(task.parameters.upstreamInputContract.scriptStyleCount,2);
+  });
+});
+
+test('single semantic character reference stays reference-to-video instead of becoming a first frame',()=>{
+  withStoredCanvasState({nodes:[{
+    id:'script-1',type:'script',scriptData:{
+      globalStyle:{text:'',referenceMediaUrls:[],referenceNodeIds:[]},
+      assets:{characters:[{id:'char-1',name:'小林',mediaUrl:'https://cdn.example.com/xiaolin.png'}],scenes:[],props:[]},
+      shots:[{id:'shot-1',characters:'小林',scene:'',props:'',action:'小林向镜头走来',dialogue:'',assetRefs:['char-1']}]
+    }
+  }]},()=>{
+    const task=Upstream.normalizeTask({nodeType:'video',prompt:'小林缓慢向镜头走来',references:[],parameters:{scriptNodeId:'script-1',shotId:'shot-1',videoMode:'text2video',generationMode:'text2video'}});
+    assert.equal(task.parameters.operation,'reference2video');
+    assert.equal(task.parameters.videoMode,'omni_reference');
+    assert.equal(task.parameters.generationMode,'omni_reference');
+    const V=videoRegistry(),operation=V.detectOperation({references:task.references,parameters:task.parameters});
+    assert.equal(operation,'reference-to-video');
+    const mapped=V.mapRequest(
+      {baseUrl:'https://xogpu.com/v1'},
+      {id:'MiniMax-H3',name:'MiniMax H3'},
+      task,
+      {protocolFamily:'xogpu-minimax-h3',videoOperation:operation},
+      task.references
+    );
+    const image=mapped.body.content.find(item=>item.type==='image_url');
+    assert.equal(image.role,'reference_image');
+    assert.equal(image.image_url.url,'https://cdn.example.com/xiaolin.png');
+  });
+});
+
+test('single style reference also stays reference-to-video',()=>{
+  withStoredCanvasState({nodes:[{
+    id:'script-1',type:'script',scriptData:{
+      globalStyle:{text:'复古胶片',referenceMediaUrls:['https://cdn.example.com/style.png'],referenceNodeIds:[]},
+      assets:{characters:[],scenes:[],props:[]},
+      shots:[{id:'shot-1',characters:'',scene:'街道',props:'',action:'街道空镜',dialogue:'',assetRefs:[]}]
+    }
+  }]},()=>{
+    const task=Upstream.normalizeTask({nodeType:'video',prompt:'街道空镜',references:[],parameters:{scriptNodeId:'script-1',shotId:'shot-1',videoMode:'text2video'}});
+    assert.equal(task.references.length,1);
+    assert.equal(task.references[0].role,'style_reference');
+    assert.equal(task.parameters.operation,'reference2video');
+    assert.equal(task.parameters.videoMode,'omni_reference');
+  });
+});
+
 test('single connected image becomes XOGPU first frame instead of weak omni reference',()=>{
   const task=Upstream.normalizeTask({
     nodeType:'video',prompt:'',references:[],
@@ -106,9 +173,7 @@ test('single connected image becomes XOGPU first frame instead of weak omni refe
       {id:'image-1',type:'image',role:'reference',url:'https://cdn.example.com/character.png'}
     ]}}
   });
-  const src=fs.readFileSync(new URL('../video-protocol-registry.js',import.meta.url),'utf8');
-  const ctx={globalThis:{},URL};vm.createContext(ctx);vm.runInContext(src,ctx);
-  const V=ctx.globalThis.CanvasVideoProtocolRegistry;
+  const V=videoRegistry();
   const operation=V.detectOperation({references:task.references,parameters:task.parameters});
   assert.equal(operation,'image-to-video');
   const mapped=V.mapRequest(
