@@ -1,0 +1,45 @@
+name: Patch generated image click generator
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/patch-image-result-generator-on-click.py'
+      - '.github/workflows/patch-image-result-generator-on-click.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply click behavior patch
+        run: python scripts/patch-image-result-generator-on-click.py
+      - name: Syntax check
+        working-directory: _read_123_zip_20260821_180410
+        run: |
+          node --check app.js
+          node --check browser-bootstrap.js
+      - name: Focused regression tests
+        run: node --test _read_123_zip_20260821_180410/tests/image-result-generator-on-click.test.mjs
+      - name: Commit runtime change
+        run: |
+          git config user.name 'Codex'
+          git config user.email 'codex@openai.local'
+          git add \
+            _read_123_zip_20260821_180410/app.js \
+            _read_123_zip_20260821_180410/browser-bootstrap.js \
+            _read_123_zip_20260821_180410/tests/image-result-generator-on-click.test.mjs
+          if git diff --cached --quiet; then
+            echo 'No runtime changes needed.'
+            exit 0
+          fi
+          git commit -m 'Open image generator when clicking generated image nodes'
+          git push origin main
