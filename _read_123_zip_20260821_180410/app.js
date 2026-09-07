@@ -3261,7 +3261,7 @@
       // Shift-click is a true multi-select action. Do not collapse the selection on pointerup.
       expandedNodeId=null;
       state.nodes.forEach(n=>n.selected=n.id===selectedId);
-    }else{const clicked=state.nodes.find(n=>n.id===finished.id),clickedState=clicked?uiV23NodeContentState(clicked):'';expandedNodeId=clicked&&(clickedState==='empty'||(clicked.type==='script'&&clickedState==='result'))?finished.id:null;selectedId=finished.id;state.selectedIds=[finished.id];state.nodes.forEach(n=>n.selected=n.id===finished.id);}
+    }else{const clicked=state.nodes.find(n=>n.id===finished.id),clickedState=clicked?uiV23NodeContentState(clicked):'',openGenerator=clicked&&(clickedState==='empty'||(clicked.type==='image'&&clickedState==='result')||(clicked.type==='script'&&clickedState==='result'));expandedNodeId=openGenerator?finished.id:null;selectedId=finished.id;state.selectedIds=[finished.id];state.nodes.forEach(n=>n.selected=n.id===finished.id);}
     render();
   }
 
