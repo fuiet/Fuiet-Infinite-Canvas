@@ -13,7 +13,7 @@
 const clean=value=>String(value??'').trim();
 const list=value=>Array.isArray(value)?value:[];
 const clone=value=>{try{return JSON.parse(JSON.stringify(value??null))}catch{return null}};
-const esc=value=>clean(value).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+const esc=value=>clean(value).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[ch]));
 const now=()=>new Date().toISOString();
 
 function readState(){
@@ -33,9 +33,12 @@ function selectedProductionNode(ctx,task={}){
   if(!ctx)return null;
   const key=ctx.type==='video'?'selectedVideoNodeId':'selectedImageNodeId',selectedId=clean(ctx.shot?.outputs?.[key]);
   const matches=node=>node&&clean(node.type).toLowerCase()===ctx.type&&clean(node.toolParams?.scriptNodeId)===ctx.scriptNodeId&&clean(node.toolParams?.shotId)===ctx.shotId;
-  const selected=ctx.nodes.find(node=>String(node?.id)===selectedId);if(matches(selected))return selected;
   const candidates=ctx.nodes.filter(matches);if(!candidates.length)return null;
-  const prompt=clean(task.prompt),exact=[...candidates].reverse().find(node=>clean(node.prompt)===prompt);return exact||candidates[candidates.length-1];
+  const prompt=clean(task.prompt),activeStatuses=new Set(['queued','fallback','retrying','running','polling','provider_succeeded','result_pending']);
+  const activeExact=[...candidates].reverse().find(node=>activeStatuses.has(clean(node.taskStatus).toLowerCase())&&clean(node.prompt)===prompt);if(activeExact)return activeExact;
+  const exact=[...candidates].reverse().find(node=>clean(node.prompt)===prompt);if(exact)return exact;
+  const selected=ctx.nodes.find(node=>String(node?.id)===selectedId);if(matches(selected))return selected;
+  const active=[...candidates].reverse().find(node=>activeStatuses.has(clean(node.taskStatus).toLowerCase()));return active||candidates[candidates.length-1];
 }
 function legacySourcePrompt(ctx){return clean(ctx?.type==='video'?ctx?.shot?.videoPrompt:ctx?.shot?.imagePrompt)}
 function sourceRecord(task={},state=readState()){
