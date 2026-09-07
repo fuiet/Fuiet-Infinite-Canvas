@@ -23,7 +23,7 @@ const canvasScripts=[
   `./script-inline-asset-refs-v1.js?v=${v}`,
   `./image-node-display-normalizer-v1.js?v=${v}`,
   `./script-asset-node-layout-v1.js?v=${v}`,
-  `./app.js?v=${v}&fix=generator-input-focus-1&ui=text-result-editor-1&wheel=text-editor-1&refs=generator-reference-strip-1&scriptclick=toolbar-3&scriptgen=panel-4&shotdesc=reference-1&resultimagegen=1`,
+  `./app.js?v=${v}&fix=generator-input-focus-1&ui=text-result-editor-1&wheel=text-editor-1&refs=generator-reference-strip-1&scriptclick=toolbar-3&scriptgen=panel-4&shotdesc=reference-1&resultimagegen=1&imageStudio=removed-1`,
   `./script-shot-description-editor-highlight-v1.js?v=${shotEditorV}`,
   `./script-prompt-asset-source-v1.js?v=${promptV}`,
   `./script-final-prompt-v2.js?v=${promptV}`,
