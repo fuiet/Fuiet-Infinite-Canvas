@@ -8,6 +8,15 @@ const require=createRequire(import.meta.url);
 const Upstream=require('../upstream-generation-inputs-v1.js');
 const Images=require('../model-image-capabilities.js');
 
+function withStoredCanvasState(state,run){
+  const previous=globalThis.CanvasBrowserStorageManager;
+  globalThis.CanvasBrowserStorageManager={getItem:key=>key==='libtv-clone-state'?JSON.stringify(state):null};
+  try{return run()}finally{
+    if(previous===undefined)delete globalThis.CanvasBrowserStorageManager;
+    else globalThis.CanvasBrowserStorageManager=previous;
+  }
+}
+
 test('video task restores all connected upstream refs and uses upstream text as prompt',()=>{
   const task=Upstream.normalizeTask({
     nodeType:'video',
@@ -24,7 +33,69 @@ test('video task restores all connected upstream refs and uses upstream text as 
   assert.equal(task.parameters.videoMode,'image2video');
   assert.equal(task.parameters.generationMode,'image2video');
   assert.equal(task.parameters.operation,'image2video');
-  assert.deepEqual(task.parameters.upstreamInputContract,{version:1,connected:true,textCount:1,mediaCount:1,localPromptOptional:true});
+  assert.deepEqual(task.parameters.upstreamInputContract,{version:2,connected:true,textCount:1,mediaCount:1,scriptAssetCount:0,localPromptOptional:true});
+});
+
+test('script batch task inherits uploaded character scene and prop media without canvas image nodes',()=>{
+  withStoredCanvasState({nodes:[{
+    id:'script-1',type:'script',scriptData:{
+      assets:{
+        characters:[{id:'char-1',name:'小林',prompt:'短发青年',mediaUrl:'https://cdn.example.com/xiaolin.png'}],
+        scenes:[{id:'scene-1',name:'客厅',prompt:'暖色现代客厅',mediaUrl:'https://cdn.example.com/living-room.png'}],
+        props:[{id:'prop-1',name:'红色钥匙',prompt:'红色金属钥匙',mediaUrl:'https://cdn.example.com/key.png'}]
+      },
+      shots:[{id:'shot-1',characters:'小林',scene:'客厅',props:'红色钥匙',action:'小林在客厅拿起红色钥匙',dialogue:'',assetRefs:['char-1','scene-1','prop-1']}]
+    }
+  }]},()=>{
+    const task=Upstream.normalizeTask({
+      nodeType:'image',prompt:'已经确认的最终图像提示词',references:[],
+      parameters:{scriptNodeId:'script-1',shotId:'shot-1',creativeContext:{linkedReferences:[]}}
+    });
+    assert.equal(task.prompt,'已经确认的最终图像提示词');
+    assert.equal(task.references.length,3);
+    assert.deepEqual(task.references.map(ref=>ref.url).sort(),[
+      'https://cdn.example.com/key.png',
+      'https://cdn.example.com/living-room.png',
+      'https://cdn.example.com/xiaolin.png'
+    ]);
+    assert.deepEqual(task.references.map(ref=>ref.role).sort(),['character_reference','image_reference','scene_reference']);
+    assert.equal(task.parameters.upstreamInputContract.scriptAssetCount,3);
+    assert.equal(task.parameters.upstreamInputContract.mediaCount,3);
+  });
+});
+
+test('script asset fallback de-duplicates an already connected media reference',()=>{
+  withStoredCanvasState({nodes:[{
+    id:'script-1',type:'script',scriptData:{
+      assets:{characters:[{id:'char-1',name:'小林',mediaUrl:'https://cdn.example.com/xiaolin.png'}],scenes:[],props:[]},
+      shots:[{id:'shot-1',characters:'小林',scene:'',props:'',action:'小林看向镜头',dialogue:'',assetRefs:['char-1']}]
+    }
+  }]},()=>{
+    const task=Upstream.normalizeTask({
+      nodeType:'image',prompt:'final',
+      references:[{id:'image-node-1',sourceNodeId:'image-node-1',type:'image',role:'character_reference',url:'https://cdn.example.com/xiaolin.png'}],
+      parameters:{scriptNodeId:'script-1',shotId:'shot-1',creativeContext:{linkedReferences:[]}}
+    });
+    assert.equal(task.references.length,1);
+    assert.equal(task.references[0].id,'image-node-1');
+    assert.equal(task.references[0].url,'https://cdn.example.com/xiaolin.png');
+    assert.equal(task.parameters.upstreamInputContract.mediaCount,1);
+    assert.equal(task.parameters.upstreamInputContract.scriptAssetCount,0);
+  });
+});
+
+test('script asset fallback also recovers a named asset when legacy assetRefs is empty',()=>{
+  withStoredCanvasState({nodes:[{
+    id:'script-1',type:'script',scriptData:{
+      assets:{characters:[],scenes:[],props:[{id:'prop-1',name:'红色钥匙',mediaUrl:'https://cdn.example.com/key.png'}]},
+      shots:[{id:'shot-1',characters:'',scene:'',props:'红色钥匙',action:'手拿起红色钥匙',dialogue:'',assetRefs:[]}]
+    }
+  }]},()=>{
+    const task=Upstream.normalizeTask({nodeType:'image',prompt:'final',references:[],parameters:{scriptNodeId:'script-1',shotId:'shot-1'}});
+    assert.equal(task.references.length,1);
+    assert.equal(task.references[0].assetId,'prop-1');
+    assert.equal(task.references[0].role,'image_reference');
+  });
 });
 
 test('single connected image becomes XOGPU first frame instead of weak omni reference',()=>{
