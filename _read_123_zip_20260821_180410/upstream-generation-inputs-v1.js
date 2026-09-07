@@ -1,5 +1,5 @@
 /* Fuiet Infinite Canvas · upstream generation input contract
- * Connected upstream nodes are generation inputs, not decorative graph metadata.
+ * Connected upstream nodes are mandatory generation inputs for every generation modality, not decorative graph metadata.
  * - text/script upstream nodes become the effective prompt
  * - media upstream nodes remain real provider references
  * - script batch nodes inherit confirmed shot assets and global style references
@@ -17,6 +17,7 @@
 
 const TEXT_TYPES=new Set(['text','script','markdown']);
 const MEDIA_TYPES=new Set(['image','video','audio']);
+const GENERATION_TYPES=new Set(['text','script','image','video','audio']);
 const clean=value=>String(value??'').trim();
 const list=value=>Array.isArray(value)?value:[];
 
@@ -179,11 +180,11 @@ function scriptPromptProvenance(task={},options={}){
 }
 function normalizeTask(task={}){
   const type=clean(task.nodeType).toLowerCase();
-  if(!['image','video'].includes(type))return task;
+  if(!GENERATION_TYPES.has(type))return task;
   const refs=linkedReferences(task),generatorPrompt=clean(task.prompt),prompt=effectivePrompt(task,refs);
   const textCount=upstreamTextParts(refs).length,mediaCount=mediaReferences(refs).length;
   const parameters=type==='video'?referenceVideoParameters(task,refs):{...(task.parameters||{})};
-  const promptProvenance=scriptPromptProvenance({...task,parameters},{generatorPrompt,providerPrompt:prompt});
+  const promptProvenance=['image','video'].includes(type)?scriptPromptProvenance({...task,parameters},{generatorPrompt,providerPrompt:prompt}):null;
   return{
     ...task,
     prompt,
@@ -191,7 +192,7 @@ function normalizeTask(task={}){
     parameters:{
       ...parameters,
       ...(promptProvenance?{promptProvenance}:{}),
-      upstreamInputContract:{version:4,connected:refs.length>0,textCount,mediaCount,scriptAssetCount:refs.filter(ref=>clean(ref.kind)==='script_asset').length,scriptStyleCount:refs.filter(ref=>clean(ref.kind)==='script_style').length,promptProvenance:Boolean(promptProvenance),localPromptOptional:refs.length>0}
+      upstreamInputContract:{version:5,connected:refs.length>0,textCount,mediaCount,scriptAssetCount:refs.filter(ref=>clean(ref.kind)==='script_asset').length,scriptStyleCount:refs.filter(ref=>clean(ref.kind)==='script_style').length,promptProvenance:Boolean(promptProvenance),localPromptOptional:refs.length>0}
     }
   };
 }

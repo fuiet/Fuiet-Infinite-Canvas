@@ -838,6 +838,47 @@ function updateTask(task, patch) {
 function taskLog(task,message,level='info'){store.appendTaskLog(task.id,message,level);const fresh=store.getTask(task.id);if(fresh)Object.assign(task,fresh)}
 function assertTaskActive(task){const fresh=store.getTask(task.id);if(fresh?.cancelRequested||fresh?.status==='canceled')throw Object.assign(new Error('任务已取消'),{code:'TASK_CANCELLED'});}
 
+function mergeUpstreamReferenceText(prompt,references=[]){
+  const local=String(prompt||'').trim(),parts=[];
+  const add=value=>{value=String(value||'').trim();if(!value||parts.includes(value)||local.includes(value))return;parts.push(value)};
+  for(const ref of (Array.isArray(references)?references:[])){
+    const type=String(ref?.type||ref?.kind||'').toLowerCase();
+    if(['text','script','markdown'].includes(type))add(ref?.text);
+  }
+  if(local)parts.push(local);
+  return parts.join('\n\n');
+}
+function upstreamMediaReferenceManifest(references=[]){
+  const rows=[];
+  for(const ref of (Array.isArray(references)?references:[])){
+    const type=String(ref?.type||ref?.kind||'').toLowerCase(),url=String(ref?.url||ref?.outputUrl||ref?.value||'').trim();
+    if(!['image','video','audio'].includes(type)||!url)continue;
+    const label=type==='image'?'图片':type==='video'?'视频':'音频',title=String(ref?.title||ref?.role||ref?.semanticRole||'参考素材').trim();
+    rows.push(`- ${label}「${title}」：${url}`);
+  }
+  return rows.length?'【上游媒体参考】\n'+rows.join('\n'):'';
+}
+function providerTextReferenceContent(model,prompt,references=[],mode='chat'){
+  const refs=Array.isArray(references)?references:[],caps=model?.capabilities||{};
+  const images=refs.filter(ref=>String(ref?.type||ref?.kind||'').toLowerCase()==='image'&&String(ref?.url||'').trim()).slice(0,12);
+  const videos=refs.filter(ref=>String(ref?.type||ref?.kind||'').toLowerCase()==='video'&&String(ref?.url||'').trim()).slice(0,6);
+  const audios=refs.filter(ref=>String(ref?.type||ref?.kind||'').toLowerCase()==='audio'&&String(ref?.url||'').trim()).slice(0,6);
+  const supportsVision=caps.supportsVision===true,supportsVideo=caps.supportsVideoUnderstanding===true;
+  const fallback=[...(!supportsVision?images:[]),...(mode==='chat'&&supportsVideo?[]:videos),...audios];
+  let text=mergeUpstreamReferenceText(prompt,refs),manifest=upstreamMediaReferenceManifest(fallback);
+  if(manifest)text=[text,manifest].filter(Boolean).join('\n\n');
+  if(!text)text='请严格参考已连接的上游节点内容完成生成。';
+  if(mode==='responses'){
+    const content=[{type:'input_text',text}];
+    if(supportsVision)for(const ref of images)content.push({type:'input_image',image_url:ref.url});
+    return{text,content};
+  }
+  const content=[{type:'text',text}];
+  if(supportsVision)for(const ref of images)content.push({type:'image_url',image_url:{url:ref.url}});
+  if(supportsVideo)for(const ref of videos)content.push({type:'video_url',video_url:{url:ref.url}});
+  return{text,content:content.length>1?content:text};
+}
+
 async function executeGeneric(task, provider, model, payload) {
   const ctx = {
     model: model.id,
@@ -876,10 +917,12 @@ async function executeGeneric(task, provider, model, payload) {
   let body = renderTemplate(opConfig.requestTemplate || model.requestTemplate, ctx);
   // 兼容旧版本保存的 {model,prompt} 模板：标准 chat/completions 需要 messages。
   if(isChatCompletions && (!body || !Array.isArray(body.messages))){
-    body={model:model.id,messages:[{role:'user',content:payload.prompt||''}]};
+    const mapped=providerTextReferenceContent(model,payload.prompt||'',payload.references||[],'chat');
+    body={model:model.id,messages:[{role:'user',content:mapped.content}]};
     if(payload.parameters?.responseFormat==='json_object')body.response_format={type:'json_object'};
   } else if(isResponses && (!body || body.input==null)){
-    body={model:model.id,input:payload.prompt||''};
+    const mapped=providerTextReferenceContent(model,payload.prompt||'',payload.references||[],'responses');
+    body={model:model.id,input:mapped.content.length>1?[{role:'user',content:mapped.content}]:mapped.text};
   } else if(isImageGenerations && (!body || (!body.prompt && !body.input))){
     body={model:model.id,prompt:payload.prompt||'',n:payload.parameters?.count||1};
   }
@@ -941,19 +984,17 @@ async function executeGeneric(task, provider, model, payload) {
 }
 
 async function executeOpenAIChat(task, provider, model, payload, useResponses=false) {
-  const sem=semanticContext(payload.references||[]);const refs=payload.references||[];
+  const refs=payload.references||[];
   updateTask(task,{progress:10});
   if(useResponses){
-    const input=[{role:'user',content:[{type:'input_text',text:payload.prompt||''}]}];
-    for(const r of refs.filter(x=>x.type==='image'&&x.url).slice(0,12))input[0].content.push({type:'input_image',image_url:r.url});
+    const mapped=providerTextReferenceContent(model,payload.prompt||'',refs,'responses');
+    const input=mapped.content.length>1?[{role:'user',content:mapped.content}]:mapped.text;
     const body={model:model.id,input};
     const data=await fetchJson(joinUrl(provider.baseUrl,'/v1/responses'),{method:'POST',headers:providerHeaders(provider),body:JSON.stringify(body),timeoutMs:120000,provider});
     return normalizeOutput(deepGet(data,'output_text')??deepGet(data,'output.0.content.0.text')??data,'text',provider);
   }
-  let content=payload.prompt||'';
-  const imageRefs=refs.filter(x=>x.type==='image'&&x.url).slice(0,12);
-  if(model.capabilities?.supportsVision&&imageRefs.length){content=[{type:'text',text:payload.prompt||''},...imageRefs.map(r=>({type:'image_url',image_url:{url:r.url},semantic_role:r.role||'reference'}))]}
-  const body={model:model.id,messages:[{role:'user',content}]};
+  const mapped=providerTextReferenceContent(model,payload.prompt||'',refs,'chat');
+  const body={model:model.id,messages:[{role:'user',content:mapped.content}]};
   if(payload.parameters?.responseFormat==='json_object'||payload.parameters?.operation==='script_breakdown'||payload.parameters?.operation==='prompt_synthesis')body.response_format={type:'json_object'};
   const data=await fetchJson(joinUrl(provider.baseUrl,'/v1/chat/completions'),{method:'POST',headers:providerHeaders(provider),body:JSON.stringify(body),timeoutMs:120000,provider});
   return normalizeOutput(deepGet(data,'choices.0.message.content')??data,'text',provider);

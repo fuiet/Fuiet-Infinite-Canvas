@@ -13,9 +13,9 @@ test('XOGPU keeps the known-working internal billing group',()=>{
 });
 
 test('browser loads a fresh XOGPU runtime after rollback',()=>{
-  assert.ok(router.includes('browser-runtime-preview.js?v=20260902-xogpu-baseline-runtime-1'));
-  assert.ok(index.includes('provider-adapter-contract.js?v=20260902-xogpu-baseline-runtime-1'));
-  assert.ok(index.includes('browser-runtime.js?v=20260902-xogpu-baseline-runtime-1'));
+  assert.ok(router.includes('browser-runtime-preview.js?v=20260907-universal-upstream-inputs-1'));
+  assert.ok(index.includes('provider-adapter-contract.js?v=20260907-universal-upstream-inputs-1'));
+  assert.ok(index.includes('browser-runtime.js?v=20260907-universal-upstream-inputs-1'));
 });
 
 test('XOGPU create errors expose safe route diagnostics without credentials',()=>{

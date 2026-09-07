@@ -405,6 +405,47 @@ function xogpuStrictVideoBody(body={},route={}){
   if(Array.isArray(src.content)&&src.content.length)out.content=src.content;
   return out;
 }
+function mergeUpstreamReferenceText(prompt,references=[]){
+  const local=String(prompt||'').trim(),parts=[];
+  const add=value=>{value=String(value||'').trim();if(!value||parts.includes(value)||local.includes(value))return;parts.push(value)};
+  for(const ref of (Array.isArray(references)?references:[])){
+    const type=String(ref?.type||ref?.kind||'').toLowerCase();
+    if(['text','script','markdown'].includes(type))add(ref?.text);
+  }
+  if(local)parts.push(local);
+  return parts.join('\n\n');
+}
+function upstreamMediaReferenceManifest(references=[]){
+  const rows=[];
+  for(const ref of (Array.isArray(references)?references:[])){
+    const type=String(ref?.type||ref?.kind||'').toLowerCase(),url=String(ref?.url||ref?.outputUrl||ref?.value||'').trim();
+    if(!['image','video','audio'].includes(type)||!url)continue;
+    const label=type==='image'?'图片':type==='video'?'视频':'音频',title=String(ref?.title||ref?.role||ref?.semanticRole||'参考素材').trim();
+    rows.push(`- ${label}「${title}」：${url}`);
+  }
+  return rows.length?'【上游媒体参考】\n'+rows.join('\n'):'';
+}
+function providerTextReferenceContent(model,prompt,references=[],mode='chat'){
+  const refs=Array.isArray(references)?references:[],caps=model?.capabilities||{};
+  const images=refs.filter(ref=>String(ref?.type||ref?.kind||'').toLowerCase()==='image'&&String(ref?.url||'').trim()).slice(0,12);
+  const videos=refs.filter(ref=>String(ref?.type||ref?.kind||'').toLowerCase()==='video'&&String(ref?.url||'').trim()).slice(0,6);
+  const audios=refs.filter(ref=>String(ref?.type||ref?.kind||'').toLowerCase()==='audio'&&String(ref?.url||'').trim()).slice(0,6);
+  const supportsVision=caps.supportsVision===true,supportsVideo=caps.supportsVideoUnderstanding===true;
+  const fallback=[...(!supportsVision?images:[]),...(mode==='chat'&&supportsVideo?[]:videos),...audios];
+  let text=mergeUpstreamReferenceText(prompt,refs),manifest=upstreamMediaReferenceManifest(fallback);
+  if(manifest)text=[text,manifest].filter(Boolean).join('\n\n');
+  if(!text)text='请严格参考已连接的上游节点内容完成生成。';
+  if(mode==='responses'){
+    const content=[{type:'input_text',text}];
+    if(supportsVision)for(const ref of images)content.push({type:'input_image',image_url:ref.url});
+    return{text,content};
+  }
+  const content=[{type:'text',text}];
+  if(supportsVision)for(const ref of images)content.push({type:'image_url',image_url:{url:ref.url}});
+  if(supportsVideo)for(const ref of videos)content.push({type:'video_url',video_url:{url:ref.url}});
+  return{text,content:content.length>1?content:text};
+}
+
 function defaultRequestBody(provider,model,task,route,refs){
   const mod=normalizeMod(task.nodeType||model.modality),rawParams=task.parameters||{},p=mod==='image'?(ImageParams?.normalize?.(rawParams)||rawParams):mod==='video'?(VideoParams?.normalize?.(rawParams)||rawParams):rawParams,prompt=String(task.prompt||''),modelId=model.id;
   const ctx={model:modelId,prompt,references:refs,parameters:p,task};
@@ -415,10 +456,13 @@ function defaultRequestBody(provider,model,task,route,refs){
   if(isChatCompletions){
     const images=refs.filter(r=>r.url&&r.type==='image');
     if(Adapters?.isAgnesProvider?.(provider)&&images.some(r=>!/^https?:\/\//i.test(String(r.url||''))))throw new Error('Agnes 文本模型的图像理解仅支持公开可访问的 image_url；浏览器本地图片不能直接提交');
-    const content=images.length?[{type:'text',text:prompt},...images.map(r=>({type:'image_url',image_url:{url:r.url}}))]:prompt;
-    return{model:modelId,messages:[{role:'user',content}],...(p.responseFormat==='json_object'?{response_format:{type:'json_object'}}:{})};
+    const mapped=providerTextReferenceContent(model,prompt,refs,'chat');
+    return{model:modelId,messages:[{role:'user',content:mapped.content}],...(p.responseFormat==='json_object'?{response_format:{type:'json_object'}}:{})};
   }
-  if(route.adapterKey==='openai-responses')return{model:modelId,input:prompt};
+  if(route.adapterKey==='openai-responses'){
+    const mapped=providerTextReferenceContent(model,prompt,refs,'responses');
+    return{model:modelId,input:mapped.content.length>1?[{role:'user',content:mapped.content}]:mapped.text};
+  }
   if(route.adapterKey==='openai-image')return{model:modelId,prompt,n:Number(p.count||1),...(p.size?{size:p.size}:{}),...(p.quality?{quality:p.quality}:{}),...(p.aspectRatio?{aspect_ratio:p.aspectRatio}:{})};
   if(route.adapterKey==='openai-audio-speech')return{model:modelId,input:prompt,voice:p.voice||'alloy',...(p.format?{format:p.format}:{})};
   if(route.adapterKey==='comfyui-workflow')return{prompt:p.workflow||p.promptGraph||{},client_id:uid('browser_')};
