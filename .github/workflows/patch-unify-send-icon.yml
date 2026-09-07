@@ -1,0 +1,42 @@
+name: Patch unified send icon
+
+on:
+  push:
+    paths:
+      - '.github/workflows/patch-unify-send-icon.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply unified send icon patch
+        run: python scripts/patch-unify-send-icon.py
+      - name: Syntax check
+        run: |
+          node --check _read_123_zip_20260821_180410/node-send-icon-v1.js
+          node --check _read_123_zip_20260821_180410/browser-bootstrap.js
+      - name: Focused regression tests
+        run: node --test _read_123_zip_20260821_180410/tests/unified-send-icon.test.mjs
+      - name: Commit runtime change
+        run: |
+          git config user.name 'Codex'
+          git config user.email 'codex@openai.local'
+          git add _read_123_zip_20260821_180410/node-send-icon-v1.js \
+                  _read_123_zip_20260821_180410/browser-bootstrap.js \
+                  _read_123_zip_20260821_180410/tests/unified-send-icon.test.mjs
+          if git diff --cached --quiet; then
+            echo 'No runtime changes to commit.'
+            exit 0
+          fi
+          git commit -m 'Unify generation send icons across the canvas'
+          git push origin main
