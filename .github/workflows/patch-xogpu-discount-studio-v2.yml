@@ -1,0 +1,50 @@
+name: Patch XOGPU discount video studio v2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/patch-xogpu-discount-studio-v2.py'
+      - '.github/workflows/patch-xogpu-discount-studio-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply XOGPU discount studio transport repair
+        run: python scripts/patch-xogpu-discount-studio-v2.py
+      - name: Syntax check
+        working-directory: _read_123_zip_20260821_180410
+        run: npm run check
+      - name: Focused video transport tests
+        working-directory: _read_123_zip_20260821_180410
+        run: node --test tests/xogpu-minimax-h3.test.mjs tests/desktop-video-protocol-bridge.test.mjs tests/xogpu-discount-studio-contract.test.mjs tests/upstream-generation-inputs.test.mjs
+      - name: Commit repair
+        run: |
+          git config user.name 'Codex'
+          git config user.email 'codex@openai.local'
+          git add \
+            _read_123_zip_20260821_180410/video-protocol-registry.js \
+            _read_123_zip_20260821_180410/provider-adapter-contract.js \
+            _read_123_zip_20260821_180410/browser-runtime-preview.js \
+            _read_123_zip_20260821_180410/server.js \
+            _read_123_zip_20260821_180410/desktop-video-protocol-bridge.cjs \
+            _read_123_zip_20260821_180410/upstream-generation-inputs-v1.js \
+            _read_123_zip_20260821_180410/browser-runtime.js \
+            _read_123_zip_20260821_180410/browser-bootstrap.js \
+            _read_123_zip_20260821_180410/tests/xogpu-minimax-h3.test.mjs \
+            _read_123_zip_20260821_180410/tests/desktop-video-protocol-bridge.test.mjs \
+            _read_123_zip_20260821_180410/tests/xogpu-discount-studio-contract.test.mjs
+          git diff --cached --quiet && exit 0
+          git commit -m 'Use XOGPU discount studio multipart for video references'
+          git push origin main
