@@ -102,6 +102,7 @@ async function start(){
       loadStyle(`./styles/script-assets-layout-fix-v2.css?v=${v}`),
       loadStyle(`./styles/script-final-prompt-v2.css?v=${promptV}`),
       loadStyle(`./styles/script-final-prompt-workbench-v4.css?v=${promptWorkbenchV}`),
+      loadStyle(`./styles/script-final-prompt-layout-v5.css?v=${promptWorkbenchV}`),
       loadStyle(`./styles/script-prompt-provenance-v1.css?v=${batchInputV}`),
       loadStyle(`./styles/script-generator-reference-preview-v1.css?v=${batchInputV}`),
       loadStyle(`./styles/script-node-progress-v1.css?v=${v}&scriptclick=toolbar-3&scriptbar=large-1`),
