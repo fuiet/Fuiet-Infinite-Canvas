@@ -1,0 +1,55 @@
+name: Patch storyboard prompt workbench v5
+
+on:
+  push:
+    paths:
+      - '.github/workflows/patch-storyboard-prompt-workbench-v5.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply storyboard prompt workbench v5 patch
+        run: python scripts/patch-storyboard-prompt-workbench-v5.py
+      - name: Syntax check
+        run: |
+          node --check _read_123_zip_20260821_180410/app.js
+          node --check _read_123_zip_20260821_180410/script-workflow-core.js
+          node --check _read_123_zip_20260821_180410/script-final-prompt-rich-v1.js
+          node --check _read_123_zip_20260821_180410/script-final-prompt-workbench-v4.js
+          node --check _read_123_zip_20260821_180410/browser-bootstrap.js
+      - name: Focused regression tests
+        run: node --test _read_123_zip_20260821_180410/tests/storyboard-prompt-workbench-v5.test.mjs
+      - name: Preserve recent prompt UI regressions
+        run: |
+          if [ -f _read_123_zip_20260821_180410/tests/script-shot-description-reference.test.mjs ]; then node --test _read_123_zip_20260821_180410/tests/script-shot-description-reference.test.mjs; fi
+          if [ -f _read_123_zip_20260821_180410/tests/script-shot-dialogue-reference.test.mjs ]; then node --test _read_123_zip_20260821_180410/tests/script-shot-dialogue-reference.test.mjs; fi
+          if [ -f _read_123_zip_20260821_180410/tests/image-result-generator-on-click.test.mjs ]; then node --test _read_123_zip_20260821_180410/tests/image-result-generator-on-click.test.mjs; fi
+          if [ -f _read_123_zip_20260821_180410/tests/remove-image-studio.test.mjs ]; then node --test _read_123_zip_20260821_180410/tests/remove-image-studio.test.mjs; fi
+      - name: Commit runtime change
+        run: |
+          git config user.name 'Codex'
+          git config user.email 'codex@openai.local'
+          git add _read_123_zip_20260821_180410/app.js \
+                  _read_123_zip_20260821_180410/script-workflow-core.js \
+                  _read_123_zip_20260821_180410/script-final-prompt-rich-v1.js \
+                  _read_123_zip_20260821_180410/script-final-prompt-workbench-v4.js \
+                  _read_123_zip_20260821_180410/styles/script-final-prompt-workbench-v4.css \
+                  _read_123_zip_20260821_180410/browser-bootstrap.js \
+                  _read_123_zip_20260821_180410/tests/storyboard-prompt-workbench-v5.test.mjs
+          if git diff --cached --quiet; then
+            echo 'No runtime changes to commit.'
+            exit 0
+          fi
+          git commit -m 'Redesign prompt stage as storyboard image workbench'
+          git push origin main
