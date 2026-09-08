@@ -1,32 +1,46 @@
 /* Fuiet Script · Final Prompt Layout V5
  * Prompt-stage-only visual correction:
- * - remove the generic modal close chrome
+ * - remove generic modal close chrome
  * - keep all three workflow stages fully visible
- * - let V4 own the content surface without legacy DOM bleed-through
- * - raise prompt-page typography to desktop-readable sizes
+ * - hide legacy prompt DOM immediately when the prompt tab becomes active
+ * - raise every prompt-page font to a desktop-readable size
  */
 
-/* The Script Studio generic feature header is not part of the prompt workflow.
-   Hide it as soon as the prompts tab is active, before the workbench renderer runs. */
-#featureModal.script-studio-fullscreen:has([data-script-tab="prompts"].active) > .feature-dialog > .feature-head{
+/* The workflow rail is the only header on the prompt stage.
+   Hide the generic Script Studio header (including the top-left ×) regardless
+   of the exact feature-dialog nesting. */
+#featureModal.script-studio-fullscreen:has([data-script-tab="prompts"].active) .feature-head{
   display:none!important;
 }
 
-/* The workflow rail is the only header for this page. */
+/* Hide the old prompt UI as soon as the prompts tab is active. V4 still keeps
+   the legacy controls in DOM as a persistence bridge, but they must never be
+   visible for even one frame. */
+#featureModal.script-studio-fullscreen:has([data-script-tab="prompts"].active) #scriptEditorContent>:not(.fpv4-page),
+.fpv4-prompts-active #scriptEditorContent>:not(.fpv4-page){
+  display:none!important;
+}
+.fpv4-prompts-active .fpv4-page{
+  display:flex!important;
+}
+
+/* ----- Complete three-step workflow rail ----- */
 #featureModal.script-studio-fullscreen:has([data-script-tab="prompts"].active) .script-workflow-head.simplified{
-  min-height:84px!important;
-  padding:10px 28px!important;
+  min-height:88px!important;
+  height:auto!important;
+  padding:12px 28px!important;
   display:flex!important;
   align-items:center!important;
   justify-content:center!important;
   overflow:visible!important;
   background:#111417!important;
+  flex:0 0 auto!important;
 }
 #featureModal.script-studio-fullscreen:has([data-script-tab="prompts"].active) .script-workflow-steps{
-  width:min(860px,calc(100vw - 80px))!important;
-  max-width:860px!important;
+  width:min(900px,calc(100vw - 80px))!important;
+  max-width:900px!important;
   display:grid!important;
-  grid-template-columns:minmax(190px,220px) 54px minmax(190px,220px) 54px minmax(190px,220px)!important;
+  grid-template-columns:minmax(200px,230px) 56px minmax(200px,230px) 56px minmax(200px,230px)!important;
   align-items:center!important;
   justify-content:center!important;
   margin:0 auto!important;
@@ -34,15 +48,18 @@
 }
 #featureModal.script-studio-fullscreen:has([data-script-tab="prompts"].active) .script-workflow-steps>em{
   display:block!important;
-  width:54px!important;
+  width:56px!important;
   height:1px!important;
   background:#3a4147!important;
 }
 #featureModal.script-studio-fullscreen:has([data-script-tab="prompts"].active) .script-step{
-  min-width:190px!important;
-  min-height:54px!important;
-  padding:8px 12px!important;
-  gap:10px!important;
+  display:flex!important;
+  min-width:200px!important;
+  min-height:58px!important;
+  height:auto!important;
+  padding:9px 13px!important;
+  gap:11px!important;
+  align-items:center!important;
   border-radius:9px!important;
   overflow:visible!important;
 }
@@ -55,171 +72,176 @@
   color:#fff!important;
 }
 #featureModal.script-studio-fullscreen:has([data-script-tab="prompts"].active) .script-step i{
-  width:30px!important;
-  height:30px!important;
-  flex:0 0 30px!important;
-  font-size:13px!important;
+  width:31px!important;
+  height:31px!important;
+  flex:0 0 31px!important;
+  font-size:14px!important;
 }
 #featureModal.script-studio-fullscreen:has([data-script-tab="prompts"].active) .script-step span{
+  display:flex!important;
   min-width:0!important;
-  gap:3px!important;
+  flex-direction:column!important;
+  align-items:flex-start!important;
+  gap:4px!important;
 }
 #featureModal.script-studio-fullscreen:has([data-script-tab="prompts"].active) .script-step b{
-  font-size:15px!important;
+  display:block!important;
+  font-size:16px!important;
   line-height:1.2!important;
+  font-weight:650!important;
   white-space:nowrap!important;
 }
 #featureModal.script-studio-fullscreen:has([data-script-tab="prompts"].active) .script-step small{
   display:block!important;
   max-width:none!important;
-  color:#8e989f!important;
-  font-size:12px!important;
-  line-height:1.25!important;
+  color:#929ca3!important;
+  font-size:13px!important;
+  line-height:1.3!important;
   overflow:visible!important;
   text-overflow:clip!important;
   white-space:nowrap!important;
 }
 
-/* V4 must be self-contained; the hidden legacy prompt DOM remains only as the
-   persistence bridge and must never be visible behind/below the workbench. */
-.fpv4-prompts-active #scriptEditorContent>:not(.fpv4-page){
-  display:none!important;
-}
-.fpv4-prompts-active .fpv4-page{
-  display:flex!important;
+/* ----- Page-wide readable baseline ----- */
+.fpv4-prompts-active .fpv4-page,
+.fpv4-prompts-active .fpv4-page button,
+.fpv4-prompts-active .fpv4-page input,
+.fpv4-prompts-active .fpv4-page textarea{
   font-size:14px!important;
 }
 
-/* Main prompt page typography. */
 .fpv4-prompts-active .fpv4-topbar{
-  min-height:72px!important;
-  gap:20px!important;
-  padding:11px 24px!important;
+  min-height:76px!important;
+  gap:22px!important;
+  padding:12px 24px!important;
 }
-.fpv4-prompts-active .fpv4-title{gap:5px!important}
-.fpv4-prompts-active .fpv4-title strong{font-size:19px!important;line-height:1.2!important}
-.fpv4-prompts-active .fpv4-title span{font-size:13px!important;line-height:1.35!important;color:#8c969b!important}
-.fpv4-prompts-active .fpv4-progress>span{font-size:13px!important}
-.fpv4-prompts-active .fpv4-progress>i{width:150px!important;height:5px!important}
+.fpv4-prompts-active .fpv4-title{gap:6px!important}
+.fpv4-prompts-active .fpv4-title strong{font-size:20px!important;line-height:1.2!important}
+.fpv4-prompts-active .fpv4-title span{font-size:14px!important;line-height:1.4!important;color:#939da3!important}
+.fpv4-prompts-active .fpv4-progress>span{font-size:14px!important}
+.fpv4-prompts-active .fpv4-progress>i{width:160px!important;height:5px!important}
 .fpv4-prompts-active #fpv4Bulk{
-  height:38px!important;
-  padding:0 17px!important;
-  font-size:13px!important;
+  height:40px!important;
+  padding:0 18px!important;
+  font-size:14px!important;
 }
 
 .fpv4-prompts-active .fpv4-contextbar{
-  gap:12px!important;
-  padding:12px 24px!important;
+  gap:14px!important;
+  padding:13px 24px!important;
 }
 .fpv4-prompts-active .fpv4-contextbar label,
 .fpv4-prompts-active .fpv4-script-context{
   gap:12px!important;
-  padding:11px 13px!important;
+  padding:12px 14px!important;
 }
 .fpv4-prompts-active .fpv4-contextbar label>span,
-.fpv4-prompts-active .fpv4-script-context>span{font-size:13px!important}
-.fpv4-prompts-active .fpv4-contextbar input{height:34px!important;font-size:14px!important}
-.fpv4-prompts-active .fpv4-script-context b{font-size:13px!important}
-.fpv4-prompts-active .fpv4-script-context small{font-size:12px!important}
+.fpv4-prompts-active .fpv4-script-context>span{font-size:14px!important}
+.fpv4-prompts-active .fpv4-contextbar input{height:36px!important;font-size:15px!important}
+.fpv4-prompts-active .fpv4-script-context b{font-size:14px!important}
+.fpv4-prompts-active .fpv4-script-context small{font-size:12px!important;line-height:1.4!important}
 
 .fpv4-prompts-active .fpv4-list{
-  padding:16px 22px 28px!important;
+  padding:17px 22px 30px!important;
 }
-.fpv4-prompts-active .fpv4-card{margin-bottom:14px!important;border-radius:11px!important}
+.fpv4-prompts-active .fpv4-card{margin-bottom:15px!important;border-radius:11px!important}
 .fpv4-prompts-active .fpv4-card-head{
-  min-height:56px!important;
-  gap:14px!important;
-  padding:9px 14px!important;
+  min-height:60px!important;
+  gap:15px!important;
+  padding:10px 14px!important;
 }
-.fpv4-prompts-active .fpv4-shot-id{min-width:128px!important;gap:9px!important}
-.fpv4-prompts-active .fpv4-shot-id b{font-size:14px!important}
-.fpv4-prompts-active .fpv4-shot-id span{font-size:12px!important}
-.fpv4-prompts-active .fpv4-status{gap:7px!important;font-size:12px!important}
+.fpv4-prompts-active .fpv4-shot-id{min-width:132px!important;gap:9px!important}
+.fpv4-prompts-active .fpv4-shot-id b{font-size:15px!important}
+.fpv4-prompts-active .fpv4-shot-id span{font-size:13px!important}
+.fpv4-prompts-active .fpv4-status{gap:7px!important;font-size:13px!important}
 .fpv4-prompts-active .fpv4-status i{width:7px!important;height:7px!important}
-.fpv4-prompts-active .fpv4-ai-basis{gap:6px!important}
-.fpv4-prompts-active .fpv4-ai-basis>span{font-size:11px!important}
+.fpv4-prompts-active .fpv4-ai-basis{gap:7px!important}
+.fpv4-prompts-active .fpv4-ai-basis>span{font-size:12px!important}
 .fpv4-prompts-active .fpv4-ai-basis b{
-  height:24px!important;
-  padding:0 9px!important;
-  font-size:11px!important;
+  height:26px!important;
+  padding:0 10px!important;
+  font-size:12px!important;
 }
 .fpv4-prompts-active .fpv4-compose-one{
-  height:34px!important;
+  height:36px!important;
+  padding:0 14px!important;
+  font-size:13px!important;
+}
+
+.fpv4-prompts-active .fpv4-card-body{
+  grid-template-columns:minmax(380px,.9fr) minmax(620px,1.6fr)!important;
+  min-height:305px!important;
+}
+.fpv4-prompts-active .fpv4-source{padding:15px 17px!important}
+.fpv4-prompts-active .fpv4-source-title{gap:9px!important;margin-bottom:12px!important}
+.fpv4-prompts-active .fpv4-source-title strong{font-size:15px!important}
+.fpv4-prompts-active .fpv4-source-title span{font-size:12px!important}
+.fpv4-prompts-active .fpv4-param-chips{gap:7px!important;margin-bottom:13px!important}
+.fpv4-prompts-active .fpv4-param-chips span{
+  height:27px!important;
+  padding:0 10px!important;
+  font-size:12px!important;
+}
+.fpv4-prompts-active .fpv4-source-row{
+  grid-template-columns:90px minmax(0,1fr)!important;
+  gap:11px!important;
+  padding:10px 0!important;
+}
+.fpv4-prompts-active .fpv4-source-row>span{font-size:13px!important}
+.fpv4-prompts-active .fpv4-source-row>div{font-size:15px!important;line-height:1.65!important}
+.fpv4-prompts-active .fpv4-asset{
+  height:26px!important;
+  padding:0 10px!important;
+  font-size:12px!important;
+}
+.fpv4-prompts-active .fpv4-muted{font-size:13px!important}
+
+.fpv4-prompts-active .fpv4-editors{gap:11px!important;padding:13px!important}
+.fpv4-prompts-active .fpv4-prompt-box{border-radius:9px!important}
+.fpv4-prompts-active .fpv4-prompt-box>header{
+  gap:14px!important;
+  padding:11px 13px!important;
+}
+.fpv4-prompts-active .fpv4-prompt-box>header>div{gap:4px!important}
+.fpv4-prompts-active .fpv4-prompt-box>header strong{font-size:15px!important}
+.fpv4-prompts-active .fpv4-prompt-box>header span{font-size:12px!important;line-height:1.4!important}
+.fpv4-prompts-active .fpv4-prompt-box>header small{font-size:12px!important}
+.fpv4-prompts-active .fpv4-prompt-box textarea{
+  min-height:120px!important;
+  padding:13px 14px!important;
+  font-size:15px!important;
+  line-height:1.7!important;
+}
+.fpv4-prompts-active .fpv4-prompt-box>footer{
+  min-height:32px!important;
   padding:0 13px!important;
   font-size:12px!important;
 }
 
-.fpv4-prompts-active .fpv4-card-body{
-  grid-template-columns:minmax(360px,.9fr) minmax(600px,1.6fr)!important;
-  min-height:290px!important;
-}
-.fpv4-prompts-active .fpv4-source{padding:14px 16px!important}
-.fpv4-prompts-active .fpv4-source-title{gap:9px!important;margin-bottom:11px!important}
-.fpv4-prompts-active .fpv4-source-title strong{font-size:14px!important}
-.fpv4-prompts-active .fpv4-source-title span{font-size:11px!important}
-.fpv4-prompts-active .fpv4-param-chips{gap:6px!important;margin-bottom:12px!important}
-.fpv4-prompts-active .fpv4-param-chips span{
-  height:25px!important;
-  padding:0 9px!important;
-  font-size:11px!important;
-}
-.fpv4-prompts-active .fpv4-source-row{
-  grid-template-columns:84px minmax(0,1fr)!important;
-  gap:10px!important;
-  padding:9px 0!important;
-}
-.fpv4-prompts-active .fpv4-source-row>span{font-size:12px!important}
-.fpv4-prompts-active .fpv4-source-row>div{font-size:14px!important;line-height:1.6!important}
-.fpv4-prompts-active .fpv4-asset{
-  height:24px!important;
-  padding:0 9px!important;
-  font-size:11px!important;
-}
-.fpv4-prompts-active .fpv4-muted{font-size:12px!important}
-
-.fpv4-prompts-active .fpv4-editors{gap:10px!important;padding:12px!important}
-.fpv4-prompts-active .fpv4-prompt-box{border-radius:9px!important}
-.fpv4-prompts-active .fpv4-prompt-box>header{
-  gap:14px!important;
-  padding:10px 12px!important;
-}
-.fpv4-prompts-active .fpv4-prompt-box>header>div{gap:3px!important}
-.fpv4-prompts-active .fpv4-prompt-box>header strong{font-size:14px!important}
-.fpv4-prompts-active .fpv4-prompt-box>header span{font-size:11px!important}
-.fpv4-prompts-active .fpv4-prompt-box>header small{font-size:11px!important}
-.fpv4-prompts-active .fpv4-prompt-box textarea{
-  min-height:112px!important;
-  padding:12px 13px!important;
-  font-size:14px!important;
-  line-height:1.65!important;
-}
-.fpv4-prompts-active .fpv4-prompt-box>footer{
-  min-height:30px!important;
-  padding:0 12px!important;
-  font-size:11px!important;
-}
-
 .fpv4-prompts-active .fpv4-footer{
-  min-height:64px!important;
+  min-height:68px!important;
   padding:0 24px!important;
 }
-.fpv4-prompts-active .fpv4-footer>div{gap:3px!important}
-.fpv4-prompts-active .fpv4-footer strong{font-size:13px!important}
-.fpv4-prompts-active .fpv4-footer span{font-size:11px!important}
+.fpv4-prompts-active .fpv4-footer>div{gap:4px!important}
+.fpv4-prompts-active .fpv4-footer strong{font-size:14px!important}
+.fpv4-prompts-active .fpv4-footer span{font-size:12px!important}
 .fpv4-prompts-active #fpv4ToBatch{
-  height:38px!important;
-  padding:0 17px!important;
-  font-size:13px!important;
+  height:40px!important;
+  padding:0 18px!important;
+  font-size:14px!important;
 }
-.fpv4-prompts-active .fpv4-empty{font-size:14px!important}
+.fpv4-prompts-active .fpv4-empty{font-size:15px!important}
 
-/* Preserve the complete three-step header on normal desktop widths. */
+/* Preserve all three stages on narrower desktop windows instead of collapsing
+   them into the old compact rail. */
 @media(max-width:1100px){
   #featureModal.script-studio-fullscreen:has([data-script-tab="prompts"].active) .script-workflow-steps{
-    width:min(760px,calc(100vw - 40px))!important;
-    grid-template-columns:minmax(160px,200px) 36px minmax(160px,200px) 36px minmax(160px,200px)!important;
+    width:min(800px,calc(100vw - 36px))!important;
+    grid-template-columns:minmax(170px,205px) 38px minmax(170px,205px) 38px minmax(170px,205px)!important;
   }
-  #featureModal.script-studio-fullscreen:has([data-script-tab="prompts"].active) .script-workflow-steps>em{width:36px!important}
-  #featureModal.script-studio-fullscreen:has([data-script-tab="prompts"].active) .script-step{min-width:160px!important}
+  #featureModal.script-studio-fullscreen:has([data-script-tab="prompts"].active) .script-workflow-steps>em{width:38px!important}
+  #featureModal.script-studio-fullscreen:has([data-script-tab="prompts"].active) .script-step{min-width:170px!important;padding-inline:10px!important}
+  #featureModal.script-studio-fullscreen:has([data-script-tab="prompts"].active) .script-step b{font-size:15px!important}
+  #featureModal.script-studio-fullscreen:has([data-script-tab="prompts"].active) .script-step small{font-size:12px!important}
   .fpv4-prompts-active .fpv4-card-body{grid-template-columns:1fr!important}
 }
