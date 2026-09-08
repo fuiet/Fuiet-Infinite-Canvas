@@ -1,0 +1,137 @@
+/* Script Studio · exact shared workflow rail
+ * Final cascade guard: Confirm Shots is the source of truth.
+ * This file intentionally loads last so Prompt V5 / Assets reference styles
+ * can never resize the three-stage workflow header independently again.
+ */
+
+/* Compose Prompts used a higher-specificity #featureModal selector in V5.
+   Match that specificity and force the exact Confirm Shots geometry. */
+#featureModal.script-studio-fullscreen:has([data-script-tab="prompts"].active) .script-workflow-head.simplified{
+  flex:0 0 62px!important;
+  width:100%!important;
+  min-height:62px!important;
+  height:62px!important;
+  box-sizing:border-box!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  padding:0 70px!important;
+  border-bottom:1px solid #292d31!important;
+  background:#0f1113!important;
+  overflow:visible!important;
+}
+#featureModal.script-studio-fullscreen:has([data-script-tab="prompts"].active) .script-workflow-head.simplified .script-workflow-steps{
+  width:min(660px,70vw)!important;
+  max-width:none!important;
+  height:62px!important;
+  display:grid!important;
+  grid-template-columns:1fr 72px 1fr 72px 1fr!important;
+  align-items:center!important;
+  justify-content:center!important;
+  margin:0 auto!important;
+  padding:0!important;
+  overflow:visible!important;
+}
+#featureModal.script-studio-fullscreen:has([data-script-tab="prompts"].active) .script-workflow-head.simplified .script-workflow-steps>em{
+  display:block!important;
+  width:44px!important;
+  height:1px!important;
+  margin:0 auto!important;
+  background:#343a40!important;
+}
+#featureModal.script-studio-fullscreen:has([data-script-tab="prompts"].active) .script-workflow-head.simplified .script-step{
+  min-width:0!important;
+  width:100%!important;
+  min-height:0!important;
+  height:46px!important;
+  box-sizing:border-box!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:10px!important;
+  padding:8px 12px!important;
+  margin:0!important;
+  border:0!important;
+  border-radius:9px!important;
+  background:transparent!important;
+  color:#777f88!important;
+  text-align:center!important;
+  overflow:visible!important;
+}
+#featureModal.script-studio-fullscreen:has([data-script-tab="prompts"].active) .script-workflow-head.simplified .script-step:hover,
+#featureModal.script-studio-fullscreen:has([data-script-tab="prompts"].active) .script-workflow-head.simplified .script-step.active{
+  background:#202429!important;
+  color:#eef1f4!important;
+}
+#featureModal.script-studio-fullscreen:has([data-script-tab="prompts"].active) .script-workflow-head.simplified .script-step.done:not(.active){
+  background:transparent!important;
+  color:#777f88!important;
+}
+#featureModal.script-studio-fullscreen:has([data-script-tab="prompts"].active) .script-workflow-head.simplified .script-step i{
+  width:28px!important;
+  height:28px!important;
+  flex:0 0 28px!important;
+  box-sizing:border-box!important;
+  display:grid!important;
+  place-items:center!important;
+  margin:0!important;
+  padding:0!important;
+  border:1px solid #4a5159!important;
+  border-radius:50%!important;
+  background:transparent!important;
+  color:inherit!important;
+  font-size:12px!important;
+  line-height:1!important;
+  font-style:normal!important;
+}
+#featureModal.script-studio-fullscreen:has([data-script-tab="prompts"].active) .script-workflow-head.simplified .script-step.done i{
+  background:#eef1ef!important;
+  color:#16191c!important;
+  border-color:#eef1ef!important;
+}
+#featureModal.script-studio-fullscreen:has([data-script-tab="prompts"].active) .script-workflow-head.simplified .script-step span{
+  min-width:0!important;
+  display:flex!important;
+  flex-direction:column!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:3px!important;
+  margin:0!important;
+  padding:0!important;
+  text-align:center!important;
+}
+#featureModal.script-studio-fullscreen:has([data-script-tab="prompts"].active) .script-workflow-head.simplified .script-step b{
+  display:block!important;
+  margin:0!important;
+  padding:0!important;
+  font-size:13px!important;
+  line-height:16px!important;
+  font-weight:600!important;
+  white-space:nowrap!important;
+}
+#featureModal.script-studio-fullscreen:has([data-script-tab="prompts"].active) .script-workflow-head.simplified .script-step small{
+  display:block!important;
+  margin:0!important;
+  padding:0!important;
+  max-width:none!important;
+  color:#747c85!important;
+  font-size:10px!important;
+  line-height:13px!important;
+  font-weight:400!important;
+  white-space:nowrap!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+}
+
+@media(max-width:1000px){
+  #featureModal.script-studio-fullscreen:has([data-script-tab="prompts"].active) .script-workflow-head.simplified{
+    padding:0 24px!important;
+  }
+  #featureModal.script-studio-fullscreen:has([data-script-tab="prompts"].active) .script-workflow-head.simplified .script-workflow-steps{
+    width:80vw!important;
+    grid-template-columns:1fr 28px 1fr 28px 1fr!important;
+  }
+  #featureModal.script-studio-fullscreen:has([data-script-tab="prompts"].active) .script-workflow-head.simplified .script-workflow-steps>em{
+    width:28px!important;
+  }
+}
