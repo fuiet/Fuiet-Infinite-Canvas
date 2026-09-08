@@ -38,7 +38,7 @@ test('video task restores all connected upstream refs and uses upstream text as 
   assert.equal(task.parameters.videoMode,'image2video');
   assert.equal(task.parameters.generationMode,'image2video');
   assert.equal(task.parameters.operation,'image2video');
-  assert.deepEqual(task.parameters.upstreamInputContract,{version:5,connected:true,textCount:1,mediaCount:1,scriptAssetCount:0,scriptStyleCount:0,promptProvenance:false,localPromptOptional:true});
+  assert.deepEqual(task.parameters.upstreamInputContract,{version:6,connected:true,textCount:1,mediaCount:1,scriptAssetCount:0,scriptStyleCount:0,promptProvenance:false,localPromptOptional:true});
 });
 
 test('script batch task inherits uploaded character scene and prop media without canvas image nodes',()=>{
@@ -143,9 +143,11 @@ test('single semantic character reference stays reference-to-video instead of be
       {protocolFamily:'xogpu-minimax-h3',videoOperation:operation},
       task.references
     );
-    const image=mapped.body.content.find(item=>item.type==='image_url');
-    assert.equal(image.role,'reference_image');
-    assert.equal(image.image_url.url,'https://cdn.example.com/xiaolin.png');
+    assert.equal(mapped.body.model,'MiniMax-H3');
+    assert.equal(mapped.body.seconds,5);
+    assert.deepEqual(JSON.parse(mapped.body.metadata),{mode:'multi',ratio:'adaptive'});
+    assert.equal('content' in mapped.body,false);
+    assert.equal(task.references[0].url,'https://cdn.example.com/xiaolin.png');
   });
 });
 
@@ -183,9 +185,11 @@ test('single connected image becomes XOGPU first frame instead of weak omni refe
     {protocolFamily:'xogpu-minimax-h3',videoOperation:operation},
     task.references
   );
-  const image=mapped.body.content.find(item=>item.type==='image_url');
-  assert.equal(image.role,'first_frame');
-  assert.equal(image.image_url.url,'https://cdn.example.com/character.png');
+  assert.equal(mapped.body.model,'MiniMax-H3');
+  assert.equal(mapped.body.seconds,5);
+  assert.deepEqual(JSON.parse(mapped.body.metadata),{mode:'image',ratio:'adaptive'});
+  assert.equal('content' in mapped.body,false);
+  assert.equal(task.references.find(ref=>ref.type==='image').url,'https://cdn.example.com/character.png');
 });
 
 test('explicit first and last frames preserve frame generation semantics',()=>{

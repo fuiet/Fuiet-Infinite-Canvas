@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-const src=fs.readFileSync(new URL('../browser-runtime.js',import.meta.url),'utf8');
+const src=fs.readFileSync(new URL('../browser-runtime-preview.js',import.meta.url),'utf8');
 
 test('XOGPU specialized mapper wins before any generic requestTemplate',()=>{
   const priority=src.indexOf("if(mod==='video'&&String(route?.protocolFamily||route?.family||'').toLowerCase()==='xogpu-minimax-h3'");
@@ -9,16 +9,21 @@ test('XOGPU specialized mapper wins before any generic requestTemplate',()=>{
   assert.ok(priority>=0);assert.ok(template>priority);
 });
 
-test('XOGPU outbound video JSON is strict-whitelisted immediately before POST',()=>{
-  assert.match(src,/function xogpuStrictVideoBody\(body=\{\},route=\{\}\)/);
-  assert.match(src,/group:'discount_video_generation'/);
-  assert.match(src,/if\(Array\.isArray\(src\.content\)&&src\.content\.length\)out\.content=src\.content/);
-  assert.match(src,/portableizeVideoJsonBody\(body,route\)\.then\(value=>xogpuStrictVideoBody\(value,route\)\)/);
+test('XOGPU text-only JSON is strict and contains no media content array',()=>{
+  const start=src.indexOf('function xogpuStrictVideoBody('),end=src.indexOf('function mergeUpstreamReferenceText',start);
+  const fn=src.slice(start,end);
+  assert.match(fn,/group:'discount_video_generation'/);
+  assert.match(fn,/model:'MiniMax-H3'/);
+  assert.equal(/out\.content|content=src\.content/.test(fn),false);
 });
 
-test('XOGPU strict body does not copy legacy top-level image aliases',()=>{
-  const start=src.indexOf('function xogpuStrictVideoBody('),end=src.indexOf('function defaultRequestBody(',start);
-  const fn=src.slice(start,end);
-  assert.ok(fn.includes("const out={model:'MiniMax-H3'"));
-  assert.equal(/out\.(images|image|image_url|image_urls|seconds|size|aspect_ratio)\s*=/.test(fn),false);
+test('XOGPU media uses discount studio multipart exact fields',()=>{
+  assert.match(src,/function buildXogpuDiscountVideoForm/);
+  assert.match(src,/form\.append\('metadata',JSON\.stringify\(\{mode,ratio\}\)\)/);
+  for(const field of ['input_reference','end_reference','reference_images','reference_videos','reference_audios'])assert.ok(src.includes(`form,'${field}'`)||src.includes(`form.append('${field}'`));
+});
+
+test('XOGPU media route forbids silent JSON fallback',()=>{
+  assert.match(src,/route\.noJsonFallback\|\|route\.strictMediaTransport/);
+  assert.match(src,/route\?\.strictCreatePath\|\|!autoVideoRoute/);
 });

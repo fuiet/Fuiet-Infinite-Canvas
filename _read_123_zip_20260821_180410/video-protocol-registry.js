@@ -26,15 +26,23 @@ function detectFamily(provider={},model={}){
   return'generic-video';
 }
 function detectOperation({references=[],parameters={}}={}){
-  const raw=String(parameters.operation||parameters.videoOperation||'').trim().toLowerCase();
-  const aliases={'text2video':'text-to-video','t2v':'text-to-video','text_to_video':'text-to-video','image2video':'image-to-video','i2v':'image-to-video','image_to_video':'image-to-video','reference2video':'reference-to-video','reference_to_video':'reference-to-video','ref2video':'reference-to-video','first-last-frame':'first-last-frame','first_last_frame':'first-last-frame'};
-  const explicit=aliases[raw]||raw;
-  if(explicit&&!['generate','generation','video','video-generation','video_generation'].includes(explicit))return explicit;
-  const refs=Array.isArray(references)?references:[];
-  const images=refs.filter(r=>String(r?.type||r?.kind||'').toLowerCase()==='image'||/frame|image|reference/.test(String(r?.role||r?.semanticRole||'').toLowerCase()));
-  if(images.some(r=>/last/.test(String(r?.role||r?.semanticRole||'').toLowerCase())))return'first-last-frame';
-  if(images.length>1)return'reference-to-video';
+  const raw=String(parameters.generationMode||parameters.videoMode||parameters.operation||parameters.videoOperation||'').trim().toLowerCase();
+  const aliases={
+    'text2video':'text-to-video','t2v':'text-to-video','text_to_video':'text-to-video','text-video':'text-to-video','文生视频':'text-to-video',
+    'image2video':'image-to-video','i2v':'image-to-video','image_to_video':'image-to-video','image-video':'image-to-video','图生视频':'image-to-video',
+    'frame2video':'first-last-frame','first-last-frame':'first-last-frame','first_last_frame':'first-last-frame','首尾帧':'first-last-frame',
+    'omni_reference':'reference-to-video','omni-reference':'reference-to-video','omni':'reference-to-video','multimodal':'reference-to-video','multi-modal':'reference-to-video','reference2video':'reference-to-video','reference_to_video':'reference-to-video','ref2video':'reference-to-video','audio2video':'reference-to-video','全能参考':'reference-to-video','多模态':'reference-to-video'
+  };
+  const explicit=aliases[raw]||raw,refs=Array.isArray(references)?references:[];
+  const media=refs.filter(r=>['image','video','audio'].includes(String(r?.type||r?.kind||'').toLowerCase())||/frame|image|picture|video|motion|audio|voice|sound/.test(String(r?.role||r?.semanticRole||'').toLowerCase()));
+  const images=media.filter(r=>String(r?.type||r?.kind||'').toLowerCase()==='image'||/frame|image|picture/.test(String(r?.role||r?.semanticRole||'').toLowerCase()));
+  const hasVideoAudio=media.some(r=>['video','audio'].includes(String(r?.type||r?.kind||'').toLowerCase()));
+  const hasLast=images.some(r=>/last/.test(String(r?.role||r?.semanticRole||'').toLowerCase()));
+  if(explicit&&explicit!=='text-to-video'&&!['generate','generation','video','video-generation','video_generation'].includes(explicit))return explicit;
+  if(hasLast)return'first-last-frame';
+  if(hasVideoAudio||images.length>1)return'reference-to-video';
   if(images.length)return'image-to-video';
+  if(explicit==='text-to-video')return'text-to-video';
   return'text-to-video';
 }
 const COMMON_TASK_IDS=['id','task_id','taskId','request_id','requestId','job_id','jobId','data.id','data.task_id','data.taskId','data.request_id','data.job_id','task.id','data.task.id','job.id','data.job.id','result.id','result.task_id','result.taskId','result.task.id','video.id','data.video.id'];
@@ -66,24 +74,38 @@ function gatewayCandidates(family,operation){
 }
 function xogpuVideoProfile(provider,model,operation){
   const host=hostOf(provider),hint=hintOf(model);if(!((host==='xogpu.com'||host.endsWith('.xogpu.com'))&&/minimax[-_. ]?h3|\bh3\b/.test(hint)))return null;
-  const base=genericProfile('xogpu-minimax-h3');
-  return{...base,profile:'xogpu:minimax-h3',createPath:'/v1/videos',createCandidates:['/v1/videos'],pollPath:'/v1/videos/{{taskId}}',pollPathCandidates:['/v1/videos/{{taskId}}','/v1/tasks/{{taskId}}'],strictPollPath:true,taskIdPath:'id',taskIdPaths:['id','task_id','taskId',...COMMON_TASK_IDS],statusPath:'status',statusPaths:['status',...COMMON_STATUS],progressPath:'progress',progressPaths:['progress',...COMMON_PROGRESS],outputPath:'',outputPaths:[],contentPath:'/v1/videos/{{taskId}}/content',contentPathCandidates:['/v1/videos/{{taskId}}/content'],requestTransport:'json',referenceTransport:'url',allowOutputWithoutTerminalStatus:false,pollIntervalMs:15000,timeoutMs:3600000,videoOperation:operation};
+  const base=genericProfile('xogpu-minimax-h3'),media=operation!=='text-to-video';
+  return{...base,profile:'xogpu:minimax-h3',createPath:media?'/api/user/discount-video-studio/jobs':'/v1/videos',createCandidates:[media?'/api/user/discount-video-studio/jobs':'/v1/videos'],pollPath:'/v1/videos/{{taskId}}',pollPathCandidates:['/v1/videos/{{taskId}}','/api/user/discount-video-studio/jobs/{{taskId}}'],strictPollPath:true,strictCreatePath:true,taskIdPath:'id',taskIdPaths:['id','task_id','taskId',...COMMON_TASK_IDS],statusPath:'status',statusPaths:['status',...COMMON_STATUS],progressPath:'progress',progressPaths:['progress',...COMMON_PROGRESS],outputPath:'',outputPaths:[],contentPath:'/v1/videos/{{taskId}}/content',contentPathCandidates:['/v1/videos/{{taskId}}/content'],requestTransport:media?'multipart':'json',strictMediaTransport:media,noJsonFallback:media,referenceTransport:'auto',allowOutputWithoutTerminalStatus:false,pollIntervalMs:15000,timeoutMs:3600000,videoOperation:operation};
 }
 function xogpuMediaReference(value,type){const text=String(value||'').trim(),label=type==='image'?'图片':type==='video'?'参考视频':'参考音频';if(/^https:\/\//i.test(text))return text;if(type==='image'&&/^data:image\/(?:png|jpeg|jpg|webp|heic|heif);base64,/i.test(text))return text;throw new Error('XOGPU MiniMax-H3 的'+label+'必须使用公网 HTTPS URL'+(type==='image'?' 或 Base64 Data URL':'')+'；不支持浏览器本地地址、HTTP 或 blob URL')}
+function xogpuStudioSize(ratio,p={}){
+  const valid=new Set(['1280x720','720x1280','1024x1024','1024x768','768x1024','1792x768']),explicit=String(p.size||'').trim();if(valid.has(explicit))return explicit;
+  return({'16:9':'1280x720','9:16':'720x1280','1:1':'1024x1024','4:3':'1024x768','3:4':'768x1024','21:9':'1792x768'})[ratio]||'1280x720';
+}
 function mapXogpuVideoRequest(model={},task={},refs=[],operation='generate'){
-  const p={...(task.parameters||{})},prompt=String(task.prompt||'').trim();if(!prompt)throw new Error('XOGPU MiniMax-H3 必须填写 prompt');if(prompt.length>7000)throw new Error('XOGPU MiniMax-H3 prompt 最长 7000 字符');
-  const duration=Math.max(1,Math.min(15,Math.round(Number(p.duration??p.seconds??5)||5))),list=Array.isArray(refs)?refs:[];
-  const entries=list.map((r,index)=>{const type=String(r?.type||r?.kind||'').toLowerCase(),role=String(r?.role||r?.semanticRole||'').toLowerCase(),url=r?.url||r?.value||r?.outputUrl||'';let kind='';if(type==='image'||/image|frame|picture/.test(role))kind='image';else if(type==='video'||/video|motion/.test(role))kind='video';else if(type==='audio'||/audio|voice|sound/.test(role))kind='audio';return{r,index,type:kind,role,url}}).filter(x=>x.type&&x.url);
+  const p={...(task.parameters||{})},prompt=String(task.prompt||'').trim();
+  if(!prompt)throw new Error('XOGPU MiniMax-H3 必须填写 prompt');
+  if(prompt.length>7000)throw new Error('XOGPU MiniMax-H3 prompt 最长 7000 字符');
+  const list=Array.isArray(refs)?refs:[],inferred=detectOperation({references:list,parameters:p});
+  const aliases={'text2video':'text-to-video','image2video':'image-to-video','frame2video':'first-last-frame','omni_reference':'reference-to-video','reference2video':'reference-to-video','audio2video':'reference-to-video'};
+  const raw=String(operation||'').trim().toLowerCase(),normalized=aliases[raw]||raw;
+  let mode=['text-to-video','image-to-video','first-last-frame','reference-to-video'].includes(normalized)?normalized:inferred;
+  const entries=list.map((r,index)=>{const type=String(r?.type||r?.kind||'').toLowerCase(),role=String(r?.role||r?.semanticRole||'').toLowerCase(),url=String(r?.url||r?.value||r?.outputUrl||'').trim();let kind='';if(type==='image'||/image|frame|picture/.test(role))kind='image';else if(type==='video'||/video|motion/.test(role))kind='video';else if(type==='audio'||/audio|voice|sound/.test(role))kind='audio';return{r,index,type:kind,role,url}}).filter(x=>x.type&&x.url);
+  if(mode==='text-to-video'&&entries.length)mode=inferred;
   const images=entries.filter(x=>x.type==='image'),videos=entries.filter(x=>x.type==='video'),audios=entries.filter(x=>x.type==='audio');
-  if(images.length>9)throw new Error('XOGPU MiniMax-H3 最多支持 9 张图片');if(videos.length>3)throw new Error('XOGPU MiniMax-H3 最多支持 3 段参考视频');if(audios.length>3)throw new Error('XOGPU MiniMax-H3 最多支持 3 段参考音频');
-  const hasVisual=images.length>0||videos.length>0,allowed=['16:9','9:16','1:1','4:3','3:4','21:9','adaptive'];let ratio=String(p.ratio||p.aspectRatio||p.aspect_ratio||(hasVisual?'adaptive':'16:9')).trim().toLowerCase();if(!allowed.includes(ratio))ratio=hasVisual?'adaptive':'16:9';if(ratio==='adaptive'&&!hasVisual)throw new Error('XOGPU MiniMax-H3 的 adaptive 比例仅适用于包含图片或视频参考的模式；文生视频请使用固定比例');
-  const body={model:'MiniMax-H3',prompt,duration,ratio,group:'discount_video_generation',n:1};
-  if(entries.length){
-    const explicitFirst=images.find(x=>/first/.test(x.role)),explicitLast=images.find(x=>/last/.test(x.role));
-    const firstFallback=operation==='first-last-frame'&&!explicitFirst?images[0]:null,lastFallback=operation==='first-last-frame'&&!explicitLast&&images.length>1?images[1]:null;
-    body.content=[{type:'text',text:prompt},...entries.map(x=>{const url=xogpuMediaReference(x.url,x.type);if(x.type==='video')return{type:'video_url',video_url:{url},role:'reference_video'};if(x.type==='audio')return{type:'audio_url',audio_url:{url},role:'reference_audio'};let role='reference_image';if(x===explicitFirst||x===firstFallback||(operation==='image-to-video'&&images.length===1&&!videos.length&&!audios.length))role='first_frame';else if(x===explicitLast||x===lastFallback)role='last_frame';return{type:'image_url',image_url:{url},role}})];
-  }
-  return body;
+  if(images.length>9)throw new Error('XOGPU MiniMax-H3 最多支持 9 张图片');
+  if(videos.length>3)throw new Error('XOGPU MiniMax-H3 最多支持 3 段参考视频');
+  if(audios.length>3)throw new Error('XOGPU MiniMax-H3 最多支持 3 段参考音频');
+  if(entries.length>12)throw new Error('XOGPU MiniMax-H3 全部参考媒体合计最多 12 个');
+  for(const item of [...videos,...audios]){const seconds=Number(item.r?.duration??item.r?.seconds??item.r?.metadata?.duration);if(Number.isFinite(seconds)&&(seconds<2||seconds>15))throw new Error(`XOGPU MiniMax-H3 的${item.type==='video'?'参考视频':'参考音频'}必须为 2-15 秒`)}
+  const duration=Math.max(1,Math.min(15,Math.round(Number(p.duration??p.seconds??5)||5))),allowed=['16:9','9:16','1:1','4:3','3:4','21:9','adaptive'];
+  const hasVisual=images.length>0||videos.length>0;let ratio=String(p.ratio||p.aspectRatio||p.aspect_ratio||(mode==='text-to-video'?'16:9':hasVisual?'adaptive':'16:9')).trim().toLowerCase();if(!allowed.includes(ratio))ratio=mode==='text-to-video'?'16:9':hasVisual?'adaptive':'16:9';if(ratio==='adaptive'&&!hasVisual)ratio='16:9';
+  if(mode==='text-to-video')return{model:'MiniMax-H3',prompt,duration,ratio,group:'discount_video_generation'};
+  if(mode==='image-to-video'&&(images.length!==1||videos.length||audios.length))throw new Error('XOGPU MiniMax-H3 图生视频必须且只能上传 1 张首帧图片');
+  if(mode==='first-last-frame'&&(images.length!==2||videos.length||audios.length))throw new Error('XOGPU MiniMax-H3 首尾帧模式必须上传 2 张图片');
+  if(mode==='reference-to-video'&&!entries.length)throw new Error('XOGPU MiniMax-H3 多模态参考至少需要 1 个媒体素材');
+  const studioMode=mode==='image-to-video'?'image':mode==='first-last-frame'?'frames':'multi';
+  return{model:'MiniMax-H3',prompt,seconds:duration,size:xogpuStudioSize(ratio,p),metadata:JSON.stringify({mode:studioMode,ratio})};
 }
 function agnesVideoProfile(provider,model,operation){
   const host=hostOf(provider),hint=hintOf(model);if(!((host==='apihub.agnes-ai.com'||host.endsWith('.agnes-ai.com'))&&/agnes[-_. ]?video/.test(hint)))return null;

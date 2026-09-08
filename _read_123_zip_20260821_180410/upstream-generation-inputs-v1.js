@@ -84,7 +84,7 @@ function scriptAssetReferences(task={}){
 }
 function nodeMediaUrl(node={}){
   const content=node?.content&&typeof node.content==='object'?node.content:{};
-  return clean(node.outputSourceUrl||node.outputUrl||node.mediaUrl||node.url||node.src||content.url||content.outputUrl);
+  return clean(node.outputUrl||node.mediaUrl||content.url||content.outputUrl||node.outputSourceUrl||node.url||node.src);
 }
 function scriptStyleReferences(task={}){
   const ctx=storedScriptContext(task);if(!ctx)return[];
@@ -101,6 +101,9 @@ function scriptStyleReferences(task={}){
   }
   return out;
 }
+function nodeTextValue(node={}){const content=node?.content;return clean(node.outputText||node.resultText||node.text||(typeof content==='string'?content:content?.text||content?.value)||node.prompt||node.description)}
+function hydrateConnectedReference(raw={}){const ref={...raw},id=clean(ref.sourceNodeId||ref.id);if(!id)return ref;const state=browserState(),node=list(state?.nodes).find(x=>String(x?.id)===id);if(!node)return ref;const type=clean(ref.type||ref.kind||node.type).toLowerCase();ref.type=ref.type||type;ref.kind=ref.kind||type;ref.title=ref.title||node.title||'';if(MEDIA_TYPES.has(type)){const url=nodeMediaUrl(node);if(url)ref.url=url}else if(TEXT_TYPES.has(type)){const value=nodeTextValue(node);if(value)ref.text=value}return ref}
+
 function linkedReferences(task={}){
   const direct=Array.isArray(task.references)?task.references:[];
   const context=task.parameters?.creativeContext;
@@ -108,7 +111,7 @@ function linkedReferences(task={}){
   const fallbackAssets=scriptAssetReferences(task),fallbackStyle=scriptStyleReferences(task),out=[],seen=new Map(),mediaSeen=new Set(),mediaIdentitySeen=new Set();
   for(const raw of [...direct,...linked,...fallbackAssets,...fallbackStyle]){
     if(!raw)continue;
-    const ref=normalizeReference(raw),role=clean(ref.role||ref.semanticRole).toLowerCase(),type=clean(ref.type||ref.kind).toLowerCase(),url=clean(ref.url),kind=clean(ref.kind).toLowerCase();
+    const ref=normalizeReference(hydrateConnectedReference(raw)),role=clean(ref.role||ref.semanticRole).toLowerCase(),type=clean(ref.type||ref.kind).toLowerCase(),url=clean(ref.url),kind=clean(ref.kind).toLowerCase();
     const mediaKey=url?`${type}|${role}|${url}`:'',mediaIdentity=url?`${type}|${url}`:'';
     if(mediaKey&&mediaSeen.has(mediaKey))continue;
     if(mediaIdentity&&mediaIdentitySeen.has(mediaIdentity)&&(kind==='script_asset'||kind==='script_style'))continue;
@@ -192,7 +195,7 @@ function normalizeTask(task={}){
     parameters:{
       ...parameters,
       ...(promptProvenance?{promptProvenance}:{}),
-      upstreamInputContract:{version:5,connected:refs.length>0,textCount,mediaCount,scriptAssetCount:refs.filter(ref=>clean(ref.kind)==='script_asset').length,scriptStyleCount:refs.filter(ref=>clean(ref.kind)==='script_style').length,promptProvenance:Boolean(promptProvenance),localPromptOptional:refs.length>0}
+      upstreamInputContract:{version:6,connected:refs.length>0,textCount,mediaCount,scriptAssetCount:refs.filter(ref=>clean(ref.kind)==='script_asset').length,scriptStyleCount:refs.filter(ref=>clean(ref.kind)==='script_style').length,promptProvenance:Boolean(promptProvenance),localPromptOptional:refs.length>0}
     }
   };
 }

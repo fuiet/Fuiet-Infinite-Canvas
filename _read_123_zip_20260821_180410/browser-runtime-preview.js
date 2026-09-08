@@ -395,15 +395,9 @@ function imageRequestDiagnostics(profile,body,path){
 }
 
 function xogpuStrictVideoBody(body={},route={}){
-  const family=String(route?.protocolFamily||route?.family||'').trim().toLowerCase();
-  if(family!=='xogpu-minimax-h3')return body;
-  const src=body&&typeof body==='object'?body:{};
-  const duration=Math.max(1,Math.min(15,Math.round(Number(src.duration)||5)));
-  const allowedRatios=['16:9','9:16','1:1','4:3','3:4','21:9','adaptive'];
-  const ratio=allowedRatios.includes(String(src.ratio||''))?String(src.ratio):'16:9';
-  const out={model:'MiniMax-H3',prompt:String(src.prompt||''),duration,ratio,group:'discount_video_generation',n:Math.max(1,Math.round(Number(src.n)||1))};
-  if(Array.isArray(src.content)&&src.content.length)out.content=src.content;
-  return out;
+  const family=String(route?.protocolFamily||route?.family||'').trim().toLowerCase();if(family!=='xogpu-minimax-h3')return body;
+  const src=body&&typeof body==='object'?body:{},duration=Math.max(1,Math.min(15,Math.round(Number(src.duration)||5))),allowed=['16:9','9:16','1:1','4:3','3:4','21:9'];let ratio=String(src.ratio||'16:9');if(!allowed.includes(ratio))ratio='16:9';
+  return{model:'MiniMax-H3',prompt:String(src.prompt||''),duration,ratio,group:'discount_video_generation'};
 }
 function mergeUpstreamReferenceText(prompt,references=[]){
   const local=String(prompt||'').trim(),parts=[];
@@ -470,11 +464,16 @@ function defaultRequestBody(provider,model,task,route,refs){
 
   return{model:modelId,prompt,...p,...(refs.length?{references:refs}:{})};
 }
-async function buildStandardVideoForm(model,task,refs){const p=VideoParams?.normalize?.(task.parameters||{})||task.parameters||{},form=new FormData();form.append('model',String(model.id||''));form.append('prompt',String(task.prompt||''));if(p.seconds)form.append('seconds',String(p.seconds));if(p.size)form.append('size',String(p.size));const first=refs.find(r=>['first_frame','image','image_reference'].includes(r.role)||r.type==='image');if(first?.url){const blob=await referenceBlob(first.url);if(!blob)throw new Error('首帧/参考图无法读取，无法提交图生视频');if(blob.size>25*1024*1024)throw new Error('首帧/参考图超过 25MB，在线预览暂不支持');form.append('input_reference',blob,'input-reference.'+((blob.type||'image/png').split('/')[1]||'png'))}return form}
+function xogpuRefEntry(ref,index){const type=String(ref?.type||ref?.kind||'').toLowerCase(),role=String(ref?.role||ref?.semanticRole||'').toLowerCase(),url=String(ref?.url||ref?.outputUrl||ref?.value||'').trim();let kind='';if(type==='image'||/image|frame|picture/.test(role))kind='image';else if(type==='video'||/video|motion/.test(role))kind='video';else if(type==='audio'||/audio|voice|sound/.test(role))kind='audio';return{ref,index,type:kind,role,url}}
+function xogpuRatioSize(ratio,p={}){const explicit=String(p.size||'').trim(),valid=['1280x720','720x1280','1024x1024','1024x768','768x1024','1792x768'];if(valid.includes(explicit))return explicit;return({'16:9':'1280x720','9:16':'720x1280','1:1':'1024x1024','4:3':'1024x768','3:4':'768x1024','21:9':'1792x768'})[ratio]||'1280x720'}
+function xogpuFilename(kind,index,blob){const map={'image/jpeg':'jpg','image/png':'png','image/webp':'webp','image/heic':'heic','image/heif':'heif','video/mp4':'mp4','video/quicktime':'mov','audio/mpeg':'mp3','audio/wav':'wav','audio/x-wav':'wav'};return`${kind}-${index+1}.${map[String(blob?.type||'').toLowerCase()]||(kind==='image'?'png':kind==='video'?'mp4':'wav')}`}
+async function appendXogpuPart(form,field,entry,limits,total){const blob=await referenceBlob(entry.url);if(!blob)throw new Error(`参考${entry.type==='image'?'图片':entry.type==='video'?'视频':'音频'}无法读取，已阻止无参考素材提交`);const max=entry.type==='image'?10*1024*1024:entry.type==='video'?48*1024*1024:20*1024*1024;if(blob.size>max)throw new Error(`XOGPU ${entry.type==='image'?'图片':entry.type==='video'?'视频':'音频'}单文件超过限制`);total.bytes+=blob.size;if(total.bytes>120*1024*1024)throw new Error('XOGPU 参考媒体总大小超过 120 MiB');form.append(field,blob,xogpuFilename(entry.type,entry.index,blob));total.files+=1;if(total.files>12)throw new Error('XOGPU 参考媒体合计最多 12 个文件')}
+async function buildXogpuDiscountVideoForm(model,task,refs,route){const p=VideoParams?.normalize?.(task.parameters||{})||task.parameters||{},entries=(Array.isArray(refs)?refs:[]).map(xogpuRefEntry).filter(x=>x.type&&x.url),images=entries.filter(x=>x.type==='image'),videos=entries.filter(x=>x.type==='video'),audios=entries.filter(x=>x.type==='audio');if(images.length>9||videos.length>3||audios.length>3||entries.length>12)throw new Error('XOGPU 参考素材数量超过文档限制');let op=String(route?.videoOperation||'').toLowerCase();if(op==='image2video')op='image-to-video';if(op==='reference2video')op='reference-to-video';if(op==='frame2video')op='first-last-frame';if(op==='text-to-video'&&entries.length)op=videos.length||audios.length||images.length>1?'reference-to-video':'image-to-video';const hasVisual=images.length||videos.length;let ratio=String(p.ratio||p.aspectRatio||p.aspect_ratio||(hasVisual?'adaptive':'16:9')).toLowerCase();if(!['16:9','9:16','1:1','4:3','3:4','21:9','adaptive'].includes(ratio))ratio=hasVisual?'adaptive':'16:9';if(ratio==='adaptive'&&!hasVisual)ratio='16:9';const mode=op==='image-to-video'?'image':op==='first-last-frame'?'frames':'multi';if(mode==='image'&&(images.length!==1||videos.length||audios.length))throw new Error('图生视频必须且只能提供 1 张图片');if(mode==='frames'&&(images.length!==2||videos.length||audios.length))throw new Error('首尾帧模式必须提供 2 张图片');if(mode==='multi'&&!entries.length)throw new Error('多模态参考至少需要 1 个媒体素材');const form=new FormData(),seconds=Math.max(1,Math.min(15,Math.round(Number(p.duration??p.seconds??5)||5)));form.append('model','MiniMax-H3');form.append('prompt',String(task.prompt||''));form.append('seconds',String(seconds));form.append('size',xogpuRatioSize(ratio,p));form.append('metadata',JSON.stringify({mode,ratio}));const total={bytes:0,files:0};if(mode==='image'){await appendXogpuPart(form,'input_reference',images[0],null,total)}else if(mode==='frames'){const first=images.find(x=>/first/.test(x.role))||images[0],last=images.find(x=>/last/.test(x.role))||images.find(x=>x!==first);await appendXogpuPart(form,'input_reference',first,null,total);await appendXogpuPart(form,'end_reference',last,null,total)}else{if(images[0])await appendXogpuPart(form,'input_reference',images[0],null,total);for(const x of images.slice(1))await appendXogpuPart(form,'reference_images',x,null,total);for(const x of videos)await appendXogpuPart(form,'reference_videos',x,null,total);for(const x of audios)await appendXogpuPart(form,'reference_audios',x,null,total)}if(total.files!==entries.length)throw new Error('参考素材未全部写入 multipart，请求已阻止');return form}
+async function buildStandardVideoForm(model,task,refs,route={}){if(String(route?.protocolFamily||route?.family||'').toLowerCase()==='xogpu-minimax-h3'&&String(route?.requestTransport||'').toLowerCase()==='multipart')return buildXogpuDiscountVideoForm(model,task,refs,route);const p=VideoParams?.normalize?.(task.parameters||{})||task.parameters||{},form=new FormData();form.append('model',String(model.id||''));form.append('prompt',String(task.prompt||''));if(p.seconds)form.append('seconds',String(p.seconds));if(p.size)form.append('size',String(p.size));const first=refs.find(r=>['first_frame','image','image_reference'].includes(r.role)||r.type==='image');if(first?.url){const blob=await referenceBlob(first.url);if(!blob)throw new Error('首帧/参考图无法读取，无法提交图生视频');if(blob.size>25*1024*1024)throw new Error('首帧/参考图超过 25MB，在线预览暂不支持');form.append('input_reference',blob,'input-reference.'+((blob.type||'image/png').split('/')[1]||'png'))}return form}
 function autoVideoRoute(model,route){return route?.adapterKey==='standard-video-async-v1'&&(model?.routeOrigin==='auto'||model?.adapterResolved?.auto===true||!String(model?.createPath||'').trim())}
 const VIDEO_AUTO_RETRY_STATUSES=new Set([400,404,405,415,422]);
 function alternateVideoCreatePaths(route,model){
-  const first=String(route.createPath||'/v1/videos'),profile=Array.isArray(route.createCandidates)?route.createCandidates:[];if(!autoVideoRoute(model,route))return[first];
+  const first=String(route.createPath||'/v1/videos'),profile=Array.isArray(route.createCandidates)?route.createCandidates:[];if(route?.strictCreatePath||!autoVideoRoute(model,route))return[first];
   return[...new Set([first,...profile,'/v1/video/generations','/v1/videos','/v1/videos/generations','/v1/video/generation','/video/generations','/videos/generations','/api/v1/videos','/api/v1/video/generations'])];
 }
 function matchingPollPath(createPath,taskId,route){if(createPath==='/v1/video/generations'||createPath==='/api/v1/video/generations')return `${createPath}/${taskId}`;if(createPath==='/v1/videos/generations'||createPath==='/video/generations'||createPath==='/videos/generations')return `${createPath}/${taskId}`;return fillTemplate(route.pollPath||'/v1/videos/{{taskId}}',{taskId})}
@@ -613,10 +612,10 @@ async function executeTask(task){
           }else{
             try{
               updateTask(task.id,{videoRequestDiagnostics:videoRequestDiagnostics(model,task,refs,createPath,'multipart',route)});
-              const form=await buildStandardVideoForm(model,task,refs);
+              const form=await buildStandardVideoForm(model,task,refs,route);
               created=await providerJson(provider,createUrl,{method:route.method||'POST',headers:{},body:form});
             }catch(error){
-              if(!VIDEO_AUTO_RETRY_STATUSES.has(Number(error?.status)))throw error;
+              if(route.noJsonFallback||route.strictMediaTransport||!VIDEO_AUTO_RETRY_STATUSES.has(Number(error?.status)))throw error;
               lastCreateError=error;
               updateTask(task.id,{videoRequestDiagnostics:videoRequestDiagnostics(model,task,refs,createPath,'json',route)});
               created=await providerJson(provider,createUrl,{method:route.method||'POST',headers:{'content-type':'application/json'},body:JSON.stringify(await videoJsonBody())});

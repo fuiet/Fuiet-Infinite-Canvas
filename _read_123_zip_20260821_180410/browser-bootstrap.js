@@ -12,7 +12,7 @@ if(!manager?.ready)throw new Error('Browser Storage Manager 未加载');
 const v='20260907-script-asset-node-layout-1';
 const promptV='20260907-final-prompt-asset-source-5';
 const promptProductionV='20260908-final-prompt-production-v3-1';
-const batchInputV='20260907-universal-upstream-inputs-1';
+const batchInputV='20260908-universal-upstream-inputs-2';
 const durationV='20260907-shot-duration-compact-1';
 const shotEditorV='20260907-shot-editor-inline-mentions-3';
 const dialogueV='20260907-shot-dialogue-reference-1';
