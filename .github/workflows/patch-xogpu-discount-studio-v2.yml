@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'scripts/patch-xogpu-discount-studio-v2.py'
+      - 'scripts/patch-xogpu-discount-studio-v2-tests.py'
       - '.github/workflows/patch-xogpu-discount-studio-v2.yml'
   workflow_dispatch:
 
@@ -22,13 +23,15 @@ jobs:
         with:
           node-version: '22'
       - name: Apply XOGPU discount studio transport repair
-        run: python scripts/patch-xogpu-discount-studio-v2.py
+        run: |
+          python scripts/patch-xogpu-discount-studio-v2.py
+          python scripts/patch-xogpu-discount-studio-v2-tests.py
       - name: Syntax check
         working-directory: _read_123_zip_20260821_180410
         run: npm run check
       - name: Focused video transport tests
         working-directory: _read_123_zip_20260821_180410
-        run: node --test tests/xogpu-minimax-h3.test.mjs tests/desktop-video-protocol-bridge.test.mjs tests/xogpu-discount-studio-contract.test.mjs tests/upstream-generation-inputs.test.mjs
+        run: node --test tests/xogpu-minimax-h3.test.mjs tests/desktop-video-protocol-bridge.test.mjs tests/xogpu-discount-studio-contract.test.mjs tests/xogpu-browser-strict-request.test.mjs tests/upstream-generation-inputs.test.mjs
       - name: Commit repair
         run: |
           git config user.name 'Codex'
@@ -44,7 +47,9 @@ jobs:
             _read_123_zip_20260821_180410/browser-bootstrap.js \
             _read_123_zip_20260821_180410/tests/xogpu-minimax-h3.test.mjs \
             _read_123_zip_20260821_180410/tests/desktop-video-protocol-bridge.test.mjs \
-            _read_123_zip_20260821_180410/tests/xogpu-discount-studio-contract.test.mjs
+            _read_123_zip_20260821_180410/tests/xogpu-discount-studio-contract.test.mjs \
+            _read_123_zip_20260821_180410/tests/xogpu-browser-strict-request.test.mjs \
+            _read_123_zip_20260821_180410/tests/upstream-generation-inputs.test.mjs
           git diff --cached --quiet && exit 0
           git commit -m 'Use XOGPU discount studio multipart for video references'
           git push origin main
