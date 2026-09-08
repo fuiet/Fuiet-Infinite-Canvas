@@ -17,6 +17,7 @@ const shotEditorV='20260907-shot-editor-inline-mentions-3';
 const dialogueV='20260907-shot-dialogue-reference-1';
 const promptWorkbenchV='20260908-final-prompt-workbench-layout-2';
 const scriptTypographyV='20260908-confirm-shot-rail-unified-2';
+const workflowRailV='20260908-workflow-rail-exact-1';
 const sendIconV='20260907-unified-send-icon-v2-1';
 const canvasScripts=[
   `./provider-auto-config-v1.js?v=${v}`,
@@ -112,7 +113,8 @@ async function start(){
       loadStyle(`./styles/edge-cut-interaction-v1.css?v=${v}`),
       loadStyle(`./styles/agent-left-v2.css?v=${v}`),
       loadStyle(`./styles/agent-panel-top-v1.css?v=${v}`),
-      loadStyle(`./styles/script-studio-typography-unified-v1.css?v=${scriptTypographyV}`)
+      loadStyle(`./styles/script-studio-typography-unified-v1.css?v=${scriptTypographyV}`),
+      loadStyle(`./styles/script-workflow-rail-exact-v1.css?v=${workflowRailV}`)
     ]);
   }
   const list=isCanvas?canvasScripts:document.querySelector('#modelList')?modelScripts:[];
