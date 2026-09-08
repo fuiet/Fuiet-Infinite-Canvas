@@ -1,0 +1,146 @@
+/* Script Studio typography unification
+ * Confirm Shots is the typography source of truth.
+ * Prepare Assets and Compose Prompts only remap comparable text roles to the
+ * same scale; layout, spacing, colors and interaction behavior are untouched.
+ */
+
+/* ---------- Shared workflow rail: exact Confirm Shots scale ---------- */
+.script-editor-shell.simplified:has(.script-assets-layout) .script-workflow-head.simplified .script-step i,
+#featureModal.script-studio-fullscreen:has([data-script-tab="prompts"].active) .script-step i{
+  font-size:12px!important;
+}
+.script-editor-shell.simplified:has(.script-assets-layout) .script-workflow-head.simplified .script-step b,
+#featureModal.script-studio-fullscreen:has([data-script-tab="prompts"].active) .script-step b{
+  font-size:13px!important;
+}
+.script-editor-shell.simplified:has(.script-assets-layout) .script-workflow-head.simplified .script-step small,
+#featureModal.script-studio-fullscreen:has([data-script-tab="prompts"].active) .script-step small{
+  font-size:10px!important;
+}
+
+/* ---------- Prepare Assets: Confirm Shots semantic scale ---------- */
+/* Primary editable/body/action text = 13px. */
+.script-editor-shell.simplified:has(.script-assets-layout) .script-global-style input,
+.script-editor-shell.simplified:has(.script-assets-layout) .asset-block-head>b,
+.script-editor-shell.simplified:has(.script-assets-layout) .asset-card-copy b,
+.script-editor-shell.simplified:has(.script-assets-layout) .script-asset-drawer-scroll input,
+.script-editor-shell.simplified:has(.script-assets-layout) .script-asset-drawer-scroll textarea,
+.script-editor-shell.simplified:has(.script-assets-layout) .script-asset-drawer-scroll select,
+.script-editor-shell.simplified:has(.script-assets-layout) .script-asset-hero-menu button,
+.script-editor-shell.simplified:has(.script-assets-layout) .script-asset-canvas-picker button,
+.script-editor-shell.simplified:has(.script-assets-layout) .script-asset-drawer-actions button,
+.script-editor-shell.simplified:has(.script-assets-layout) .script-bottom-actions #generateAllAssets{
+  font-size:13px!important;
+}
+
+/* Major inspector title = 14px, matching Confirm Shots major identifiers/dialog titles. */
+.script-editor-shell.simplified:has(.script-assets-layout) .script-asset-drawer>header b{
+  font-size:14px!important;
+}
+
+/* Field/section labels = 12px, matching Confirm Shots table headings. */
+.script-editor-shell.simplified:has(.script-assets-layout) .script-asset-drawer-scroll>label{
+  font-size:12px!important;
+}
+
+/* Supporting copy = 10px, matching Confirm Shots workflow/subtext. */
+.script-editor-shell.simplified:has(.script-assets-layout) .script-global-style>span,
+.script-editor-shell.simplified:has(.script-assets-layout) .asset-missing,
+.script-editor-shell.simplified:has(.script-assets-layout) .asset-card-copy p,
+.script-editor-shell.simplified:has(.script-assets-layout) .script-asset-add-card>span,
+.script-editor-shell.simplified:has(.script-assets-layout) .script-asset-hero-trigger span,
+.script-editor-shell.simplified:has(.script-assets-layout) .script-asset-drawer-meta span{
+  font-size:10px!important;
+}
+
+/* Status/toast copy = 11px, matching Confirm Shots compact status text. */
+.script-editor-shell.simplified:has(.script-assets-layout) .script-bottom-actions .script-asset-warning,
+.script-editor-shell.simplified:has(.script-assets-layout) .script-asset-inline-toast{
+  font-size:11px!important;
+}
+
+/* ---------- Compose Prompts: Confirm Shots semantic scale ---------- */
+/* Primary page/body/editable/action text = 13px. */
+.fpv4-prompts-active .fpv4-page,
+.fpv4-prompts-active .fpv4-page button,
+.fpv4-prompts-active .fpv4-page input,
+.fpv4-prompts-active .fpv4-page textarea{
+  font-size:13px!important;
+}
+
+/* Major page/shot identifiers = 14px. */
+.fpv4-prompts-active .fpv4-title strong,
+.fpv4-prompts-active .fpv4-shot-id b{
+  font-size:14px!important;
+}
+
+/* Top supporting/progress copy = 10px. */
+.fpv4-prompts-active .fpv4-title span,
+.fpv4-prompts-active .fpv4-progress>span{
+  font-size:10px!important;
+}
+.fpv4-prompts-active #fpv4Bulk,
+.fpv4-prompts-active #fpv4ToBatch{
+  font-size:13px!important;
+}
+
+/* Context labels = 12px; context values = 13px; helper copy = 10px. */
+.fpv4-prompts-active .fpv4-contextbar label>span,
+.fpv4-prompts-active .fpv4-script-context>span{
+  font-size:12px!important;
+}
+.fpv4-prompts-active .fpv4-contextbar input,
+.fpv4-prompts-active .fpv4-script-context b{
+  font-size:13px!important;
+}
+.fpv4-prompts-active .fpv4-script-context small{
+  font-size:10px!important;
+}
+
+/* Shot header: primary status = 11px, compact provenance chips = 10px. */
+.fpv4-prompts-active .fpv4-shot-id span,
+.fpv4-prompts-active .fpv4-status{
+  font-size:11px!important;
+}
+.fpv4-prompts-active .fpv4-ai-basis>span,
+.fpv4-prompts-active .fpv4-ai-basis b{
+  font-size:10px!important;
+}
+.fpv4-prompts-active .fpv4-compose-one{
+  font-size:13px!important;
+}
+
+/* Source panel: title/body follow 13px; labels 12px; helper/chips 10px. */
+.fpv4-prompts-active .fpv4-source-title strong,
+.fpv4-prompts-active .fpv4-source-row>div{
+  font-size:13px!important;
+}
+.fpv4-prompts-active .fpv4-source-row>span{
+  font-size:12px!important;
+}
+.fpv4-prompts-active .fpv4-source-title span,
+.fpv4-prompts-active .fpv4-param-chips span,
+.fpv4-prompts-active .fpv4-asset,
+.fpv4-prompts-active .fpv4-muted{
+  font-size:10px!important;
+}
+
+/* Prompt editors: heading/body = 13px; helper/footer = 10px. */
+.fpv4-prompts-active .fpv4-prompt-box>header strong,
+.fpv4-prompts-active .fpv4-prompt-box textarea{
+  font-size:13px!important;
+}
+.fpv4-prompts-active .fpv4-prompt-box>header span,
+.fpv4-prompts-active .fpv4-prompt-box>header small,
+.fpv4-prompts-active .fpv4-prompt-box>footer{
+  font-size:10px!important;
+}
+
+/* Bottom status/action area. */
+.fpv4-prompts-active .fpv4-footer strong,
+.fpv4-prompts-active .fpv4-empty{
+  font-size:13px!important;
+}
+.fpv4-prompts-active .fpv4-footer span{
+  font-size:10px!important;
+}
