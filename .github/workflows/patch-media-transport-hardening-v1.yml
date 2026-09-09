@@ -1,0 +1,47 @@
+name: Patch media transport hardening v1
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/patch-media-transport-hardening-v1.py'
+      - '.github/workflows/patch-media-transport-hardening-v1.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply media transport hardening
+        run: python scripts/patch-media-transport-hardening-v1.py
+      - name: Syntax check browser runtime
+        run: node --check _read_123_zip_20260821_180410/browser-runtime-preview.js
+      - name: Run focused media transport tests
+        run: |
+          node --test \
+            _read_123_zip_20260821_180410/tests/xogpu-browser-strict-request.test.mjs \
+            _read_123_zip_20260821_180410/tests/media-transport-hardening-v1.test.mjs
+      - name: Check patch whitespace
+        run: git diff --check
+      - name: Commit patched runtime
+        run: |
+          if git diff --quiet; then
+            echo 'No source changes to commit.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            _read_123_zip_20260821_180410/browser-runtime-preview.js \
+            '_read_123_zip_20260821_180410/functions/api/[[path]].js' \
+            _read_123_zip_20260821_180410/tests/media-transport-hardening-v1.test.mjs
+          git commit -m 'Harden media proxy and XOGPU preflight'
+          git push
