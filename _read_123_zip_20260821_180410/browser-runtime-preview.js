@@ -197,12 +197,26 @@ function providerResourceUrl(provider,value){const text=String(value||'').trim()
 function authCandidates(provider){const key=String(provider?.apiKey||'').trim(),list=[];if(!key)return[{}];const configured=String(provider?.authHeader||'').trim();if(configured){const scheme=String(provider?.authScheme||'').trim();list.push({[configured]:scheme?`${scheme} ${key}`:key})}list.push({Authorization:`Bearer ${key}`},{'x-api-key':key},{'api-key':key});const seen=new Set();return list.filter(x=>{const s=JSON.stringify(x);if(seen.has(s))return false;seen.add(s);return true})}
 function cleanHeaders(headers={}){const h={};for(const [k,v] of Object.entries(headers||{})){const n=String(k).toLowerCase();if(['host','cookie','set-cookie','content-length','connection','transfer-encoding','cf-connecting-ip','x-forwarded-for'].includes(n))continue;h[k]=String(v)}return h}
 
-async function blobToBase64(blob){const bytes=new Uint8Array(await blob.arrayBuffer());let out='';const step=0x8000;for(let i=0;i<bytes.length;i+=step)out+=String.fromCharCode(...bytes.subarray(i,i+step));return btoa(out)}
-async function serializeProxyBody(body){if(body==null)return{bodyType:'none',body:null};if(typeof body==='string')return{bodyType:'text',body};if(body instanceof FormData){const entries=[];for(const [name,value] of body.entries()){if(value instanceof Blob){if(value.size>25*1024*1024)throw new Error('在线预览的单个代理文件不能超过 25MB');entries.push({name,kind:'file',filename:value.name||'upload.bin',type:value.type||'application/octet-stream',base64:await blobToBase64(value)})}else entries.push({name,kind:'text',value:String(value)})}return{bodyType:'form-data',formData:entries}}throw new Error('在线代理不支持此请求体类型')}
+const PROXY_FORM_META='__canvas_proxy_meta_v2';
+async function serializeProxyBody(body){if(body==null)return{bodyType:'none',body:null};if(typeof body==='string')return{bodyType:'text',body};throw new Error('在线代理不支持此请求体类型')}
+function proxyMultipartBody(url,method,headers,body){
+  const form=new FormData();
+  form.append(PROXY_FORM_META,JSON.stringify({url,method,headers}));
+  for(const [name,value] of body.entries()){
+    if(name===PROXY_FORM_META)throw new Error('multipart 字段名与代理保留字段冲突');
+    if(value instanceof Blob)form.append(name,value,value.name||'upload.bin');else form.append(name,String(value));
+  }
+  return form;
+}
 async function proxyFetch(url,init={}){
-  const headers=cleanHeaders(init.headers||{}),packed=await serializeProxyBody(init.body);
-  if(packed.bodyType==='form-data'){delete headers['content-type'];delete headers['Content-Type']}
-  const res=await rawFetch('/api/proxy',{method:'POST',headers:{'content-type':'application/json','x-canvas-proxy':'1'},body:JSON.stringify({url,method:String(init.method||'GET').toUpperCase(),headers,...packed})});
+  const headers=cleanHeaders(init.headers||{}),method=String(init.method||'GET').toUpperCase();
+  if(init.body instanceof FormData){
+    delete headers['content-type'];delete headers['Content-Type'];delete headers['content-length'];delete headers['Content-Length'];
+    const body=proxyMultipartBody(url,method,headers,init.body);
+    return rawFetch('/api/proxy',{method:'POST',headers:{'x-canvas-proxy':'1','x-canvas-proxy-mode':'form-data-v2'},body});
+  }
+  const packed=await serializeProxyBody(init.body);
+  const res=await rawFetch('/api/proxy',{method:'POST',headers:{'content-type':'application/json','x-canvas-proxy':'1'},body:JSON.stringify({url,method,headers,...packed})});
   // Do not throw on upstream HTTP errors here. The proxy intentionally mirrors the
   // upstream status/body; providerJson must receive that status so protocol fallback
   // can react to 400/404/405/415/422 instead of losing it inside a generic Error.
@@ -240,15 +254,58 @@ function outputObject(value,modality='text',sourceUrl=''){
   return{type:'url',value:String(value),url:String(value),sourceUrl:String(sourceUrl||value)};
 }
 function validMediaOutput(value){const text=String(value||'').trim();return /^(https?:\/\/|data:|blob:|\/\/|\/media\/|\/__browser_media\/)/i.test(text)}
+async function typedGeneratedImageBlob(blob,url,res){
+  if(!(blob instanceof Blob)||!blob.size)return blob;
+  const current=String(blob.type||res?.headers?.get?.('content-type')||'').split(';')[0].trim().toLowerCase();
+  if(current.startsWith('image/'))return blob;
+  const hint=`${String(url||'')} ${String(res?.headers?.get?.('content-disposition')||'')}`.toLowerCase();
+  let mime='';
+  if(/\.png(?:[?#]|$)/i.test(hint))mime='image/png';
+  else if(/\.(jpe?g)(?:[?#]|$)/i.test(hint))mime='image/jpeg';
+  else if(/\.webp(?:[?#]|$)/i.test(hint))mime='image/webp';
+  else if(/\.(heic|heif)(?:[?#]|$)/i.test(hint))mime='image/heic';
+  if(!mime){
+    try{
+      const head=new Uint8Array(await blob.slice(0,16).arrayBuffer());
+      const ascii=String.fromCharCode(...head);
+      if(head.length>=8&&head[0]===0x89&&ascii.slice(1,4)==='PNG')mime='image/png';
+      else if(head.length>=3&&head[0]===0xff&&head[1]===0xd8&&head[2]===0xff)mime='image/jpeg';
+      else if(head.length>=12&&ascii.slice(0,4)==='RIFF'&&ascii.slice(8,12)==='WEBP')mime='image/webp';
+    }catch{}
+  }
+  return mime?new Blob([blob],{type:mime}):blob;
+}
+async function materializeGeneratedImageOutput(value,provider){
+  const text=String(value||'').trim();
+  if(!text||text.startsWith('/__browser_media/')||text.startsWith('/media/')||text.startsWith('data:')||text.startsWith('blob:'))return text;
+  if(!/^(https?:\/\/|\/\/)/i.test(text))return text;
+  const url=text.startsWith('//')?`${location.protocol}${text}`:text;
+  const res=await fetchProviderResource(provider,url,{method:'GET',headers:{accept:'image/*,application/octet-stream;q=0.9,*/*;q=0.1'}});
+  if(!res.ok)throw new Error(`图片结果下载失败 ${res.status}`);
+  const ct=String(res.headers.get('content-type')||'').toLowerCase();
+  if(ct.includes('application/json')||ct.includes('+json')||ct.startsWith('text/')){
+    let payload=null;try{payload=await res.json()}catch{throw new Error('图片结果地址没有返回图片文件')}
+    const candidate=Core?.firstPath?Core.firstPath(payload,['url','image_url','imageUrl','download_url','downloadUrl','content.url','data.url','data.image_url','data.imageUrl','result.url','result.image_url']):undefined;
+    if(candidate&&String(candidate)!==url)return materializeGeneratedImageOutput(candidate,provider);
+    throw new Error('图片结果地址没有返回可用图片文件');
+  }
+  const blob=await res.blob();if(!blob.size)throw new Error('图片结果下载为空文件');
+  const typed=await typedGeneratedImageBlob(blob,url,res);
+  if(!String(typed.type||'').toLowerCase().startsWith('image/'))throw new Error('图片结果下载后无法识别文件格式');
+  const stored=await storeMediaBlob(typed,{name:'generated-image'});
+  if(!stored?.url)throw new Error('图片结果下载后未能保存到浏览器本地媒体库');
+  return stored.url;
+}
 async function normalizeGeneratedOutput(value,modality,provider){
   if(value==null)return value;
   let text=typeof value==='string'?value.trim():value;
   if(modality==='image'&&typeof text==='string'&&/^data:image\//i.test(text)){
-    try{const blob=await (await rawFetch(text)).blob(),stored=await storeMediaBlob(blob,{name:'generated-image'});return stored.url}catch{}
+    const blob=await (await rawFetch(text)).blob(),stored=await storeMediaBlob(blob,{name:'generated-image'});if(!stored?.url)throw new Error('图片结果未能保存到浏览器本地媒体库');return stored.url;
   }
   if(typeof text==='string'&&text.startsWith('/')&&!text.startsWith('/__browser_media/')&&!text.startsWith('/media/')){
-    try{return joinUrl(provider?.baseUrl||location.origin,text)}catch{}
+    try{text=joinUrl(provider?.baseUrl||location.origin,text)}catch{}
   }
+  if(modality==='image'&&typeof text==='string'&&/^(https?:\/\/|\/\/)/i.test(text))return materializeGeneratedImageOutput(text,provider);
   return text;
 }
 async function typedGeneratedVideoBlob(blob,url,res){
@@ -318,13 +375,13 @@ function imageTargetSelection(provider,model,parameters={}){
   const target=ImageOutputDimensions?.parseSize?.(selection?.size||parameters?.size||'');
   return target?{...target,selection}:null;
 }
-async function generatedImageBlob(value){
+async function generatedImageBlob(value,provider){
   const text=String(value||'').trim();if(!text)throw new Error('生成图片地址为空，无法校验尺寸');
   let res;
-  if(/^https?:\/\//i.test(text)||text.startsWith('//')){const url=text.startsWith('//')?`${location.protocol}${text}`:text;res=await providerFetch(url,{method:'GET',headers:{accept:'image/*'}})}
+  if(/^https?:\/\//i.test(text)||text.startsWith('//')){const url=text.startsWith('//')?`${location.protocol}${text}`:text;res=await fetchProviderResource(provider,url,{method:'GET',headers:{accept:'image/*,application/octet-stream;q=0.9'}})}
   else res=await rawFetch(text,{method:'GET',headers:{accept:'image/*'}});
   if(!res?.ok)throw new Error(`无法读取生成图片以校验尺寸${res?.status?`（HTTP ${res.status}）`:''}`);
-  const blob=await res.blob();if(!String(blob.type||'').toLowerCase().startsWith('image/'))throw new Error('生成结果不是可校验的图片文件');return blob;
+  const blob=await typedGeneratedImageBlob(await res.blob(),text,res);if(!String(blob.type||'').toLowerCase().startsWith('image/'))throw new Error('生成结果不是可校验的图片文件');return blob;
 }
 async function decodeGeneratedImage(blob){
   if(typeof createImageBitmap==='function'){const bitmap=await createImageBitmap(blob);return{image:bitmap,width:bitmap.width,height:bitmap.height,close:()=>bitmap.close?.()}}
@@ -338,7 +395,7 @@ async function encodedCanvasBlob(canvas,type){
 }
 async function enforceGeneratedImageDimensions(value,provider,model,parameters={}){
   const target=imageTargetSelection(provider,model,parameters);if(!target)return{value,corrected:false,targetSize:'',sourceSize:'',finalSize:'',policy:''};
-  const targetSize=target.size,blob=await generatedImageBlob(value),decoded=await decodeGeneratedImage(blob),sourceSize=`${decoded.width}x${decoded.height}`;
+  const targetSize=target.size,blob=await generatedImageBlob(value,provider),decoded=await decodeGeneratedImage(blob),sourceSize=`${decoded.width}x${decoded.height}`;
   try{
     if(ImageOutputDimensions?.sameSize?.(decoded.width,decoded.height,target))return{value,corrected:false,targetSize,sourceSize,finalSize:sourceSize,policy:'verified'};
     const crop=ImageOutputDimensions?.cropRect?.(decoded.width,decoded.height,target.width,target.height);if(!crop)throw new Error('无法计算图片尺寸纠正规则');
@@ -467,8 +524,19 @@ function defaultRequestBody(provider,model,task,route,refs){
 function xogpuRefEntry(ref,index){const type=String(ref?.type||ref?.kind||'').toLowerCase(),role=String(ref?.role||ref?.semanticRole||'').toLowerCase(),url=String(ref?.url||ref?.outputUrl||ref?.value||'').trim();let kind='';if(type==='image'||/image|frame|picture/.test(role))kind='image';else if(type==='video'||/video|motion/.test(role))kind='video';else if(type==='audio'||/audio|voice|sound/.test(role))kind='audio';return{ref,index,type:kind,role,url}}
 function xogpuRatioSize(ratio,p={}){const explicit=String(p.size||'').trim(),valid=['1280x720','720x1280','1024x1024','1024x768','768x1024','1792x768'];if(valid.includes(explicit))return explicit;return({'16:9':'1280x720','9:16':'720x1280','1:1':'1024x1024','4:3':'1024x768','3:4':'768x1024','21:9':'1792x768'})[ratio]||'1280x720'}
 function xogpuFilename(kind,index,blob){const map={'image/jpeg':'jpg','image/png':'png','image/webp':'webp','image/heic':'heic','image/heif':'heif','video/mp4':'mp4','video/quicktime':'mov','audio/mpeg':'mp3','audio/wav':'wav','audio/x-wav':'wav'};return`${kind}-${index+1}.${map[String(blob?.type||'').toLowerCase()]||(kind==='image'?'png':kind==='video'?'mp4':'wav')}`}
-async function appendXogpuPart(form,field,entry,limits,total){const blob=await referenceBlob(entry.url);if(!blob)throw new Error(`参考${entry.type==='image'?'图片':entry.type==='video'?'视频':'音频'}无法读取，已阻止无参考素材提交`);const max=entry.type==='image'?10*1024*1024:entry.type==='video'?48*1024*1024:20*1024*1024;if(blob.size>max)throw new Error(`XOGPU ${entry.type==='image'?'图片':entry.type==='video'?'视频':'音频'}单文件超过限制`);total.bytes+=blob.size;if(total.bytes>120*1024*1024)throw new Error('XOGPU 参考媒体总大小超过 120 MiB');form.append(field,blob,xogpuFilename(entry.type,entry.index,blob));total.files+=1;if(total.files>12)throw new Error('XOGPU 参考媒体合计最多 12 个文件')}
-async function buildXogpuDiscountVideoForm(model,task,refs,route){const p=VideoParams?.normalize?.(task.parameters||{})||task.parameters||{},entries=(Array.isArray(refs)?refs:[]).map(xogpuRefEntry).filter(x=>x.type&&x.url),images=entries.filter(x=>x.type==='image'),videos=entries.filter(x=>x.type==='video'),audios=entries.filter(x=>x.type==='audio');if(images.length>9||videos.length>3||audios.length>3||entries.length>12)throw new Error('XOGPU 参考素材数量超过文档限制');let op=String(route?.videoOperation||'').toLowerCase();if(op==='image2video')op='image-to-video';if(op==='reference2video')op='reference-to-video';if(op==='frame2video')op='first-last-frame';if(op==='text-to-video'&&entries.length)op=videos.length||audios.length||images.length>1?'reference-to-video':'image-to-video';const hasVisual=images.length||videos.length;let ratio=String(p.ratio||p.aspectRatio||p.aspect_ratio||(hasVisual?'adaptive':'16:9')).toLowerCase();if(!['16:9','9:16','1:1','4:3','3:4','21:9','adaptive'].includes(ratio))ratio=hasVisual?'adaptive':'16:9';if(ratio==='adaptive'&&!hasVisual)ratio='16:9';const mode=op==='image-to-video'?'image':op==='first-last-frame'?'frames':'multi';if(mode==='image'&&(images.length!==1||videos.length||audios.length))throw new Error('图生视频必须且只能提供 1 张图片');if(mode==='frames'&&(images.length!==2||videos.length||audios.length))throw new Error('首尾帧模式必须提供 2 张图片');if(mode==='multi'&&!entries.length)throw new Error('多模态参考至少需要 1 个媒体素材');const form=new FormData(),seconds=Math.max(1,Math.min(15,Math.round(Number(p.duration??p.seconds??5)||5)));form.append('model','MiniMax-H3');form.append('prompt',String(task.prompt||''));form.append('seconds',String(seconds));form.append('size',xogpuRatioSize(ratio,p));form.append('metadata',JSON.stringify({mode,ratio}));const total={bytes:0,files:0};if(mode==='image'){await appendXogpuPart(form,'input_reference',images[0],null,total)}else if(mode==='frames'){const first=images.find(x=>/first/.test(x.role))||images[0],last=images.find(x=>/last/.test(x.role))||images.find(x=>x!==first);await appendXogpuPart(form,'input_reference',first,null,total);await appendXogpuPart(form,'end_reference',last,null,total)}else{if(images[0])await appendXogpuPart(form,'input_reference',images[0],null,total);for(const x of images.slice(1))await appendXogpuPart(form,'reference_images',x,null,total);for(const x of videos)await appendXogpuPart(form,'reference_videos',x,null,total);for(const x of audios)await appendXogpuPart(form,'reference_audios',x,null,total)}if(total.files!==entries.length)throw new Error('参考素材未全部写入 multipart，请求已阻止');return form}
+function xogpuDurationHint(entry){const ref=entry?.ref||{},meta=ref?.metadata||{};for(const value of [ref.duration,ref.durationSec,ref.durationSeconds,ref.seconds,meta.duration,meta.durationSec,meta.durationSeconds]){const n=Number(value);if(Number.isFinite(n)&&n>0)return n}return 0}
+async function xogpuMediaDurationSeconds(entry,blob){
+  const hinted=xogpuDurationHint(entry);if(hinted>0)return hinted;
+  if(typeof document==='undefined'||typeof URL==='undefined'||typeof URL.createObjectURL!=='function')throw new Error('当前浏览器无法读取参考媒体时长');
+  const tag=entry.type==='audio'?'audio':'video',objectUrl=URL.createObjectURL(blob),el=document.createElement(tag);el.preload='metadata';
+  return await new Promise((resolve,reject)=>{let done=false;const finish=(error,value)=>{if(done)return;done=true;clearTimeout(timer);try{el.removeAttribute('src');el.load?.()}catch{}URL.revokeObjectURL(objectUrl);if(error)reject(error);else resolve(value)};const timer=setTimeout(()=>finish(new Error(`参考${entry.type==='audio'?'音频':'视频'}时长读取超时`)),8000);el.addEventListener('loadedmetadata',()=>{const seconds=Number(el.duration);if(!Number.isFinite(seconds)||seconds<=0)finish(new Error(`无法读取参考${entry.type==='audio'?'音频':'视频'}时长`));else finish(null,seconds)},{once:true});el.addEventListener('error',()=>finish(new Error(`无法解析参考${entry.type==='audio'?'音频':'视频'}时长`)),{once:true});el.src=objectUrl;try{el.load?.()}catch{}});
+}
+async function xogpuValidateReferenceDuration(entry,blob){if(entry.type!=='video'&&entry.type!=='audio')return 0;const seconds=await xogpuMediaDurationSeconds(entry,blob);if(seconds<2||seconds>15)throw new Error(`XOGPU 参考${entry.type==='audio'?'音频':'视频'}时长为 ${seconds.toFixed(2)} 秒，仅支持 2–15 秒`);return seconds}
+async function xogpuImageDimensions(blob){const decoded=await decodeGeneratedImage(blob);try{return{width:Number(decoded.width||0),height:Number(decoded.height||0)}}finally{decoded.close?.()}}
+async function xogpuValidateFrameAspectRatio(firstBlob,lastBlob){const first=await xogpuImageDimensions(firstBlob),last=await xogpuImageDimensions(lastBlob);if(!first.width||!first.height||!last.width||!last.height)throw new Error('无法读取首尾帧尺寸，已阻止提交');const a=first.width/first.height,b=last.width/last.height,delta=Math.abs(a-b)/Math.max(a,b);if(delta>0.01)throw new Error(`首尾帧宽高比不一致（${first.width}x${first.height} vs ${last.width}x${last.height}），已在提交前阻止`);return{first,last}}
+async function xogpuReferenceBlob(entry){const blob=await referenceBlob(entry.url);if(!blob)throw new Error(`参考${entry.type==='image'?'图片':entry.type==='video'?'视频':'音频'}无法读取，已阻止无参考素材提交`);return blob}
+async function appendXogpuPart(form,field,entry,limits,total,preparedBlob=null){const blob=preparedBlob||await xogpuReferenceBlob(entry);const max=entry.type==='image'?10*1024*1024:entry.type==='video'?48*1024*1024:20*1024*1024;if(blob.size>max)throw new Error(`XOGPU ${entry.type==='image'?'图片':entry.type==='video'?'视频':'音频'}单文件超过限制`);await xogpuValidateReferenceDuration(entry,blob);total.bytes+=blob.size;if(total.bytes>120*1024*1024)throw new Error('XOGPU 参考媒体总大小超过 120 MiB');form.append(field,blob,xogpuFilename(entry.type,entry.index,blob));total.files+=1;if(total.files>12)throw new Error('XOGPU 参考媒体合计最多 12 个文件')}
+async function buildXogpuDiscountVideoForm(model,task,refs,route){const p=VideoParams?.normalize?.(task.parameters||{})||task.parameters||{},entries=(Array.isArray(refs)?refs:[]).map(xogpuRefEntry).filter(x=>x.type&&x.url),images=entries.filter(x=>x.type==='image'),videos=entries.filter(x=>x.type==='video'),audios=entries.filter(x=>x.type==='audio');if(images.length>9||videos.length>3||audios.length>3||entries.length>12)throw new Error('XOGPU 参考素材数量超过文档限制');let op=String(route?.videoOperation||'').toLowerCase();if(op==='image2video')op='image-to-video';if(op==='reference2video')op='reference-to-video';if(op==='frame2video')op='first-last-frame';if(op==='text-to-video'&&entries.length)op=videos.length||audios.length||images.length>1?'reference-to-video':'image-to-video';const hasVisual=images.length||videos.length;let ratio=String(p.ratio||p.aspectRatio||p.aspect_ratio||(hasVisual?'adaptive':'16:9')).toLowerCase();if(!['16:9','9:16','1:1','4:3','3:4','21:9','adaptive'].includes(ratio))ratio=hasVisual?'adaptive':'16:9';if(ratio==='adaptive'&&!hasVisual)ratio='16:9';const mode=op==='image-to-video'?'image':op==='first-last-frame'?'frames':'multi';if(mode==='image'&&(images.length!==1||videos.length||audios.length))throw new Error('图生视频必须且只能提供 1 张图片');if(mode==='frames'&&(images.length!==2||videos.length||audios.length))throw new Error('首尾帧模式必须提供 2 张图片');if(mode==='multi'&&!entries.length)throw new Error('多模态参考至少需要 1 个媒体素材');const form=new FormData(),seconds=Math.max(1,Math.min(15,Math.round(Number(p.duration??p.seconds??5)||5)));form.append('model','MiniMax-H3');form.append('prompt',String(task.prompt||''));form.append('seconds',String(seconds));form.append('size',xogpuRatioSize(ratio,p));form.append('metadata',JSON.stringify({mode,ratio}));const total={bytes:0,files:0};if(mode==='image'){await appendXogpuPart(form,'input_reference',images[0],null,total)}else if(mode==='frames'){const first=images.find(x=>/first/.test(x.role))||images[0],last=images.find(x=>/last/.test(x.role))||images.find(x=>x!==first),firstBlob=await xogpuReferenceBlob(first),lastBlob=await xogpuReferenceBlob(last);await xogpuValidateFrameAspectRatio(firstBlob,lastBlob);await appendXogpuPart(form,'input_reference',first,null,total,firstBlob);await appendXogpuPart(form,'end_reference',last,null,total,lastBlob)}else{if(images[0])await appendXogpuPart(form,'input_reference',images[0],null,total);for(const x of images.slice(1))await appendXogpuPart(form,'reference_images',x,null,total);for(const x of videos)await appendXogpuPart(form,'reference_videos',x,null,total);for(const x of audios)await appendXogpuPart(form,'reference_audios',x,null,total)}if(total.files!==entries.length)throw new Error('参考素材未全部写入 multipart，请求已阻止');return form}
 async function buildStandardVideoForm(model,task,refs,route={}){if(String(route?.protocolFamily||route?.family||'').toLowerCase()==='xogpu-minimax-h3'&&String(route?.requestTransport||'').toLowerCase()==='multipart')return buildXogpuDiscountVideoForm(model,task,refs,route);const p=VideoParams?.normalize?.(task.parameters||{})||task.parameters||{},form=new FormData();form.append('model',String(model.id||''));form.append('prompt',String(task.prompt||''));if(p.seconds)form.append('seconds',String(p.seconds));if(p.size)form.append('size',String(p.size));const first=refs.find(r=>['first_frame','image','image_reference'].includes(r.role)||r.type==='image');if(first?.url){const blob=await referenceBlob(first.url);if(!blob)throw new Error('首帧/参考图无法读取，无法提交图生视频');if(blob.size>25*1024*1024)throw new Error('首帧/参考图超过 25MB，在线预览暂不支持');form.append('input_reference',blob,'input-reference.'+((blob.type||'image/png').split('/')[1]||'png'))}return form}
 function autoVideoRoute(model,route){return route?.adapterKey==='standard-video-async-v1'&&(model?.routeOrigin==='auto'||model?.adapterResolved?.auto===true||!String(model?.createPath||'').trim())}
 const VIDEO_AUTO_RETRY_STATUSES=new Set([400,404,405,415,422]);

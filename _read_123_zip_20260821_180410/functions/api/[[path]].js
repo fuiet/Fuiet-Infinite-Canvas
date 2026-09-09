@@ -3,6 +3,7 @@
  * The browser runtime owns all preview persistence; this function only provides a
  * same-origin CORS escape hatch for upstream provider requests.
  */
+const PROXY_FORM_META='__canvas_proxy_meta_v2';
 const HOP_BY_HOP = new Set([
   'host','cookie','set-cookie','content-length','connection','keep-alive',
   'proxy-authenticate','proxy-authorization','te','trailer','transfer-encoding','upgrade',
@@ -69,14 +70,31 @@ async function proxy(request){
   if(origin&&origin!==requestOrigin)return json({error:'只允许本站页面调用代理'},403);
   if(request.headers.get('x-canvas-proxy')!=='1')return json({error:'缺少画布代理标记'},403);
 
-  let body;try{body=await request.json()}catch{return json({error:'代理请求必须是 JSON'},400)}
+  const rawMultipart=request.headers.get('x-canvas-proxy-mode')==='form-data-v2';
+  let body,payload;
+  if(rawMultipart){
+    let incoming;try{incoming=await request.formData()}catch{return json({error:'代理 multipart 请求无法解析'},400)}
+    const meta=String(incoming.get(PROXY_FORM_META)||'');
+    if(!meta||meta.length>65536)return json({error:'代理 multipart 元数据无效'},400);
+    try{body=JSON.parse(meta)}catch{return json({error:'代理 multipart 元数据不是有效 JSON'},400)}
+    const form=new FormData();
+    for(const [name,value] of incoming.entries()){
+      if(name===PROXY_FORM_META)continue;
+      if(typeof value==='string')form.append(name,value);else form.append(name,value,String(value?.name||'upload.bin'));
+    }
+    payload=form;
+  }else{
+    try{body=await request.json()}catch{return json({error:'代理请求必须是 JSON 或 multipart'},400)}
+    payload=body?.body;
+  }
   let current;try{current=validateTarget(body?.url)}catch(e){return json({error:e.message},400)}
   const method=String(body?.method||'GET').toUpperCase();
   if(!['GET','POST','PUT','PATCH','DELETE','HEAD'].includes(method))return json({error:'不支持的上游请求方法'},405);
   const headers=sanitizeHeaders(body?.headers||{});
-  let payload=body?.body;
-  const bodyType=String(body?.bodyType||'text');
-  if(bodyType==='form-data'){
+  const bodyType=rawMultipart?'form-data-v2':String(body?.bodyType||'text');
+  if(rawMultipart){
+    headers.delete('content-type');headers.delete('content-length');
+  }else if(bodyType==='form-data'){
     const form=new FormData();
     for(const item of Array.isArray(body?.formData)?body.formData:[]){
       if(item?.kind==='file'){
@@ -86,9 +104,7 @@ async function proxy(request){
         }catch{return json({error:'代理 multipart 文件编码无效'},400)}
       }else form.append(String(item?.name||'field'),String(item?.value||''));
     }
-    headers.delete('content-type');
-    headers.delete('content-length');
-    payload=form;
+    headers.delete('content-type');headers.delete('content-length');payload=form;
   }else if(payload!==null&&payload!==undefined&&typeof payload!=='string')return json({error:'代理请求体必须是文本、JSON 字符串或 multipart'},400);
   if(['GET','HEAD'].includes(method))payload=undefined;
 
