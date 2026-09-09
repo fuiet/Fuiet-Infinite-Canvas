@@ -737,20 +737,33 @@ async function prepareReferences(provider,model,references=[]){
 function isProviderOutputOrigin(provider,value){
   try{return Boolean(provider?.baseUrl)&&new URL(String(value||'')).origin===new URL(String(provider.baseUrl)).origin}catch{return false}
 }
+function resultPersistencePendingError(message,cause){
+  const error=new Error(message);error.code='RESULT_PENDING';if(cause)error.cause=cause;return error;
+}
 async function materializeRemoteOutput(output,provider,modality=''){
   if(!output||output.type!=='url'||provider.downloadOutputs===false)return output;
   const value=String(output.value||'');if(value.startsWith('/media/')||value.startsWith('data:'))return output;
   if(!/^https?:\/\//i.test(value))return output;
-  try{
-    const sameProviderOrigin=isProviderOutputOrigin(provider,value);
-    const headers=sameProviderOrigin?providerHeaders(provider):{};
-    const policy=sameProviderOrigin?{allowCredentiallessCrossOriginRedirect:true}:{sameOrigin:false};
-    const res=await fetchSafe(value,{method:'GET',headers,timeoutMs:120000},provider,policy);if(!res.ok)return output;
-    const limit=modality==='video'?Math.max(MAX_UPLOAD_BYTES,250*1024*1024):MAX_UPLOAD_BYTES;
-    const len=Number(res.headers.get('content-length')||0);if(len>limit)return output;
-    const buf=Buffer.from(await res.arrayBuffer());if(buf.length>limit)return output;
-    const ct=String(res.headers.get('content-type')||'').split(';')[0];const ext=safeExt(new URL(value).pathname,ct);const file=outFile(ext);fs.writeFileSync(file,buf);return {...output,sourceUrl:value,value:mediaUrl(file),persisted:true};
-  }catch{return output}
+  const strictMedia=['image','video','audio'].includes(String(modality||'').toLowerCase());
+  let lastError=null;
+  for(let attempt=0;attempt<3;attempt++){
+    if(attempt)await new Promise(resolve=>setTimeout(resolve,attempt===1?1200:3000));
+    try{
+      const sameProviderOrigin=isProviderOutputOrigin(provider,value);
+      const headers=sameProviderOrigin?providerHeaders(provider):{};
+      const policy=sameProviderOrigin?{allowCredentiallessCrossOriginRedirect:true}:{sameOrigin:false};
+      const res=await fetchSafe(value,{method:'GET',headers,timeoutMs:120000},provider,policy);
+      if(!res.ok)throw new Error(`结果文件下载失败 HTTP ${res.status}`);
+      const limit=modality==='video'?Math.max(MAX_UPLOAD_BYTES,250*1024*1024):MAX_UPLOAD_BYTES;
+      const len=Number(res.headers.get('content-length')||0);if(len>limit)throw new Error(`结果文件超过本地持久化限制 ${Math.round(limit/1024/1024)}MB`);
+      const ct=String(res.headers.get('content-type')||'').split(';')[0].trim().toLowerCase();
+      if(strictMedia&&(ct.startsWith('text/')||ct.includes('json')))throw new Error(`结果地址返回了 ${ct||'非媒体内容'}`);
+      const buf=Buffer.from(await res.arrayBuffer());if(!buf.length)throw new Error('结果文件下载为空');if(buf.length>limit)throw new Error(`结果文件超过本地持久化限制 ${Math.round(limit/1024/1024)}MB`);
+      const ext=safeExt(new URL(value).pathname,ct);const file=outFile(ext);fs.writeFileSync(file,buf);return {...output,sourceUrl:value,value:mediaUrl(file),persisted:true};
+    }catch(error){lastError=error}
+  }
+  if(strictMedia)throw resultPersistencePendingError(`上游已生成成功，但结果文件尚未持久化到本地：${lastError?.message||lastError||'下载失败'}`,lastError);
+  return output;
 }
 
 async function fetchJson(url, options={}) {
@@ -1040,8 +1053,15 @@ function localMediaMime(file){
 function xogpuServerRef(ref,index){const type=String(ref?.type||ref?.kind||'').toLowerCase(),role=String(ref?.role||ref?.semanticRole||'').toLowerCase(),url=String(ref?.url||ref?.outputUrl||ref?.value||'').trim();let kind='';if(type==='image'||/image|frame|picture/.test(role))kind='image';else if(type==='video'||/video|motion/.test(role))kind='video';else if(type==='audio'||/audio|voice|sound/.test(role))kind='audio';return{ref,index,type:kind,role,url}}
 function decodeDataReference(value){const m=String(value||'').match(/^data:([^;,]+)?(;base64)?,(.*)$/is);if(!m)return null;return{mime:String(m[1]||'application/octet-stream').toLowerCase(),buffer:m[2]?Buffer.from(m[3]||'','base64'):Buffer.from(decodeURIComponent(m[3]||''),'utf8')}}
 async function serverReferenceBlob(entry){const local=localVideoMediaReference(entry.url);if(local){const file=mediaPathFromUrl(local),buffer=fs.readFileSync(file);return{blob:new Blob([buffer],{type:localMediaMime(file)}),name:path.basename(file),file}}const data=decodeDataReference(entry.url);if(data)return{blob:new Blob([data.buffer],{type:data.mime}),name:`reference_${entry.index}${safeExt('',data.mime)}`,file:''};if(/^https?:\/\//i.test(entry.url)){const res=await fetchSafe(entry.url,{method:'GET',timeoutMs:90000},{},{sameOrigin:false});if(!res.ok)throw new Error(`参考素材下载失败 ${res.status}`);const buffer=Buffer.from(await res.arrayBuffer()),mime=String(res.headers.get('content-type')||'application/octet-stream').split(';')[0];return{blob:new Blob([buffer],{type:mime}),name:`reference_${entry.index}${safeExt(new URL(entry.url).pathname,mime)}`,file:''}}throw new Error('参考素材不是可读取的本地媒体、Data URL 或公网 URL')}
-async function appendServerXogpuPart(form,field,entry,total){const part=await serverReferenceBlob(entry),size=part.blob.size,max=entry.type==='image'?10*1024*1024:entry.type==='video'?48*1024*1024:20*1024*1024;if(size>max)throw new Error(`XOGPU ${entry.type==='image'?'图片':entry.type==='video'?'视频':'音频'}单文件超过限制`);if(part.file&&['video','audio'].includes(entry.type)){try{const info=await probeMediaFile(part.file);if(info.duration&&(info.duration<2||info.duration>15))throw new Error(`XOGPU 参考${entry.type==='video'?'视频':'音频'}时长必须为 2-15 秒`)}catch(error){if(/时长必须/.test(String(error?.message||'')))throw error}}total.bytes+=size;total.files+=1;if(total.bytes>120*1024*1024)throw new Error('XOGPU 参考媒体总大小超过 120 MiB');if(total.files>12)throw new Error('XOGPU 参考媒体合计最多 12 个文件');form.append(field,part.blob,part.name)}
-async function buildServerXogpuForm(body,refs,operation){const entries=(Array.isArray(refs)?refs:[]).map(xogpuServerRef).filter(x=>x.type&&x.url),images=entries.filter(x=>x.type==='image'),videos=entries.filter(x=>x.type==='video'),audios=entries.filter(x=>x.type==='audio');if(images.length>9||videos.length>3||audios.length>3||entries.length>12)throw new Error('XOGPU 参考素材数量超过文档限制');let metadata={};try{metadata=typeof body.metadata==='string'?JSON.parse(body.metadata):body.metadata||{}}catch{}const mode=String(metadata.mode|| (operation==='image-to-video'?'image':operation==='first-last-frame'?'frames':'multi'));if(mode==='image'&&(images.length!==1||videos.length||audios.length))throw new Error('图生视频必须且只能提供 1 张图片');if(mode==='frames'&&(images.length!==2||videos.length||audios.length))throw new Error('首尾帧模式必须提供 2 张图片');if(mode==='multi'&&!entries.length)throw new Error('多模态参考至少需要 1 个媒体素材');const form=new FormData();for(const key of ['model','prompt','seconds','size','metadata'])if(body[key]!==undefined)form.append(key,String(body[key]));const total={bytes:0,files:0};if(mode==='image'){await appendServerXogpuPart(form,'input_reference',images[0],total)}else if(mode==='frames'){const first=images.find(x=>/first/.test(x.role))||images[0],last=images.find(x=>/last/.test(x.role))||images.find(x=>x!==first);await appendServerXogpuPart(form,'input_reference',first,total);await appendServerXogpuPart(form,'end_reference',last,total)}else{if(images[0])await appendServerXogpuPart(form,'input_reference',images[0],total);for(const x of images.slice(1))await appendServerXogpuPart(form,'reference_images',x,total);for(const x of videos)await appendServerXogpuPart(form,'reference_videos',x,total);for(const x of audios)await appendServerXogpuPart(form,'reference_audios',x,total)}if(total.files!==entries.length)throw new Error('参考素材未全部写入 multipart，请求已阻止');return form}
+async function probeServerReference(part){
+  if(part.file)return probeMediaFile(part.file);
+  const ext=safeExt(part.name||'',String(part.blob?.type||'')),file=outFile(ext);fs.writeFileSync(file,Buffer.from(await part.blob.arrayBuffer()));
+  try{return await probeMediaFile(file)}finally{try{fs.unlinkSync(file)}catch{}}
+}
+async function validateServerXogpuDuration(entry,part){if(!['video','audio'].includes(entry.type))return 0;const info=await probeServerReference(part),seconds=Number(info.duration||0);if(!Number.isFinite(seconds)||seconds<=0)throw new Error(`无法读取 XOGPU 参考${entry.type==='video'?'视频':'音频'}时长`);if(seconds<2||seconds>15)throw new Error(`XOGPU 参考${entry.type==='video'?'视频':'音频'}时长为 ${seconds.toFixed(2)} 秒，仅支持 2-15 秒`);return seconds}
+async function validateServerXogpuFrameAspect(firstPart,lastPart){const [first,last]=await Promise.all([probeServerReference(firstPart),probeServerReference(lastPart)]),a=first.video,b=last.video;if(!a?.width||!a?.height||!b?.width||!b?.height)throw new Error('无法读取 XOGPU 首尾帧尺寸，已阻止提交');const ar=a.width/a.height,br=b.width/b.height,delta=Math.abs(ar-br)/Math.max(ar,br);if(delta>0.01)throw new Error(`首尾帧宽高比不一致（${a.width}x${a.height} vs ${b.width}x${b.height}），已在提交前阻止`);return{first:a,last:b}}
+async function appendServerXogpuPart(form,field,entry,total,preparedPart=null){const part=preparedPart||await serverReferenceBlob(entry),size=part.blob.size,max=entry.type==='image'?10*1024*1024:entry.type==='video'?48*1024*1024:20*1024*1024;if(size>max)throw new Error(`XOGPU ${entry.type==='image'?'图片':entry.type==='video'?'视频':'音频'}单文件超过限制`);await validateServerXogpuDuration(entry,part);total.bytes+=size;total.files+=1;if(total.bytes>120*1024*1024)throw new Error('XOGPU 参考媒体总大小超过 120 MiB');if(total.files>12)throw new Error('XOGPU 参考媒体合计最多 12 个文件');form.append(field,part.blob,part.name)}
+async function buildServerXogpuForm(body,refs,operation){const entries=(Array.isArray(refs)?refs:[]).map(xogpuServerRef).filter(x=>x.type&&x.url),images=entries.filter(x=>x.type==='image'),videos=entries.filter(x=>x.type==='video'),audios=entries.filter(x=>x.type==='audio');if(images.length>9||videos.length>3||audios.length>3||entries.length>12)throw new Error('XOGPU 参考素材数量超过文档限制');let metadata={};try{metadata=typeof body.metadata==='string'?JSON.parse(body.metadata):body.metadata||{}}catch{}const mode=String(metadata.mode|| (operation==='image-to-video'?'image':operation==='first-last-frame'?'frames':'multi'));if(mode==='image'&&(images.length!==1||videos.length||audios.length))throw new Error('图生视频必须且只能提供 1 张图片');if(mode==='frames'&&(images.length!==2||videos.length||audios.length))throw new Error('首尾帧模式必须提供 2 张图片');if(mode==='multi'&&!entries.length)throw new Error('多模态参考至少需要 1 个媒体素材');const form=new FormData();for(const key of ['model','prompt','seconds','size','metadata'])if(body[key]!==undefined)form.append(key,String(body[key]));const total={bytes:0,files:0};if(mode==='image'){await appendServerXogpuPart(form,'input_reference',images[0],total)}else if(mode==='frames'){const first=images.find(x=>/first/.test(x.role))||images[0],last=images.find(x=>/last/.test(x.role))||images.find(x=>x!==first),firstPart=await serverReferenceBlob(first),lastPart=await serverReferenceBlob(last);await validateServerXogpuFrameAspect(firstPart,lastPart);await appendServerXogpuPart(form,'input_reference',first,total,firstPart);await appendServerXogpuPart(form,'end_reference',last,total,lastPart)}else{if(images[0])await appendServerXogpuPart(form,'input_reference',images[0],total);for(const x of images.slice(1))await appendServerXogpuPart(form,'reference_images',x,total);for(const x of videos)await appendServerXogpuPart(form,'reference_videos',x,total);for(const x of audios)await appendServerXogpuPart(form,'reference_audios',x,total)}if(total.files!==entries.length)throw new Error('参考素材未全部写入 multipart，请求已阻止');return form}
 
 async function portableizeLocalVideoJsonBody(body,config={}){
   if(!ProviderRuntimeCore.mapNestedStrings)return body;
@@ -1289,6 +1309,11 @@ async function runTask(task, payload) {
   if(!provider)throw new Error('API 供应商不存在');
   const model=(provider.models||[]).find(m=>m.id===task.modelId&&m.modality===task.nodeType);
   if(!model)throw new Error('所选模型不存在，或模型类型与节点类型不匹配');
+  if(task.providerStatus==='succeeded'&&task.resultStatus==='pending'&&task.providerOutput?.type==='url'){
+    assertTaskActive(task);taskLog(task,'上游已经生成成功，仅重试结果文件持久化，不重新提交生成请求','warn');
+    const output=await materializeRemoteOutput(task.providerOutput,provider,task.nodeType);
+    updateTask(task,{status:'succeeded',progress:100,output,providerStatus:'succeeded',resultStatus:'saved',resultSavedAt:new Date().toISOString(),error:null,lastError:null});taskLog(task,'结果文件已持久化，任务完成');return;
+  }
   assertTaskActive(task);taskLog(task,`开始执行：${provider.name} / ${model.name||model.id}`);
   payload={...payload,references:await prepareReferences(provider,model,payload.references||[])};
   task.payload=payload;updateTask(task,{payload,progress:3,status:'running',error:null});
@@ -1297,8 +1322,11 @@ async function runTask(task, payload) {
   else if(adapter==='standard-video-async-v1')output=await executeStandardVideoAsync(task,provider,model,payload);
   else if(adapter.startsWith('openai-'))output=await executeOpenAI(task,provider,model,payload);
   else output=await executeGeneric(task,provider,model,payload);
-  assertTaskActive(task);output=await materializeRemoteOutput(output,provider,task.nodeType);
-  updateTask(task,{status:'succeeded',progress:100,output,error:null});taskLog(task,'任务完成');
+  assertTaskActive(task);
+  const mediaOutput=['image','video','audio'].includes(String(task.nodeType||'').toLowerCase())&&output?.type==='url';
+  if(mediaOutput)updateTask(task,{providerStatus:'succeeded',resultStatus:'available',providerOutput:output,providerSucceededAt:task.providerSucceededAt||new Date().toISOString(),error:null});
+  output=await materializeRemoteOutput(output,provider,task.nodeType);
+  updateTask(task,{status:'succeeded',progress:100,output,error:null,...(mediaOutput?{providerStatus:'succeeded',resultStatus:'saved',resultSavedAt:new Date().toISOString(),lastError:null}:{})});taskLog(task,'任务完成');
 }
 async function runTaskById(id){
   const task=store.getTask(id);if(!task)return;
