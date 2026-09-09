@@ -765,7 +765,7 @@ async function executeTask(task){
       value=await materializeGeneratedVideoOutput(value,provider);
       return updateTask(task.id,{status:'succeeded',providerStatus:'succeeded',resultStatus:'saved',progress:100,output:outputObject(value,'video',sourceUrl),providerOutput:clone(created.value),providerResultUrl:sourceUrl||String(value||''),resultSavedAt:now(),videoProtocolDiagnostics:{createPath:usedCreatePath,mode:'immediate-output'}});
     }
-    if(!taskId){const error=new Error('异步接口没有返回任务 ID，也没有返回可用的视频结果；为避免重复扣费不会自动重新提交');error.noRetry=true;throw error}
+    if(!taskId){const responsePreview=(()=>{try{let text=JSON.stringify(created.value);text=text.replace(/(\"(?:authorization|api[_-]?key|token|secret)\"\s*:\s*\")[^\"]*(\")/gi,'$1[redacted]$2');return text.length>700?text.slice(0,700)+'…':text}catch{return''}})();const error=new Error('异步接口没有返回任务 ID，也没有返回可用的视频结果；为避免重复扣费不会自动重新提交'+(responsePreview?`；创建响应：${responsePreview}`:''));error.noRetry=true;error.providerCreateResponse=created.value;throw error}
     if(modality==='video')pollCandidates=videoPollUrlCandidates(provider,created.value,usedCreatePath,taskId,route);
     const providerVideoId=modality==='video'&&Core?.firstPath?Core.firstPath(created.value,['video_id','videoId','data.video_id','data.videoId']):'';
     const providerTaskId=modality==='video'&&Core?.firstPath?Core.firstPath(created.value,['task_id','taskId','data.task_id','data.taskId','id','data.id']):'';

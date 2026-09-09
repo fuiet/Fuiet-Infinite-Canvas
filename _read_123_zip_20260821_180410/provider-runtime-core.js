@@ -42,6 +42,27 @@ function findStringByPrefix(value,prefix,depth=0){
   }
   return '';
 }
+function findNamedTaskId(value,depth=0,allowPlainId=false){
+  if(depth>8||value==null)return '';
+  if(Array.isArray(value)){
+    for(const item of value){const hit=findNamedTaskId(item,depth+1,true);if(hit)return hit;}
+    return '';
+  }
+  if(typeof value!=='object')return '';
+  const priority=['task_id','taskId','taskID','job_id','jobId','jobID','video_id','videoId','videoID','generation_id','generationId','request_id','requestId','task_uuid','taskUuid','job_uuid','jobUuid','video_uuid','videoUuid'];
+  for(const key of priority){const item=value[key];if((typeof item==='string'||typeof item==='number')&&String(item).trim())return String(item).trim();}
+  for(const key of ['task','job','video','generation']){const item=value[key];if((typeof item==='string'||typeof item==='number')&&String(item).trim())return String(item).trim();}
+  if(allowPlainId){const item=value.id;if((typeof item==='string'||typeof item==='number')&&String(item).trim())return String(item).trim();}
+  for(const [key,item] of Object.entries(value)){
+    if(item==null||typeof item!=='object')continue;
+    const childAllowsId=allowPlainId||/^(?:data|result|response|payload|task|job|video|generation|item)$/i.test(key);
+    const hit=findNamedTaskId(item,depth+1,childAllowsId);if(hit)return hit;
+  }
+  return '';
+}
+function findTaskPrefixId(value){
+  return findStringByPrefix(value,'task_')||findStringByPrefix(value,'video_task_');
+}
 function lowerValues(values,fallback){
   const source=Array.isArray(values)&&values.length?values:fallback;
   return new Set(source.map(value=>String(value).trim().toLowerCase()).filter(Boolean));
@@ -50,15 +71,18 @@ function extractTaskId(response,config={}){
   const configured=firstPath(response,[config.taskIdPath,...(Array.isArray(config.taskIdPaths)?config.taskIdPaths:[])]);
   if(configured!==undefined&&configured!==null&&configured!=='')return String(configured);
   const common=firstPath(response,[
-    'id','task_id','taskId','request_id','requestId','job_id','jobId',
-    'data.id','data.task_id','data.taskId','data.request_id','data.job_id','data.jobId',
-    'task.id','job.id','result.id','result.task.id','result.job.id','video.id','data.video.id','data.task.id','data.job.id','result.task_id','result.taskId'
+    'id','task_id','taskId','taskID','request_id','requestId','job_id','jobId','video_id','videoId','generation_id','generationId','task_uuid','taskUuid','job_uuid','jobUuid',
+    'data.id','data.task_id','data.taskId','data.request_id','data.requestId','data.job_id','data.jobId','data.video_id','data.videoId','data.generation_id','data.generationId','data.task_uuid','data.taskUuid','data.job_uuid','data.jobUuid',
+    'task.id','task.task_id','task.taskId','job.id','job.task_id','job.taskId','job.job_id','job.jobId','video.id','video.task_id','video.taskId','generation.id','generation.task_id','generation.taskId',
+    'data.task.id','data.task.task_id','data.task.taskId','data.job.id','data.job.task_id','data.job.taskId','data.video.id','data.video.task_id','data.video.taskId','data.generation.id','data.generation.task_id','data.generation.taskId',
+    'result.id','result.task_id','result.taskId','result.job_id','result.jobId','result.video_id','result.videoId','result.task.id','result.task.task_id','result.task.taskId','result.job.id','result.job.task_id','result.job.taskId',
+    'response.id','response.task_id','response.taskId','payload.id','payload.task_id','payload.taskId','0.id','0.task_id','0.taskId'
   ]);
-  if(common===undefined||common===null||common===''){
-    const scalar=typeof response?.data==='string'||typeof response?.data==='number'?response.data:(typeof response?.result==='string'||typeof response?.result==='number'?response.result:undefined);
-    if(scalar!==undefined&&scalar!==null&&String(scalar).trim())return String(scalar);
-  }
-  return common!==undefined&&common!==null&&common!==''?String(common):findStringByPrefix(response,'video_task_');
+  if(common!==undefined&&common!==null&&common!=='')return String(common);
+  const scalar=typeof response?.data==='string'||typeof response?.data==='number'?response.data:(typeof response?.result==='string'||typeof response?.result==='number'?response.result:undefined);
+  if(scalar!==undefined&&scalar!==null&&String(scalar).trim())return String(scalar);
+  const named=findNamedTaskId(response,0,false);if(named)return named;
+  return findTaskPrefixId(response);
 }
 function extractStatus(response,config={}){
   return firstPath(response,[config.statusPath,...(Array.isArray(config.statusPaths)?config.statusPaths:[]),'status','data.status','state','data.state','task.status','task.state','data.task.status','data.task.state','job.status','job.state','data.job.status','data.job.state','result.status','result.state','video.status','video.state','data.video.status','data.video.state']);
