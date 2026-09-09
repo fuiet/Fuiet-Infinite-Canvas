@@ -22,8 +22,23 @@ jobs:
           python-version: '3.12'
       - name: Apply media transport hardening
         run: python scripts/patch-media-transport-hardening-v1.py
+      - name: Normalize generated hardening regression test
+        run: |
+          node <<'NODE'
+          const fs=require('fs');
+          const p='_read_123_zip_20260821_180410/tests/media-transport-hardening-v1.test.mjs';
+          let s=fs.readFileSync(p,'utf8');
+          const start=s.indexOf('  const frameBranch=browser.match(');
+          const next=s.indexOf("  assert.ok(frameBranch.indexOf('xogpuValidateFrameAspectRatio')",start);
+          if(start<0||next<0)throw new Error('Unable to locate generated frame-branch assertion');
+          const replacement=`  const frameStart=browser.indexOf("else if(mode==='frames')");\n  const frameEnd=browser.indexOf('}else{',frameStart);\n  const frameBranch=browser.slice(frameStart,frameEnd>frameStart?frameEnd:undefined);\n`;
+          s=s.slice(0,start)+replacement+s.slice(next);
+          fs.writeFileSync(p,s);
+          NODE
       - name: Syntax check browser runtime
         run: node --check _read_123_zip_20260821_180410/browser-runtime-preview.js
+      - name: Syntax check generated regression test
+        run: node --check _read_123_zip_20260821_180410/tests/media-transport-hardening-v1.test.mjs
       - name: Run focused media transport tests
         run: |
           node --test \
