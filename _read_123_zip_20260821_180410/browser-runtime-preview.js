@@ -194,7 +194,7 @@ function credentialedProviderUrl(provider,url){if(!isProviderOriginUrl(provider,
 function stripCredentialHeaders(headers={}){const out={};for(const [k,v] of Object.entries(headers||{})){const n=String(k).toLowerCase();if(n==='authorization'||n==='proxy-authorization'||n==='x-api-key'||n==='api-key'||/(^|[-_])(token|secret|api[-_]?key)([-_]|$)/i.test(n))continue;out[k]=v}return out}
 function providerRouteUrl(provider,value){const text=String(value||'').trim();if(!text)return'';try{const url=/^https?:\/\//i.test(text)?text:joinUrl(provider.baseUrl,text);return isProviderOriginUrl(provider,url)?url:''}catch{return''}}
 function providerResourceUrl(provider,value){const text=String(value||'').trim();if(!text)return'';try{if(/^https?:\/\//i.test(text))return new URL(text).toString();if(text.startsWith('/'))return joinUrl(provider.baseUrl,text);return''}catch{return''}}
-function authCandidates(provider){let key=String(provider?.apiKey||'').trim();if(!key)return[{}];key=key.replace(/^Bearer\s+/i,'').trim();const host=(()=>{try{return new URL(String(provider?.baseUrl||'')).hostname.toLowerCase()}catch{return''}})();if(host==='xogpu.com'||host.endsWith('.xogpu.com'))return[{Authorization:`Bearer ${key}`}];const list=[];const configured=String(provider?.authHeader||'').trim();if(configured){const scheme=String(provider?.authScheme||'').trim();list.push({[configured]:scheme?`${scheme} ${key}`:key})}list.push({Authorization:`Bearer ${key}`},{'x-api-key':key},{'api-key':key});const seen=new Set();return list.filter(x=>{const s=JSON.stringify(x);if(seen.has(s))return false;seen.add(s);return true})}
+function normalizeProviderApiKey(value){let key=String(value||'').trim();key=key.replace(/^Authorization\s*:\s*/i,'').trim();key=key.replace(/^Bearer\s+/i,'').trim();key=key.replace(/^[\"'`]+|[\"'`]+$/g,'').trim();key=key.replace(/[\u200B-\u200D\uFEFF]/g,'').trim();return key}function authCandidates(provider){const key=normalizeProviderApiKey(provider?.apiKey);if(!key)return[{}];const host=(()=>{try{return new URL(String(provider?.baseUrl||'')).hostname.toLowerCase()}catch{return''}})();const list=[];if(host==='xogpu.com'||host.endsWith('.xogpu.com')){list.push({Authorization:`Bearer ${key}`},{Authorization:key},{'x-api-key':key},{'api-key':key})}else{const configured=String(provider?.authHeader||'').trim();if(configured){const scheme=String(provider?.authScheme||'').trim();list.push({[configured]:scheme?`${scheme} ${key}`:key})}list.push({Authorization:`Bearer ${key}`},{'x-api-key':key},{'api-key':key})}const seen=new Set();return list.filter(x=>{const s=JSON.stringify(x);if(seen.has(s))return false;seen.add(s);return true})}
 function cleanHeaders(headers={}){const h={};for(const [k,v] of Object.entries(headers||{})){const n=String(k).toLowerCase();if(['host','cookie','set-cookie','content-length','connection','transfer-encoding','cf-connecting-ip','x-forwarded-for'].includes(n))continue;h[k]=String(v)}return h}
 
 const PROXY_FORM_META='__canvas_proxy_meta_v2';
@@ -232,13 +232,14 @@ async function providerFetch(url,init={}){
     return proxyFetch(url,init);
   }
 }
+async function responseAuthRejected(res){if([401,403].includes(res.status))return true;if(!res?.ok)return false;try{const ct=String(res.headers.get('content-type')||'').toLowerCase();if(!(ct.includes('json')||ct.startsWith('text/')))return false;const text=await res.clone().text();return /unauthorized|invalid access token|invalid[^;\n]*(?:token|api[ _-]?key)|access token/i.test(text)}catch{return false}}
 async function fetchWithAuth(provider,url,init={}){
   url=credentialedProviderUrl(provider,url);
   let last=null;
   for(const auth of authCandidates(provider)){
     const res=await providerFetch(url,{...init,headers:{accept:'application/json',...(init.headers||{}),...auth}});
     last=res;
-    if(![401,403].includes(res.status))return res;
+    if(!(await responseAuthRejected(res)))return res;
   }
   return last;
 }
@@ -616,7 +617,7 @@ function providerRetryAfterMs(res,detail=''){
   const m=String(detail||'').match(/per\s+(\d+(?:\.\d+)?)\s*(second|minute|hour)/i);if(m){const n=Number(m[1])||1,unit=m[2].toLowerCase(),factor=unit.startsWith('hour')?3600000:unit.startsWith('minute')?60000:1000;return clamp(n*factor+1000)}
   return 65000;
 }
-async function providerJson(provider,url,init){const res=await fetchWithAuth(provider,url,init);const parsed=await readResponse(res);const explicitFailure=Boolean(parsed?.kind==='json'&&parsed?.value&&typeof parsed.value==='object'&&parsed.value.success===false);if(!res.ok||explicitFailure){const detail=runtimeErrorText(parsed.value);const host=(()=>{try{return new URL(String(provider?.baseUrl||'')).hostname.toLowerCase()}catch{return''}})();const authFailure=/unauthorized|invalid access token|invalid[^;\n]*(?:token|api[ _-]?key)|access token/i.test(String(detail||''));const status=!res.ok?res.status:(authFailure?401:400);const xogpu=host==='xogpu.com'||host.endsWith('.xogpu.com');const prefix=xogpu&&authFailure?'XOGPU 认证失败：API Key 无效、已过期，或没有 discount_video_generation 权限':`供应商 HTTP ${status}`;const err=new Error(`${prefix}${detail?`：${detail.slice(0,500)}`:''}`);err.status=status;err.detail=detail;err.providerFailure=explicitFailure;if(status===429)err.retryAfterMs=providerRetryAfterMs(res,detail);throw err}return parsed}
+async function providerJson(provider,url,init){const res=await fetchWithAuth(provider,url,init);const parsed=await readResponse(res);const explicitFailure=Boolean(parsed?.kind==='json'&&parsed?.value&&typeof parsed.value==='object'&&parsed.value.success===false);if(!res.ok||explicitFailure){const detail=runtimeErrorText(parsed.value);const host=(()=>{try{return new URL(String(provider?.baseUrl||'')).hostname.toLowerCase()}catch{return''}})();const authFailure=/unauthorized|invalid access token|invalid[^;\n]*(?:token|api[ _-]?key)|access token/i.test(String(detail||''));const status=!res.ok?res.status:(authFailure?401:400);const xogpu=host==='xogpu.com'||host.endsWith('.xogpu.com');const key=normalizeProviderApiKey(provider?.apiKey);const keyMeta=key?`；已使用已保存密钥（长度 ${key.length}${key.startsWith('sk-')?'，前缀 sk-':''}）`:'；当前没有可用密钥';const prefix=xogpu&&authFailure?`XOGPU 认证失败：已依次尝试 Bearer、Authorization 原始值、x-api-key、api-key${keyMeta}。XOGPU 仍拒绝该密钥`:`供应商 HTTP ${status}`;const err=new Error(`${prefix}${detail?`：${detail.slice(0,500)}`:''}`);err.status=status;err.detail=detail;err.providerFailure=explicitFailure;if(status===429)err.retryAfterMs=providerRetryAfterMs(res,detail);throw err}return parsed}
 
 async function discover(provider){
   const endpoints=['/v1/models','/models','/api/v1/models','/api/models'];let last='';
