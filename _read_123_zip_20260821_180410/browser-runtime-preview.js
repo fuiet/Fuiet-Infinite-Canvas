@@ -655,6 +655,14 @@ async function executeTask(task){
   const operation=task.parameters?.operation||'generate';
   const modality=normalizeMod(task.nodeType);
   const route=modality==='video'&&Adapters?.resolveVideoRoute?Adapters.resolveVideoRoute(provider,model,task,task.references||[]):Adapters?.resolveRoute?Adapters.resolveRoute(provider,model,task.nodeType,operation):{createPath:model.createPath,method:model.method||'POST',responseMode:model.responseMode||'sync',outputPath:model.outputPath||''};
+  const pendingResultUrl=String(task.providerResultUrl||'').trim();
+  if(task.providerStatus==='succeeded'&&task.resultStatus==='pending'&&pendingResultUrl&&['image','video'].includes(modality)){
+    updateTask(task.id,{status:'result_pending',progress:Math.max(99,Number(task.progress||0)),error:null,lastError:task.lastError||'上游已成功，仅重试结果持久化'});
+    let value=modality==='image'?await materializeGeneratedImageOutput(pendingResultUrl,provider):await materializeGeneratedVideoOutput(pendingResultUrl,provider);
+    if(!validMediaOutput(value))throw new Error(`上游已成功，但${modality==='image'?'图片':'视频'}结果持久化后仍不可用`);
+    let dimensionInfo=null;if(modality==='image'){dimensionInfo=await enforceGeneratedImageDimensions(value,provider,model,task.parameters||{});value=dimensionInfo.value}
+    return updateTask(task.id,{status:'succeeded',providerStatus:'succeeded',resultStatus:'saved',progress:100,output:outputObject(value,modality,pendingResultUrl),resultSavedAt:now(),lastError:null,error:null,...imageDimensionTaskPatch(dimensionInfo)});
+  }
   if(!route.createPath)throw new Error('无法自动确定供应商创建接口');
   const recoveredUpstreamTaskId=modality==='video'&&task.providerCreateResponse&&Core?.extractTaskId?String(Core.extractTaskId(task.providerCreateResponse,route)||'').trim():'';
   const existingUpstreamTaskId=modality==='video'?String(recoveredUpstreamTaskId||task.upstreamTaskId||'').trim():'';
@@ -733,14 +741,15 @@ async function executeTask(task){
       }
       const raw=created.value,extracted=Core?.extractOutput?Core.extractOutput(raw,route,modality):undefined;
       let value=extracted!==undefined?extracted:(modality==='text'?(raw?.choices?.[0]?.message?.content??raw?.text??raw?.content??JSON.stringify(raw)):raw?.url??raw?.data?.url);
-      value=await normalizeGeneratedOutput(value,modality,provider);
-      const sourceUrl=modality==='image'&&typeof value==='string'&&/^https:\/\//i.test(value.trim())?value.trim():'';
+      const sourceUrl=['image','video'].includes(modality)?providerResourceUrl(provider,value):'';
+      if(sourceUrl)updateTask(task.id,{providerStatus:'succeeded',resultStatus:'pending',providerOutput:clone(raw),providerResultUrl:sourceUrl,providerSucceededAt:findTask(task.id)?.providerSucceededAt||now(),progress:99,error:null});
+      value=await normalizeGeneratedOutput(sourceUrl||value,modality,provider);
       if(modality==='video')value=await materializeGeneratedVideoOutput(value,provider);
       if(modality==='image'&&!validMediaOutput(value))throw new Error('上游已返回成功响应，但未识别到图片结果字段');
       if(modality==='video'&&!validMediaOutput(value))throw new Error('上游已返回成功响应，但未识别到视频结果字段');
       let dimensionInfo=null;if(modality==='image'){dimensionInfo=await enforceGeneratedImageDimensions(value,provider,model,task.parameters||{});value=dimensionInfo.value}
       const upstreamSize=modality==='image'?imageResponseSize(raw):'';
-      return updateTask(task.id,{status:'succeeded',progress:100,output:outputObject(value,modality,sourceUrl),...imageDimensionTaskPatch(dimensionInfo),...(upstreamSize?{upstreamSize}:{})});
+      return updateTask(task.id,{status:'succeeded',providerStatus:sourceUrl?'succeeded':undefined,resultStatus:sourceUrl?'saved':undefined,resultSavedAt:sourceUrl?now():undefined,progress:100,output:outputObject(value,modality,sourceUrl),...imageDimensionTaskPatch(dimensionInfo),...(upstreamSize?{upstreamSize}:{})});
     }
   }
 
@@ -750,9 +759,11 @@ async function executeTask(task){
     const immediateOutput=modality==='video'&&Core?.extractOutput?Core.extractOutput(created.value,route,'video'):undefined;
     taskId=Core?.extractTaskId?Core.extractTaskId(created.value,route):created.value?.id;
     if(modality==='video'&&immediateOutput&&!taskId){
-      let value=await normalizeGeneratedOutput(immediateOutput,'video',provider);
+      const sourceUrl=providerResourceUrl(provider,immediateOutput);
+      if(sourceUrl)updateTask(task.id,{status:'provider_succeeded',providerStatus:'succeeded',resultStatus:'pending',providerOutput:clone(created.value),providerResultUrl:sourceUrl,providerSucceededAt:findTask(task.id)?.providerSucceededAt||now(),progress:99,error:null,videoProtocolDiagnostics:{createPath:usedCreatePath,mode:'immediate-output'}});
+      let value=await normalizeGeneratedOutput(sourceUrl||immediateOutput,'video',provider);
       value=await materializeGeneratedVideoOutput(value,provider);
-      return updateTask(task.id,{status:'succeeded',providerStatus:'succeeded',resultStatus:'saved',progress:100,output:outputObject(value,'video'),providerOutput:clone(created.value),providerResultUrl:String(value||''),resultSavedAt:now(),videoProtocolDiagnostics:{createPath:usedCreatePath,mode:'immediate-output'}});
+      return updateTask(task.id,{status:'succeeded',providerStatus:'succeeded',resultStatus:'saved',progress:100,output:outputObject(value,'video',sourceUrl),providerOutput:clone(created.value),providerResultUrl:sourceUrl||String(value||''),resultSavedAt:now(),videoProtocolDiagnostics:{createPath:usedCreatePath,mode:'immediate-output'}});
     }
     if(!taskId){const error=new Error('异步接口没有返回任务 ID，也没有返回可用的视频结果；为避免重复扣费不会自动重新提交');error.noRetry=true;throw error}
     if(modality==='video')pollCandidates=videoPollUrlCandidates(provider,created.value,usedCreatePath,taskId,route);
