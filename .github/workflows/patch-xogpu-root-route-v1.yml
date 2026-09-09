@@ -1,0 +1,51 @@
+name: Patch XOGPU root route v1
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/patch-xogpu-root-route-v1.py'
+      - '.github/workflows/patch-xogpu-root-route-v1.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply XOGPU root route patch
+        run: python scripts/patch-xogpu-root-route-v1.py
+      - name: Syntax check protocol registry
+        run: node --check _read_123_zip_20260821_180410/video-protocol-registry.js
+      - name: Syntax check regression test
+        run: node --check _read_123_zip_20260821_180410/tests/xogpu-root-route-v1.test.mjs
+      - name: Run focused XOGPU regressions
+        run: |
+          node --test \
+            _read_123_zip_20260821_180410/tests/xogpu-root-route-v1.test.mjs \
+            _read_123_zip_20260821_180410/tests/xogpu-browser-strict-request.test.mjs \
+            _read_123_zip_20260821_180410/tests/media-transport-hardening-v1.test.mjs \
+            _read_123_zip_20260821_180410/tests/browser-result-only-retry-v1.test.mjs
+      - name: Check patch whitespace
+        run: git diff --check
+      - name: Commit corrected XOGPU routes
+        run: |
+          if git diff --quiet; then
+            echo 'No source changes to commit.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            _read_123_zip_20260821_180410/video-protocol-registry.js \
+            _read_123_zip_20260821_180410/index.html \
+            _read_123_zip_20260821_180410/tests/xogpu-root-route-v1.test.mjs
+          git commit -m 'Fix XOGPU discount studio root route'
+          git push
