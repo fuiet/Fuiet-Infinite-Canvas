@@ -176,6 +176,11 @@ function resolveRoute(provider={},model={},nodeType='',operation='generate'){
   });
   const op=compact(model.operationRoutes?.[operation]||model.operationRoutes?.generate||{});
   const route={...defaults,...knownVideo,...providerVideo,...modelVideo,...direct,...op,adapterKey};
+  const knownVideoFamily=String(knownVideo.protocolFamily||knownVideo.family||'').trim().toLowerCase();
+  if(nodeType==='video'&&knownVideoFamily==='xogpu-minimax-h3'&&/^https?:\/\//i.test(String(knownVideo.createPath||''))){
+    route.createPath=knownVideo.createPath;
+    route.createCandidates=Array.isArray(knownVideo.createCandidates)&&knownVideo.createCandidates.length?[...knownVideo.createCandidates]:[knownVideo.createPath];
+  }
   route.method=String(route.method||'POST').toUpperCase();
   route.pollMethod=String(route.pollMethod||'GET').toUpperCase();
   route.successValues=Array.isArray(route.successValues)&&route.successValues.length?route.successValues:SUCCESS;
