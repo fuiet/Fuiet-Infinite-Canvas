@@ -1,0 +1,48 @@
+name: Patch XOGPU auth v4
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/patch-xogpu-auth-v4.py'
+      - '.github/workflows/patch-xogpu-auth-v4.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply XOGPU auth patch
+        run: python scripts/patch-xogpu-auth-v4.py
+      - name: Syntax checks
+        run: |
+          node --check _read_123_zip_20260821_180410/browser-runtime-preview.js
+          node --check _read_123_zip_20260821_180410/browser-runtime.js
+          node --check _read_123_zip_20260821_180410/tests/xogpu-auth-v4.test.mjs
+      - name: Run XOGPU auth tests
+        run: node --test _read_123_zip_20260821_180410/tests/xogpu-auth-v4.test.mjs
+      - name: Check whitespace
+        run: git diff --check
+      - name: Commit XOGPU auth fix
+        run: |
+          if git diff --quiet; then
+            echo 'No source changes to commit.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            _read_123_zip_20260821_180410/browser-runtime-preview.js \
+            _read_123_zip_20260821_180410/browser-runtime.js \
+            _read_123_zip_20260821_180410/index.html \
+            _read_123_zip_20260821_180410/tests/xogpu-auth-v4.test.mjs
+          git commit -m 'Fix XOGPU Bearer auth and provider failures'
+          git push
