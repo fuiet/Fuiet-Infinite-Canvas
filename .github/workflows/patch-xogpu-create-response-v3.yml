@@ -1,0 +1,53 @@
+name: Patch XOGPU create response v3
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/patch-xogpu-create-response-v3.py'
+      - '.github/workflows/patch-xogpu-create-response-v3.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply XOGPU create response patch
+        run: python scripts/patch-xogpu-create-response-v3.py
+      - name: Syntax checks
+        run: |
+          node --check _read_123_zip_20260821_180410/provider-runtime-core.js
+          node --check _read_123_zip_20260821_180410/browser-runtime.js
+          node --check _read_123_zip_20260821_180410/tests/xogpu-create-response-v3.test.mjs
+      - name: Run XOGPU focused tests
+        run: |
+          node --test \
+            _read_123_zip_20260821_180410/tests/xogpu-create-response-v3.test.mjs \
+            _read_123_zip_20260821_180410/tests/xogpu-route-merge-v2.test.mjs \
+            _read_123_zip_20260821_180410/tests/xogpu-root-route-v1.test.mjs \
+            _read_123_zip_20260821_180410/tests/xogpu-discount-studio-contract.test.mjs
+      - name: Check whitespace
+        run: git diff --check
+      - name: Commit parser fix
+        run: |
+          if git diff --quiet; then
+            echo 'No source changes to commit.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            _read_123_zip_20260821_180410/provider-runtime-core.js \
+            _read_123_zip_20260821_180410/browser-runtime.js \
+            _read_123_zip_20260821_180410/index.html \
+            _read_123_zip_20260821_180410/tests/xogpu-create-response-v3.test.mjs
+          git commit -m 'Handle XOGPU create response task ids'
+          git push
