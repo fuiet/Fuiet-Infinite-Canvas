@@ -2,7 +2,8 @@ from pathlib import Path
 
 root = Path('_read_123_zip_20260821_180410')
 core = root / 'provider-runtime-core.js'
-browser = root / 'browser-runtime.js'
+preview = root / 'browser-runtime-preview.js'
+router = root / 'browser-runtime.js'
 index = root / 'index.html'
 test_file = root / 'tests' / 'xogpu-create-response-v3.test.mjs'
 
@@ -22,14 +23,23 @@ elif "return findTaskPrefixId(response);" not in src:
     raise SystemExit('extractTaskId anchor not found')
 core.write_text(src, encoding='utf-8')
 
-bsrc = browser.read_text(encoding='utf-8')
+psrc = preview.read_text(encoding='utf-8')
 old_error = "if(!taskId){const error=new Error('异步接口没有返回任务 ID，也没有返回可用的视频结果；为避免重复扣费不会自动重新提交');error.noRetry=true;throw error}"
-new_error = "if(!taskId){const preview=(()=>{try{let text=JSON.stringify(created.value);text=text.replace(/(\\\"(?:authorization|api[_-]?key|token|secret)\\\"\\s*:\\s*\\\")[^\\\"]*(\\\")/gi,'$1[redacted]$2');return text.length>700?text.slice(0,700)+'…':text}catch{return''}})();const error=new Error('异步接口没有返回任务 ID，也没有返回可用的视频结果；为避免重复扣费不会自动重新提交'+(preview?`；创建响应：${preview}`:''));error.noRetry=true;error.providerCreateResponse=created.value;throw error}"
-if old_error in bsrc:
-    bsrc = bsrc.replace(old_error, new_error, 1)
-elif 'error.providerCreateResponse=created.value' not in bsrc:
-    raise SystemExit('browser missing-task-id anchor not found')
-browser.write_text(bsrc, encoding='utf-8')
+new_error = "if(!taskId){const responsePreview=(()=>{try{let text=JSON.stringify(created.value);text=text.replace(/(\\\"(?:authorization|api[_-]?key|token|secret)\\\"\\s*:\\s*\\\")[^\\\"]*(\\\")/gi,'$1[redacted]$2');return text.length>700?text.slice(0,700)+'…':text}catch{return''}})();const error=new Error('异步接口没有返回任务 ID，也没有返回可用的视频结果；为避免重复扣费不会自动重新提交'+(responsePreview?`；创建响应：${responsePreview}`:''));error.noRetry=true;error.providerCreateResponse=created.value;throw error}"
+if old_error in psrc:
+    psrc = psrc.replace(old_error, new_error, 1)
+elif 'error.providerCreateResponse=created.value' not in psrc:
+    raise SystemExit('preview missing-task-id anchor not found')
+preview.write_text(psrc, encoding='utf-8')
+
+rsrc = router.read_text(encoding='utf-8')
+old_preview_cache = './browser-runtime-preview.js?v=20260908-xogpu-discount-studio-2'
+new_preview_cache = './browser-runtime-preview.js?v=20260909-xogpu-create-response-3'
+if old_preview_cache in rsrc:
+    rsrc = rsrc.replace(old_preview_cache,new_preview_cache,1)
+elif new_preview_cache not in rsrc:
+    raise SystemExit('browser preview cache key anchor not found')
+router.write_text(rsrc, encoding='utf-8')
 
 html = index.read_text(encoding='utf-8')
 repls = {
@@ -43,4 +53,41 @@ for old,new in repls.items():
         raise SystemExit(f'cache key anchor not found: {old}')
 index.write_text(html, encoding='utf-8')
 
-test_file.write_text("""import test from 'node:test';\nimport assert from 'node:assert/strict';\nimport fs from 'node:fs';\nimport vm from 'node:vm';\n\nconst coreSrc=fs.readFileSync(new URL('../provider-runtime-core.js',import.meta.url),'utf8');\nconst sandbox={};sandbox.globalThis=sandbox;vm.runInNewContext(coreSrc,sandbox,{filename:'provider-runtime-core.js'});\nconst Core=sandbox.CanvasProviderRuntimeCore;\n\ntest('extracts XOGPU task id from nested uncommon create response shapes',()=>{\n  assert.equal(Core.extractTaskId({data:{job:{taskId:'task_nested_1'}}}), 'task_nested_1');\n  assert.equal(Core.extractTaskId({payload:{generation_id:'task_generation_2'}}), 'task_generation_2');\n  assert.equal(Core.extractTaskId([{id:'task_array_3'}]), 'task_array_3');\n  assert.equal(Core.extractTaskId({ok:true,job:{uuid:'task_uuid_4'}}), 'task_uuid_4');\n  assert.equal(Core.extractTaskId({ok:true,envelope:{anything:'task_prefixed_5'}}), 'task_prefixed_5');\n});\n\ntest('does not mistake unrelated nested user id for a task id',()=>{\n  assert.equal(Core.extractTaskId({user:{id:'user_123'},ok:true}), '');\n});\n\nconst browser=fs.readFileSync(new URL('../browser-runtime.js',import.meta.url),'utf8');\ntest('missing task id error includes a sanitized create response preview for diagnostics',()=>{\n  assert.match(browser,/创建响应/);\n  assert.match(browser,/\[redacted\]/);\n});\n\nconst html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');\ntest('browser cache keys are bumped for XOGPU create-response parser',()=>{\n  assert.match(html,/provider-runtime-core\\.js\\?v=20260909-xogpu-create-response-3/);\n  assert.match(html,/browser-runtime\\.js\\?v=20260909-xogpu-create-response-3/);\n});\n""", encoding='utf-8')
+test_file.write_text(r"""import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+
+const coreSrc=fs.readFileSync(new URL('../provider-runtime-core.js',import.meta.url),'utf8');
+const sandbox={};sandbox.globalThis=sandbox;vm.runInNewContext(coreSrc,sandbox,{filename:'provider-runtime-core.js'});
+const Core=sandbox.CanvasProviderRuntimeCore;
+
+test('extracts XOGPU task id from nested uncommon create response shapes',()=>{
+  assert.equal(Core.extractTaskId({data:{job:{taskId:'task_nested_1'}}}), 'task_nested_1');
+  assert.equal(Core.extractTaskId({payload:{generation_id:'task_generation_2'}}), 'task_generation_2');
+  assert.equal(Core.extractTaskId([{id:'task_array_3'}]), 'task_array_3');
+  assert.equal(Core.extractTaskId({ok:true,job:{uuid:'task_uuid_4'}}), 'task_uuid_4');
+  assert.equal(Core.extractTaskId({ok:true,envelope:{anything:'task_prefixed_5'}}), 'task_prefixed_5');
+});
+
+test('does not mistake unrelated nested user id for a task id',()=>{
+  assert.equal(Core.extractTaskId({user:{id:'user_123'},ok:true}), '');
+});
+
+const preview=fs.readFileSync(new URL('../browser-runtime-preview.js',import.meta.url),'utf8');
+test('missing task id error includes a sanitized create response preview for diagnostics',()=>{
+  assert.match(preview,/创建响应/);
+  assert.match(preview,/\[redacted\]/);
+});
+
+const router=fs.readFileSync(new URL('../browser-runtime.js',import.meta.url),'utf8');
+test('router loads the new preview runtime version',()=>{
+  assert.match(router,/browser-runtime-preview\.js\?v=20260909-xogpu-create-response-3/);
+});
+
+const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
+test('browser cache keys are bumped for XOGPU create-response parser',()=>{
+  assert.match(html,/provider-runtime-core\.js\?v=20260909-xogpu-create-response-3/);
+  assert.match(html,/browser-runtime\.js\?v=20260909-xogpu-create-response-3/);
+});
+""", encoding='utf-8')
